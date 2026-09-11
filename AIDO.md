@@ -32,7 +32,7 @@
 
 | หัวข้อ | ค่า |
 |---|---|
-| ชื่อ | money-bot |
+| ชื่อ | JOD tang |
 | ประเภท | โปรเจกต์การศึกษา ไม่แสวงหากำไร |
 | ทีม | 5 คน ① Bot Core ② Database ③ AI ④ Frontend ⑤ Integration |
 | งบ | 0 บาท/เดือน (free tier ทั้งหมด) |
