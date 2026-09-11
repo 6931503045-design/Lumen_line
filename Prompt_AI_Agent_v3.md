@@ -78,7 +78,7 @@ Python Monte Carlo, Forecast Level 2-3, Sentry, ตาราง `ai_cache` แ�
 
 | หัวข้อ | รายละเอียด |
 |---|---|
-| ชื่อ | money-bot |
+| ชื่อ | JOD tang |
 | คืออะไร | LINE Chatbot บันทึกรายรับ-รายจ่าย + AI วางแผนการเงิน |
 | Backend | Node.js + TypeScript + Express |
 | Database | Supabase (PostgreSQL) |
