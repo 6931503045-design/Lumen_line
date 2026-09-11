@@ -1,7 +1,7 @@
 https://claude.ai/share/753df625-69d8-4224-b3a8-dfe60e03b885
 link for Claude chat 
 
-JOD tang
+# JOD tang
 บอทจดเงินบน LINE ที่คุยภาษาคนได้ แต่ไม่ปล่อยให้ AI แตะเงินของผู้ใช้
 
 1. โปรเจคนี้คืออะไร (อธิบายแบบ 30 วินาที)
