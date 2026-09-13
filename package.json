@@ -1,0 +1,31 @@
+{
+  "name": "jod-tang",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "tunnel": "echo '⚠️ ตั้งค่า ngrok domain เองก่อนใช้งานจริง: ngrok http 3000'",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^2.22.0",
+    "@line/bot-sdk": "^11.2.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "dayjs": "^1.11.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "node-cron": "^4.6.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

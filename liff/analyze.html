@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JOD tang | วิเคราะห์</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body data-theme="dark" data-page="analyze">
+    <div class="app-shell">
+      <header class="topbar glass-panel">
+        <div class="profile-meta">
+          <div class="avatar">AS</div>
+          <div>
+            <p class="eyebrow">วิเคราะห์</p>
+            <h1>ข้อมูลเชิงลึก</h1>
+          </div>
+        </div>
+        <button class="theme-toggle" aria-label="สลับโหมด">☀️</button>
+      </header>
+
+      <main class="page-content">
+        <section class="glass-panel section-panel">
+          <div class="panel-head">
+            <h3>สัดส่วนรายจ่ายตามหมวด</h3>
+            <span class="pill success">ปกติดี</span>
+          </div>
+          <div class="chart-wrap donut-wrap large">
+            <canvas id="spendingDonutAnalyze"></canvas>
+          </div>
+          <p id="emptyStateAnalyze" class="empty-state" hidden>ข้อมูลยังไม่เพียงพอสำหรับการวิเคราะห์ 7 วัน</p>
+        </section>
+
+        <section class="glass-panel chart-panel">
+          <div class="panel-head">
+            <h3>แนวโน้ม 6 เดือน</h3>
+            <span>รายรับ vs รายจ่าย</span>
+          </div>
+          <div class="chart-wrap line-wrap tall">
+            <canvas id="reportChart"></canvas>
+          </div>
+        </section>
+
+        <section class="glass-panel section-panel">
+          <div class="panel-head">
+            <h3>ใช้อย่างปลอดภัยได้</h3>
+            <span id="safeToSpendBadgeWrap"></span>
+          </div>
+          <div class="insight-grid">
+            <div class="insight-card">
+              <span>อัตราการใช้จ่าย</span>
+              <strong>72%</strong>
+            </div>
+            <div class="insight-card">
+              <span>การคาดการณ์</span>
+              <strong>+฿18,500</strong>
+            </div>
+            <div class="insight-card">
+              <span>กองทุนฉุกเฉิน</span>
+              <strong>52%</strong>
+            </div>
+          </div>
+          <p class="ai-disclaimer">ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
+        </section>
+
+        <section class="glass-panel section-panel">
+          <div class="panel-head">
+            <h3>แผนเก็บเงิน</h3>
+            <button id="createPlanBtn" class="chip-button">+ สร้างแผนใหม่</button>
+          </div>
+          <div id="planCards" class="goal-stack"></div>
+          <p class="ai-disclaimer">ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
+        </section>
+
+        <section class="glass-panel section-panel">
+          <div class="panel-head">
+            <h3>จำลองผลกระทบก่อนซื้อ</h3>
+          </div>
+          <div class="simulator-box">
+            <label class="field-label" for="purchasePrice">ราคา</label>
+            <div class="simulator-row">
+              <input id="purchasePrice" type="number" value="32000" min="0" />
+              <button id="simulatePurchaseBtn" class="chip-button">จำลอง</button>
+            </div>
+          </div>
+          <div class="simulator-results">
+            <div class="simulate-card">
+              <span>ซื้อเลยตอนนี้</span>
+              <strong id="buyNowResult">฿0</strong>
+            </div>
+            <div class="simulate-card">
+              <span>ออมแทน</span>
+              <strong id="saveLaterResult">฿0</strong>
+            </div>
+          </div>
+          <p class="ai-disclaimer">ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
+        </section>
+      </main>
+
+      <nav class="bottom-nav glass-panel" aria-label="เมนูหลัก">
+        <a class="nav-item" href="index.html">ภาพรวม</a>
+        <a class="nav-item" href="transactions.html">รายการ</a>
+        <a class="nav-item" href="categories.html">หมวดหมู่</a>
+        <a class="nav-item active" href="analyze.html">วิเคราะห์</a>
+        <a class="nav-item" href="settings.html">ตั้งค่า</a>
+      </nav>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/mock-data.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>

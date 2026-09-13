@@ -1,0 +1,8 @@
+{
+  "messages": [
+    { "text": "กาแฟ 80", "expected": { "type": "expense", "amount": 80, "category": "กาแฟ" } },
+    { "text": "เงินเดือน 35000", "expected": { "type": "income", "amount": 35000, "category": "เงินเดือน" } },
+    { "text": "สรุป", "expected": { "command": "summary" } },
+    { "text": "เหลือ", "expected": { "command": "balance" } }
+  ]
+}
