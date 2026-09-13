@@ -1,7 +1,12 @@
-// ไฟล์นี้ทำหน้าที่อะไร: helper สำหรับตอบกลับ LINE ผ่าน reply token
-// ใครรับผิดชอบ: ① Bot Core
-// เขียนในสัปดาห์: W1
-// TODO: เพิ่ม replyText, replyFlex, replyMulti และ loading animation
-// ⚖️ กฎเหล็ก G5
+import { lineClient } from './client';
 
-export {};
+export async function replyText(replyToken: string, text: string): Promise<void> {
+  try {
+    await lineClient.replyMessage({
+      replyToken,
+      messages: [{ type: 'text', text }],
+    });
+  } catch (err) {
+    console.error('[line/reply] replyText error:', err);
+  }
+}

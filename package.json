@@ -2,30 +2,32 @@
   "name": "jod-tang",
   "version": "0.1.0",
   "private": true,
+  "description": "บอทจดเงินบน LINE ที่คุยภาษาคนได้ แต่ไม่ปล่อยให้ AI แตะเงินของผู้ใช้ (JOD tang)",
   "type": "commonjs",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "tunnel": "echo '⚠️ ตั้งค่า ngrok domain เองก่อนใช้งานจริง: ngrok http 3000'",
     "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@google/genai": "^2.22.0",
-    "@line/bot-sdk": "^11.2.0",
-    "@supabase/supabase-js": "^2.49.1",
-    "dayjs": "^1.11.0",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.2",
-    "node-cron": "^4.6.0",
-    "zod": "^3.23.8"
+    "@google/genai": "^0.3.0",
+    "@line/bot-sdk": "^9.9.0",
+    "@supabase/supabase-js": "^2.116.0",
+    "dayjs": "^1.11.23",
+    "dotenv": "^17.4.2",
+    "express": "^4.22.2",
+    "node-cron": "^3.0.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/node": "^22.10.2",
-    "tsx": "^4.19.1",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "@types/express": "^4.17.25",
+    "@types/node": "^22.20.2",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
   }
 }
