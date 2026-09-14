@@ -3,15 +3,15 @@
 // เขียนในสัปดาห์: W3
 // ⚖️ กฎเหล็ก G6, G7
 //
-// 🆕 เดิมทุก route คืน mock ก้อนเดียวกันหมดและไม่มี auth เลย ตอนนี้ทุก route ใต้ /api
-// (ยกเว้น /api/ping) ผ่าน liffAuth ก่อน แล้วอ่านเฉพาะข้อมูลของ req.userId เท่านั้น
+// ทุก route ใต้ /api (ยกเว้น /api/ping) ผ่าน requireSession ก่อน
+// แล้วอ่านเฉพาะข้อมูลของ req.userId เท่านั้น
 //
 // ⚠️ ความซื่อสัตย์ของตัวเลข: อะไรที่ backend ยังคำนวณไม่ได้จริง จะไม่ส่งเลขหลอกมาให้
 // แต่จะบอกชื่อไว้ใน `unavailable` เพื่อให้หน้าเว็บแสดงสถานะ "ยังไม่มีข้อมูล" ได้ถูกต้อง
 // แทนที่จะโชว์ ฿0.00 ซึ่งผู้ใช้จะอ่านว่า "ฉันมีเงินศูนย์บาท"
 
 import express from 'express';
-import { liffAuth, type AuthedRequest } from '../middleware/liffAuth';
+import { requireSession, type AuthedRequest } from '../middleware/auth';
 import { getUserSummary } from '../services/summary.service';
 import { listTransactionsByUser } from '../db/queries/transactions';
 import { listCategoriesByUser } from '../db/queries/categories';
@@ -30,8 +30,8 @@ apiRouter.get('/ping', (_req, res) => {
   res.json({ ok: true, message: 'API ready' });
 });
 
-// ทุก route ใต้บรรทัดนี้ต้องมี LIFF ID token
-apiRouter.use(liffAuth);
+// ทุก route ใต้บรรทัดนี้ต้องล็อกอินแล้ว (มี session cookie ที่เราเซ็น)
+apiRouter.use(requireSession);
 
 /** ตัวช่วยห่อ handler ที่เป็น async ให้ error วิ่งไปที่ error handler กลางของ Express */
 function handle(
@@ -41,6 +41,19 @@ function handle(
     fn(req as AuthedRequest, res).catch(next);
   };
 }
+
+/**
+ * ผู้ใช้ที่ล็อกอินอยู่คือใคร — ชื่อกับรูปมาจาก id_token ตอนล็อกอิน เก็บไว้ใน session cookie
+ * เดิมหน้าเว็บได้ข้อมูลนี้จาก liff.getProfile() ซึ่งไม่มีแล้วเมื่อเลิกใช้ LIFF
+ */
+apiRouter.get('/me', (req, res) => {
+  const authed = req as AuthedRequest;
+  res.json({
+    userId: authed.userId,
+    displayName: authed.displayName ?? null,
+    pictureUrl: authed.pictureUrl ?? null,
+  });
+});
 
 apiRouter.get(
   '/summary',
