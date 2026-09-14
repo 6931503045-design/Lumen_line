@@ -32,11 +32,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ต้องเปิด Pages ด้วยมือครั้งเดียวก่อน ที่ Settings > Pages > Source = GitHub Actions
+      # (GITHUB_TOKEN ของ Actions ไม่มีสิทธิ์สร้าง Pages site ให้เอง และ repo private
+      #  ต้องใช้ GitHub Pro ขึ้นไป ถ้าไม่มีให้เปลี่ยน repo เป็น public ก่อน)
       - name: Configure Pages
         uses: actions/configure-pages@v5
-        with:
-          # พยายามเปิด Pages ให้อัตโนมัติ (ต้องเป็น public repo หรือมี GitHub Pro)
-          enablement: true
 
       - name: Upload liff/ as Pages artifact
         uses: actions/upload-pages-artifact@v3
