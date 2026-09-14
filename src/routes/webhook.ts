@@ -55,8 +55,10 @@ webhookRouter.post('/', middleware(lineConfig), (req, res) => {
 
 async function processEvent(event: LineWebhookEvent): Promise<void> {
   // กันประมวลผลซ้ำ: insert webhookEventId ลง webhook_events ถ้าชน primary key (เคยทำแล้ว) ให้ข้าม
-  if (event.webhookEventId) {
-    const { error } = await supabase.from('webhook_events').insert({ id: event.webhookEventId });
+  const eventId = event.webhookEventId;
+
+  if (eventId) {
+    const { error } = await supabase.from('webhook_events').insert({ id: eventId });
 
     if (error) {
       // 23505 = unique_violation ของ Postgres แปลว่าเคย insert แถวนี้ไปแล้ว = event ซ้ำ ข้ามได้เลย (idempotent)
@@ -66,6 +68,32 @@ async function processEvent(event: LineWebhookEvent): Promise<void> {
     }
   }
 
+  // 🔴 แก้บั๊ก: เดิมพอ insert marker สำเร็จก็ไปเรียก handler เลยโดยไม่มี try/catch
+  // ถ้า handler พังกลางทาง (Supabase ล่ม, เน็ตหลุด) marker จะค้างอยู่ใน webhook_events
+  // แล้วตอน LINE retry มารอบใหม่จะชน 23505 แล้ว return ทิ้งทันที = รายการของผู้ใช้หายถาวร
+  // โดยไม่มีใครรู้ ตอนนี้ถ้า handler พังจะลบ marker ทิ้งเพื่อเปิดทางให้ retry ของ LINE ทำงานได้จริง
+  try {
+    await dispatchEvent(event);
+  } catch (err) {
+    if (eventId) {
+      const { error: cleanupError } = await supabase
+        .from('webhook_events')
+        .delete()
+        .eq('id', eventId);
+
+      if (cleanupError) {
+        // ลบไม่สำเร็จ = retry ของ LINE จะยังโดนข้ามอยู่ดี ต้อง log ให้เห็นชัดว่า event ไหนหาย
+        console.error(
+          `[webhook] ลบ marker ของ event ${eventId} ไม่สำเร็จ — retry จะถูกข้าม:`,
+          cleanupError
+        );
+      }
+    }
+    throw err;
+  }
+}
+
+async function dispatchEvent(event: LineWebhookEvent): Promise<void> {
   switch (event.type) {
     case 'follow':
       await handleFollow(event);

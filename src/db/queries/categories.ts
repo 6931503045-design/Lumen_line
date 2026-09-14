@@ -1,11 +1,25 @@
+// ไฟล์นี้ทำหน้าที่อะไร: query สำหรับ categories
+// ใครรับผิดชอบ: ② Database
+// ⚖️ กฎเหล็ก G6 — ทุก query กรอง user_id
+//
+// 🔴 แก้บั๊ก race condition: เดิมเป็น select-แล้วค่อย-insert เฉยๆ ถ้าผู้ใช้พิมพ์สองข้อความ
+// หมวดเดียวกันติดกัน ทั้งสอง request จะ select ไม่เจอพร้อมกันแล้ว insert พร้อมกัน
+// ตัวหลังชน unique (user_id, name, type) แล้ว throw ทำให้ผู้ใช้เห็น "บันทึกไม่สำเร็จ"
+// ทั้งที่ควรใช้หมวดเดิมได้ ตอนนี้ถ้าชนจะอ่านซ้ำแล้วใช้แถวที่อีกฝั่งสร้างไว้แทน
+//
+// จงใจไม่ใช้ upsert เพราะ upsert จะ UPDATE แถวเดิมทับ ทำให้ is_default/is_essential
+// ของหมวดตั้งต้นที่ seed ไว้ตอน follow (เช่น "อาหาร" ที่เป็น is_essential: true)
+// ถูกรีเซ็ตเป็น false โดยไม่ตั้งใจ
+
 import { supabase } from '../supabase';
 
-export async function findOrCreateCategory(
+/** อ่าน id ของหมวดตามชื่อ+ประเภทของผู้ใช้คนนี้ คืน null ถ้ายังไม่มี */
+async function findCategoryId(
   userId: string,
   name: string,
   type: 'income' | 'expense'
-): Promise<string> {
-  const { data: existing, error: selectError } = await supabase
+): Promise<string | null> {
+  const { data, error } = await supabase
     .from('categories')
     .select('id')
     .eq('user_id', userId)
@@ -13,11 +27,20 @@ export async function findOrCreateCategory(
     .eq('type', type)
     .maybeSingle();
 
-  if (selectError) {
-    throw selectError;
+  if (error) {
+    throw error;
   }
-  if (existing) {
-    return existing.id;
+  return data?.id ?? null;
+}
+
+export async function findOrCreateCategory(
+  userId: string,
+  name: string,
+  type: 'income' | 'expense'
+): Promise<string> {
+  const existingId = await findCategoryId(userId, name, type);
+  if (existingId) {
+    return existingId;
   }
 
   const { data: created, error: insertError } = await supabase
@@ -26,8 +49,20 @@ export async function findOrCreateCategory(
     .select('id')
     .single();
 
-  if (insertError || !created) {
-    throw insertError ?? new Error('findOrCreateCategory: สร้างหมวดหมู่ไม่สำเร็จ');
+  if (insertError) {
+    // 23505 = unique_violation แปลว่ามี request อื่นสร้างหมวดนี้ไปแล้วระหว่างที่เรากำลังจะสร้าง
+    // ไม่ใช่ error จริง — อ่านซ้ำแล้วใช้แถวของอีกฝั่งได้เลย
+    if (insertError.code === '23505') {
+      const racedId = await findCategoryId(userId, name, type);
+      if (racedId) {
+        return racedId;
+      }
+    }
+    throw insertError;
+  }
+
+  if (!created) {
+    throw new Error('findOrCreateCategory: สร้างหมวดหมู่ไม่สำเร็จ');
   }
 
   return created.id;
