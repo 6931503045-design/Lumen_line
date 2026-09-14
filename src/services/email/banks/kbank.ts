@@ -26,6 +26,16 @@
 // 5) ต้องเช็ค "(สำเร็จ)" ก่อนสร้างรายการ ไม่งั้นวันที่ธนาคารส่งอีเมลแจ้งรายการที่ล้มเหลว
 //    ระบบจะบันทึกเงินที่ไม่เคยออกจากบัญชีจริง — และต้องเช็ค "ไม่สำเร็จ" ก่อน เพราะคำนั้น
 //    มีคำว่า "สำเร็จ" อยู่ข้างใน
+//
+// ข้อตกลงที่ทีมเคาะแล้ว (อย่าเปลี่ยนโดยไม่คุยกันก่อน):
+//   - โอนพร้อมเพย์ให้คนอื่น = expense ไม่ใช่ transfer
+//     (transfer ตาม G7 สงวนไว้สำหรับการย้ายเงินภายในของผู้ใช้เอง เช่นเข้าแผนออม
+//      ซึ่งจากอีเมลแยกไม่ออกอยู่แล้วว่าปลายทางเป็นบัญชีตัวเองหรือคนอื่น)
+//   - ค่าธรรมเนียม (ค่าธรรมเนียม (บาท)) จงใจไม่บันทึกเป็นรายการแยก ตามที่ทีมตัดสินใจ
+//     ตัวอย่างที่มีทั้งหมดเป็น 0.00 — ถ้าวันหนึ่งอยากเก็บ ให้เพิ่ม field ใน
+//     BankEmailParseResult แล้วให้ email.service สร้างรายการที่สองต่างหาก
+//   - คำที่ใช้ตอนรายการล้มเหลว ยังไม่มีใครเคยเห็นอีเมลจริง คำใน FAILURE_WORDS
+//     จึงยังเป็นการเผื่อไว้ ไม่ใช่สิ่งที่ยืนยันแล้ว
 
 import { toSatang } from '../../../utils/money';
 import type { BankEmailParseResult, BankEmailParser } from './types';
@@ -59,7 +69,7 @@ const SUCCESS_WORDS = ['(สำเร็จ)', 'สำเร็จ', '(success)'
  * เงินออกจากบัญชีผู้ใช้ — ทั้งชำระค่าสินค้าและโอนออก
  * K PLUS ใช้คำว่า "จากบัญชี" กำกับบัญชีต้นทางเสมอ ซึ่งเป็นสัญญาณที่ชัดที่สุด
  */
-const EXPENSE_MARKERS = [
+const OUTGOING_MARKERS = [
   'ชำระเงินจากบัญชี',
   'โอนเงินจากบัญชี',
   'หักบัญชี',
@@ -67,21 +77,23 @@ const EXPENSE_MARKERS = [
   'from account',
 ];
 
-/**
- * เงินเข้าบัญชีผู้ใช้
- * ⚠️ ยังไม่ได้ตรวจกับอีเมลจริง — ยังไม่เคยเห็นอีเมลแบบเงินเข้าของ K PLUS
- * ถ้าได้ตัวอย่างมาแล้วให้เพิ่ม fixture ใน tests/fixtures/kplus/ แล้วปรับคำที่นี่
- */
-const INCOME_MARKERS = ['เงินเข้าบัญชี', 'รับโอนเงิน', 'โอนเงินเข้าบัญชี', 'deposit to account'];
-
 function includesAny(haystack: string, needles: readonly string[]): boolean {
   return needles.some((needle) => haystack.includes(needle));
 }
 
-function detectDirection(lowerText: string): 'income' | 'expense' | null {
-  if (includesAny(lowerText, INCOME_MARKERS)) return 'income';
-  if (includesAny(lowerText, EXPENSE_MARKERS)) return 'expense';
-  return null;
+/**
+ * อีเมลฉบับนี้เป็นรายการเงินออกไหม
+ *
+ * ทำไมมีแค่ขาออก: ทีมยืนยันแล้วว่า "ตอนนี้เงินเข้าไม่ได้แจ้งเตือนผ่าน Email" —
+ * K PLUS ส่งอีเมลเฉพาะตอนเงินออกเท่านั้น เดิมไฟล์นี้มีรายการคำสำหรับจับ income ด้วย
+ * แต่เป็นคำที่เดาเอาเองล้วนๆ ไม่เคยเห็นอีเมลจริงสักฉบับ จึงเอาออก — โค้ดที่ไม่เคยถูก
+ * ตรวจกับของจริงและไม่มีวันได้ทำงาน เก็บไว้มีแต่จะหลอกคนอ่านว่าระบบรองรับแล้ว
+ *
+ * ถ้าวันหนึ่งธนาคารเริ่มส่งอีเมลเงินเข้า: อีเมลนั้นจะไม่ตรง marker ไหนเลย -> parse คืน null
+ * -> เก็บไว้ใน user_emails แบบ parsed=false ให้เห็นว่ามีอีเมลที่อ่านไม่ออก ไม่ใช่เดาทิศทางผิด
+ */
+function isOutgoing(lowerText: string): boolean {
+  return includesAny(lowerText, OUTGOING_MARKERS);
 }
 
 /** รายการนี้สำเร็จจริงไหม — ไม่แน่ใจถือว่าไม่สำเร็จ (fail closed) */
@@ -138,9 +150,7 @@ export const kbankParser: BankEmailParser = {
     const lower = text.toLowerCase();
 
     if (!isSuccessful(lower)) return null;
-
-    const type = detectDirection(lower);
-    if (!type) return null;
+    if (!isOutgoing(lower)) return null;
 
     const amountSatang = readMoney(text, AMOUNT_TH, AMOUNT_EN);
     if (amountSatang === null) return null;
@@ -149,7 +159,8 @@ export const kbankParser: BankEmailParser = {
 
     return {
       amountSatang,
-      type,
+      // K PLUS ส่งอีเมลเฉพาะรายการเงินออก จึงเป็น expense เสมอ (ดู isOutgoing)
+      type: 'expense',
       occurredAt: readDateTime(text),
       refNumber: ref,
     };
