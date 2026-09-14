@@ -54,7 +54,10 @@ export function toSatang(baht: number | string): number {
     );
   }
 
-  const [, intPart, fracPartRaw = ''] = match;
+  // group 1 เป็น capture บังคับ (ไม่มี ? ต่อท้าย) จึงมีค่าเสมอเมื่อ match สำเร็จ
+  // ใช้ ! เพราะ tsconfig เปิด noUncheckedIndexedAccess ทำให้ TS มองว่าเป็น string | undefined
+  const intPart = match[1]!;
+  const fracPartRaw = match[2] ?? '';
 
   // ปัดครึ่งขึ้นถ้ามีทศนิยมเกิน 2 ตำแหน่ง (เกินหน่วยสตางค์) — ดูตัวเลขหลักที่ 3 เป็นตัวตัดสิน
   let carrySatang = 0n;
@@ -109,7 +112,8 @@ export function formatBaht(satang: number): string {
 
   const negative = satang < 0;
   const absoluteSatang = Math.abs(satang);
-  const [bahtPart, satangPart] = fromSatang(absoluteSatang).split('.');
+  // fromSatang คืนรูปแบบ "<บาท>.<สตางค์ 2 หลัก>" เสมอ จึงแยกได้ 2 ส่วนแน่นอน
+  const [bahtPart, satangPart] = fromSatang(absoluteSatang).split('.') as [string, string];
   const bahtWithComma = bahtPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
   return `${negative ? '-' : ''}฿${bahtWithComma}.${satangPart}`;

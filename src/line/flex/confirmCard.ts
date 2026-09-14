@@ -3,6 +3,7 @@
 // อ้างอิง: SPEC.md §3 S1 ตาราง Flex Message แถว confirmCard, ตาราง Postback แถว undo/edit_category
 //
 // ต้องมีตาม SPEC: รายการ, หมวด, ยอด, ปุ่ม ↩️ ยกเลิก / ✏️ แก้หมวด, แนบคำเตือนงบถ้ามี
+// ⚠️ ขอบเขตตอนนี้: มีเฉพาะปุ่ม ↩️ ยกเลิก — ดูเหตุผลที่ซ่อน ✏️ แก้หมวด ตรง footerButtons ด้านล่าง
 // ⚠️ ขอบเขต W1: "แนบคำเตือนงบถ้ามี" ยังทำไม่ได้ตอนนี้ (ยังไม่มี budget check logic ใน W1)
 // รับ budgetWarning เป็น optional string ไว้ล่วงหน้า ให้ส่ง undefined ไปก่อนจนกว่าจะทำ budgets ใน W2/W3
 //
@@ -60,6 +61,24 @@ export function buildConfirmCard(input: ConfirmCardInput) {
     });
   }
 
+  // ⚠️ ปุ่ม "✏️ แก้หมวด" ถูกซ่อนไว้ก่อน: postbackHandler ยังตอบข้อความ stub อยู่เพราะต้องมี
+  // db/queries/categories.ts::listCategoriesByUser() + quick reply ก่อน ปล่อยปุ่มที่กดแล้ว
+  // ไม่เกิดอะไรไว้ในทุกการ์ดแย่กว่าไม่มีปุ่ม — เอากลับมาได้ทันทีที่ทำ flow นั้นเสร็จ
+  // (postbackHandler ยังรับ action=edit_category อยู่ เผื่อการ์ดเก่าในแชทผู้ใช้ที่ยังมีปุ่มนี้)
+  const footerButtons: Record<string, unknown>[] = [
+    {
+      type: 'button',
+      style: 'secondary',
+      height: 'sm',
+      action: {
+        type: 'postback',
+        label: '↩️ ยกเลิก',
+        data: `action=undo&id=${input.transactionId}`,
+        displayText: 'ยกเลิกรายการล่าสุด',
+      },
+    },
+  ];
+
   return {
     type: 'flex' as const,
     altText: `บันทึก${label} ${input.formattedAmount} หมวด "${input.categoryName}" แล้ว`,
@@ -76,30 +95,7 @@ export function buildConfirmCard(input: ConfirmCardInput) {
         type: 'box',
         layout: 'horizontal',
         spacing: 'sm',
-        contents: [
-          {
-            type: 'button',
-            style: 'secondary',
-            height: 'sm',
-            action: {
-              type: 'postback',
-              label: '↩️ ยกเลิก',
-              data: `action=undo&id=${input.transactionId}`,
-              displayText: 'ยกเลิกรายการล่าสุด',
-            },
-          },
-          {
-            type: 'button',
-            style: 'secondary',
-            height: 'sm',
-            action: {
-              type: 'postback',
-              label: '✏️ แก้หมวด',
-              data: `action=edit_category&id=${input.transactionId}`,
-              displayText: 'แก้หมวดรายการนี้',
-            },
-          },
-        ],
+        contents: footerButtons,
       },
     },
   };

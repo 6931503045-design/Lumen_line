@@ -87,24 +87,41 @@ export async function getTransactionOwnedByUser(
   return data;
 }
 
-/** soft delete — ตั้ง deleted_at = now() เท่านั้น ห้ามลบแถวจริง */
-export async function softDeleteTransaction(transactionId: string): Promise<void> {
+/**
+ * soft delete — ตั้ง deleted_at = now() เท่านั้น ห้ามลบแถวจริง
+ *
+ * ⚖️ G6: ต้องส่ง userId มาด้วยเสมอ แล้วกรองใน UPDATE ด้วย ไม่ใช่พึ่งแค่การเช็ค
+ * getTransactionOwnedByUser() ของผู้เรียก — query ต้องป้องกันตัวเองได้ เผื่อมีคนเรียกจากจุดอื่น
+ * ในอนาคตแล้วลืมเช็คก่อน จะได้ไม่กลายเป็นช่องแก้ข้อมูลข้ามผู้ใช้
+ */
+export async function softDeleteTransaction(
+  transactionId: string,
+  userId: string
+): Promise<void> {
   const { error } = await supabase
     .from('transactions')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', transactionId);
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', transactionId)
+    .eq('user_id', userId);
 
   if (error) {
     throw error;
   }
 }
 
-/** restore — ล้าง deleted_at กลับเป็น null (postback action=restore หลังกด undo ผิด) */
-export async function restoreTransaction(transactionId: string): Promise<void> {
+/**
+ * restore — ล้าง deleted_at กลับเป็น null (postback action=restore หลังกด undo ผิด)
+ * ⚖️ G6: กรอง user_id ด้วยเหตุผลเดียวกับ softDeleteTransaction
+ */
+export async function restoreTransaction(
+  transactionId: string,
+  userId: string
+): Promise<void> {
   const { error } = await supabase
     .from('transactions')
-    .update({ deleted_at: null })
-    .eq('id', transactionId);
+    .update({ deleted_at: null, updated_at: new Date().toISOString() })
+    .eq('id', transactionId)
+    .eq('user_id', userId);
 
   if (error) {
     throw error;

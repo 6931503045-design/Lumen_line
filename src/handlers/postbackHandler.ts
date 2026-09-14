@@ -81,7 +81,7 @@ async function handleUndo(replyToken: string, userId: string, transactionId: str
   }
 
   try {
-    await softDeleteTransaction(transactionId);
+    await softDeleteTransaction(transactionId, userId);
     await replyTextWithQuickReply(replyToken, 'ยกเลิกรายการล่าสุดแล้วครับ ↩️', [
       {
         type: 'action',
@@ -113,7 +113,7 @@ async function handleRestore(replyToken: string, userId: string, transactionId: 
   }
 
   try {
-    await restoreTransaction(transactionId);
+    await restoreTransaction(transactionId, userId);
     await replyText(replyToken, 'เอารายการกลับคืนแล้วครับ ✅');
   } catch (err) {
     console.error('[postbackHandler] restoreTransaction error:', err);
