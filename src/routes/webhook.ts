@@ -1,139 +1,88 @@
-import crypto from 'node:crypto';
+// ไฟล์นี้ทำหน้าที่อะไร: endpoint สำหรับ LINE webhook รับข้อความ ตรวจลายเซ็น กันซ้ำ แล้วแยกงานไปแต่ละ handler
+// ใครรับผิดชอบ: ① Bot Core
+// เขียนในสัปดาห์: W1
+// อ้างอิง: SPEC.md §3 S1 (event follow/unfollow/message.text/postback), README.md แผนภาพ webhook
+// ⚖️ กฎเหล็ก G5, G6
+//
+// 🆕 เพิ่ม dispatch ไป postback event (สำหรับปุ่ม ↩️ ยกเลิก / ✏️ แก้หมวด ใน confirmCard)
+//
+// รูปแบบตาม SPEC: ต้องตอบ 200 ภายใน < 1 วิ ก่อน แล้วค่อยประมวลผล event ต่อแบบ async (ไม่ await handler
+// ก่อนตอบ res เพื่อไม่ให้ LINE คิดว่า timeout แล้ว retry ซ้ำจนเกิด event ซ้ำมากขึ้นไปอีก)
 
-import { Router } from 'express';
+import express from 'express';
+import { middleware } from '@line/bot-sdk';
+import { env } from '../config/env';
+import { supabase } from '../db/supabase';
+import { handleFollow, handleUnfollow } from '../handlers/followHandler';
+import { handleText } from '../handlers/textHandler';
+import { handlePostback } from '../handlers/postbackHandler';
 
-import { config } from '../config.js';
-import { parseUserText } from '../services/parser.js';
-import { replyText } from '../services/line.js';
-import { createTransaction, getSummary } from '../services/transactions.js';
+export const webhookRouter = express.Router();
 
-const router = Router();
+const lineConfig = {
+  channelAccessToken: env.lineChannelAccessToken,
+  channelSecret: env.lineChannelSecret,
+};
 
-export function verifyLineSignature(rawBody: Buffer, signature?: string | string[]): boolean {
-  if (!rawBody || !Buffer.isBuffer(rawBody)) {
-    return false;
-  }
+/**
+ * โครงสร้าง event แบบคร่าวๆ พอสำหรับ W1 (follow / unfollow / message.text / postback)
+ * ตั้งใจไม่ import type เต็มจาก @line/bot-sdk เพราะ namespace ของ type ใน SDK เปลี่ยนบ่อยระหว่างเวอร์ชัน
+ * (v7 ใช้ WebhookEvent ตรงๆ, v8 ย้ายไปอยู่ใต้ `webhook.Event`) — ก่อนจะ narrow type ให้แม่นขึ้น
+ * ให้เช็คเวอร์ชัน @line/bot-sdk ใน package.json ก่อนเสมอ
+ */
+type LineWebhookEvent = {
+  type: string;
+  webhookEventId?: string;
+  replyToken?: string;
+  source?: { userId?: string; type?: string };
+  message?: { type: string; text?: string };
+  postback?: { data?: string };
+};
 
-  const normalizedSignature = Array.isArray(signature) ? signature[0] : signature;
+// middleware ของ @line/bot-sdk ต้องมาก่อน handler เสมอ — เป็นตัวตรวจ x-line-signature ด้วย raw body
+// (ดูคอมเมนต์ใน index.ts ว่าทำไมห้ามมี express.json() ครอบมาก่อนหน้านี้)
+webhookRouter.post('/', middleware(lineConfig), (req, res) => {
+  // ต้องตอบ 200 ทันทีก่อนประมวลผลต่อ (< 1 วิ ตาม SPEC) — ไม่ await handler ตรงนี้
+  res.status(200).json({ ok: true });
 
-  if (!normalizedSignature || !normalizedSignature.trim()) {
-    return false;
-  }
-
-  const channelSecret = config.line.channelSecret || 'development-secret';
-
-  const expected = crypto
-    .createHmac('sha256', channelSecret)
-    .update(rawBody)
-    .digest('base64');
-
-  try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(normalizedSignature));
-  } catch {
-    return false;
-  }
-}
-
-function formatSummary(userId: string): string {
-  const summary = getSummary(userId);
-  return `รายรับ: ${summary.income / 100} บาท\nรายจ่าย: ${summary.expense / 100} บาท\nคงเหลือ: ${summary.net / 100} บาท`;
-}
-
-router.post('/', async (req, res) => {
-  const rawBody = Buffer.isBuffer(req.body)
-    ? req.body
-    : typeof req.body === 'string'
-      ? Buffer.from(req.body)
-      : Buffer.from(JSON.stringify(req.body ?? {}));
-  const signature = req.headers['x-line-signature'];
-
-  if (!verifyLineSignature(rawBody, signature)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  try {
-    const payload = JSON.parse(rawBody.toString('utf8')) as {
-      events?: Array<{ type?: string; replyToken?: string; source?: { userId?: string }; message?: { type?: string; text?: string } }>;
-    };
-
-    for (const event of payload.events ?? []) {
-      if (event.type !== 'message' || event.message?.type !== 'text') {
-        continue;
-      }
-
-      const messageText = event.message?.text;
-      if (!messageText) {
-        continue;
-      }
-
-      const parsed = parseUserText(messageText);
-      if (!parsed) {
-        continue;
-      }
-
-      const userId = event.source?.userId ?? 'demo-user';
-
-      if (parsed.kind === 'summary') {
-        await replyText(event.replyToken ?? '', formatSummary(userId));
-        continue;
-      }
-
-      if (parsed.kind === 'balance') {
-        const summary = getSummary(userId);
-        await replyText(event.replyToken ?? '', `ยอดคงเหลือ: ${(summary.net / 100).toFixed(2)} บาท`);
-        continue;
-      }
-
-      if (parsed.kind === 'plan' || parsed.kind === 'help') {
-        await replyText(event.replyToken ?? '', 'แผน/ช่วยเหลือ: พิมพ์ข้อความแบบ “กาแฟ 80”, “+เงินเดือน 35000”, หรือ “ออม 2000” เพื่อเริ่มใช้งาน');
-        continue;
-      }
-
-      if (parsed.amountSatang === undefined) {
-        continue;
-      }
-
-      if (parsed.kind === 'expense') {
-        createTransaction({
-          userId,
-          type: 'expense',
-          amount: parsed.amountSatang,
-          label: parsed.label,
-          category: 'general',
-          parsedBy: 'manual',
-        });
-      }
-
-      if (parsed.kind === 'income') {
-        createTransaction({
-          userId,
-          type: 'income',
-          amount: parsed.amountSatang,
-          label: parsed.label,
-          category: 'general',
-          parsedBy: 'manual',
-        });
-      }
-
-      if (parsed.kind === 'transfer') {
-        createTransaction({
-          userId,
-          type: 'transfer',
-          amount: parsed.amountSatang,
-          label: parsed.label,
-          category: 'general',
-          parsedBy: 'manual',
-        });
-      }
-
-      await replyText(event.replyToken ?? '', `บันทึกสำเร็จ: ${parsed.label} ${parsed.amountSatang / 100} บาท`);
-    }
-
-    return res.status(200).json({ ok: true });
-  } catch (error) {
-    console.error('Webhook processing error:', error);
-    return res.status(500).json({ error: 'Webhook processing failed' });
+  const events = (req.body?.events ?? []) as LineWebhookEvent[];
+  for (const event of events) {
+    processEvent(event).catch((err) => {
+      console.error('[webhook] processEvent error:', err);
+    });
   }
 });
 
-export default router;
+async function processEvent(event: LineWebhookEvent): Promise<void> {
+  // กันประมวลผลซ้ำ: insert webhookEventId ลง webhook_events ถ้าชน primary key (เคยทำแล้ว) ให้ข้าม
+  if (event.webhookEventId) {
+    const { error } = await supabase.from('webhook_events').insert({ id: event.webhookEventId });
+
+    if (error) {
+      // 23505 = unique_violation ของ Postgres แปลว่าเคย insert แถวนี้ไปแล้ว = event ซ้ำ ข้ามได้เลย (idempotent)
+      if (error.code === '23505') return;
+      console.error('[webhook] insert webhook_events error:', error);
+      return;
+    }
+  }
+
+  switch (event.type) {
+    case 'follow':
+      await handleFollow(event);
+      break;
+    case 'unfollow':
+      await handleUnfollow(event);
+      break;
+    case 'message':
+      if (event.message?.type === 'text') {
+        await handleText(event);
+      }
+      break;
+    case 'postback':
+      await handlePostback(event);
+      break;
+    default:
+      // event ประเภทอื่น (join ฯลฯ) ยังไม่จัดการใน W1
+      break;
+  }
+}

@@ -1,17 +1,13 @@
-import { Router } from 'express';
+// ไฟล์นี้ทำหน้าที่อะไร: endpoint ตรวจสุขภาพของ backend สำหรับ Render / GitHub Actions / monitoring
+// ใครรับผิดชอบ: ① Bot Core
+// เขียนในสัปดาห์: W1
+// TODO: เพิ่ม health checks สำหรับ Supabase, Gemini, LINE, cron
+// ⚖️ กฎเหล็ก G4
 
-const router = Router();
+import express from 'express';
 
-router.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'jod-tang' });
+export const healthRouter = express.Router();
+
+healthRouter.get('/', (_req, res) => {
+  res.status(200).json({ ok: true, service: 'JOD tang' });
 });
-
-router.get('/', (_req, res) => {
-  res.json({
-    ok: true,
-    message: 'JOD tang backend is running',
-    aiEnabled: false,
-  });
-});
-
-export default router;

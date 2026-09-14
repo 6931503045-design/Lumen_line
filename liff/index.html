@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JOD tang | ภาพรวม</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body data-theme="dark" data-page="dashboard">
+    <div class="app-shell">
+      <header class="topbar glass-panel">
+        <div class="profile-meta">
+          <div class="avatar">AS</div>
+          <div>
+            <p class="eyebrow">ยินดีต้อนรับกลับ</p>
+            <h1>อเล็กซานเดอร์ ซิมส์</h1>
+          </div>
+        </div>
+        <button class="theme-toggle" aria-label="สลับโหมด">☀️</button>
+      </header>
+
+      <main class="page-content dashboard-page">
+        <section class="hero card-glass">
+          <div>
+            <p class="mini-label">ยอดคงเหลือสุทธิ</p>
+            <h2 id="netBalance">฿0</h2>
+          </div>
+          <div class="hero-stat">
+            <div id="confidenceBadgeWrap"></div>
+            <strong id="confidenceScore">--</strong>
+          </div>
+        </section>
+
+        <section class="summary-grid">
+          <article class="mini-card glass-panel">
+            <div class="card-row">
+              <span>รายรับ</span>
+              <span class="trend up">▲ 12.4%</span>
+            </div>
+            <strong id="incomeAmount">฿0</strong>
+          </article>
+          <article class="mini-card glass-panel">
+            <div class="card-row">
+              <span>รายจ่าย</span>
+              <span class="trend down">▼ 6.1%</span>
+            </div>
+            <strong id="expenseAmount">฿0</strong>
+          </article>
+          <article class="mini-card glass-panel">
+            <div class="card-row">
+              <span>ใช้อย่างปลอดภัยได้</span>
+              <span class="trend neutral">เป้าหมาย</span>
+            </div>
+            <strong id="safeToSpend">฿0</strong>
+          </article>
+        </section>
+
+        <section class="glass-panel section-panel" id="monthlyBudgetSummary"></section>
+
+        <section class="chart-grid">
+          <article class="glass-panel chart-panel">
+            <div class="panel-head">
+              <h3>สัดส่วนรายจ่าย</h3>
+              <span>เดือนนี้</span>
+            </div>
+            <div class="chart-wrap donut-wrap">
+              <canvas id="spendingDonut"></canvas>
+            </div>
+          </article>
+
+          <article class="glass-panel chart-panel">
+            <div class="panel-head">
+              <h3>กระแสเงินสด</h3>
+              <span>6 เดือน</span>
+            </div>
+            <div class="chart-wrap line-wrap">
+              <canvas id="cashTrend"></canvas>
+            </div>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="glass-panel list-panel">
+            <div class="panel-head">
+              <h3>รายการล่าสุด</h3>
+              <a href="transactions.html">ดูทั้งหมด</a>
+            </div>
+            <ul id="transactionList" class="transaction-list"></ul>
+          </article>
+
+          <article class="glass-panel list-panel">
+            <div class="panel-head">
+              <h3>แผนออม</h3>
+              <a href="analyze.html">แก้ไข</a>
+            </div>
+            <div id="goalCards" class="goal-stack"></div>
+          </article>
+        </section>
+      </main>
+
+      <nav class="bottom-nav glass-panel" aria-label="เมนูหลัก">
+        <a class="nav-item active" href="index.html">ภาพรวม</a>
+        <a class="nav-item" href="transactions.html">รายการ</a>
+        <a class="nav-item" href="categories.html">หมวดหมู่</a>
+        <a class="nav-item" href="analyze.html">วิเคราะห์</a>
+        <a class="nav-item" href="settings.html">ตั้งค่า</a>
+      </nav>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/mock-data.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+name: Cron
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Cron workflow scaffold ready"
