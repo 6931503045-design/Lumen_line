@@ -5,5 +5,5 @@
     "sourceMap": false
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "liff", "tests"]
+  "exclude": ["node_modules", "dist", "web", "tests"]
 }

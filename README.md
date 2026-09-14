@@ -7,7 +7,7 @@
 
 ## โครงสร้างหลัก
 - `src/` — backend logic
-- `liff/` — frontend mini app
+- `web/` — หน้าเว็บที่ backend เสิร์ฟเอง (เดิมเป็น LIFF mini app)
 - `supabase/migrations/` — schema SQL
 - `tests/` — unit tests skeleton
 
@@ -26,7 +26,7 @@
 - ① Bot Core — LINE OA / webhook / deploy / security
 - ② Database — schema / query / budget
 - ③ AI — Gemini / planner / guard / dictionary
-- ④ Frontend — LIFF / Flex Message
+- ④ Frontend — หน้าเว็บ / Flex Message
 - ⑤ Integration — OCR / email / testing / docs
 
 ## ⚠️ กฎเหล็ก

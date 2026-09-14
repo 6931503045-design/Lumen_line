@@ -7,6 +7,9 @@
 // error ของ library ตอน import แทน (เช่น `Error: supabaseUrl is required.` จาก @supabase/supabase-js)
 // ซึ่งตอน deploy จริงจะไล่หาสาเหตุยากมาก — ตอนนี้ถ้า env ไม่ครบจะตายตั้งแต่ boot พร้อมบอกชื่อ env ที่ขาด
 //
+// หมายเหตุ: โปรเจกต์เลิกใช้ LIFF แล้ว เปลี่ยนเป็นเว็บธรรมดาที่ backend เสิร์ฟเอง
+// LIFF_ID และ LIFF_ORIGIN จึงถูกถอดออก — ไม่มีโค้ดไหนอ่านสองค่านั้นแล้ว
+//
 // หมายเหตุ PUSH_LIMIT: เป็น "ค่าคงที่" ตาม SPEC §7 อยู่ใน config/constants.ts ไม่ใช่ env
 // (เดิม .env.example ประกาศ PUSH_LIMIT=100 ไว้ด้วยแต่ไม่มีโค้ดไหนอ่าน และขัดกับ constants.ts ที่เป็น 280)
 
@@ -38,7 +41,10 @@ const envSchema = z.object({
   // ── LINE (จำเป็น: ไม่มีก็รับ webhook / ตอบข้อความไม่ได้เลย) ────────────────
   LINE_CHANNEL_ACCESS_TOKEN: z.string().min(1, 'ต้องมีค่า (เอาจาก LINE Developers > Messaging API)'),
   LINE_CHANNEL_SECRET: z.string().min(1, 'ต้องมีค่า (ใช้ตรวจลายเซ็น webhook)'),
+  // LINE Login — ใช้ทั้งตอน redirect ไปหน้าล็อกอินและตอนแลก code เป็น id_token
+  // channel secret จำเป็นเฉพาะเว็บ: สมัย LIFF ไม่ต้องใช้เพราะ SDK ส่ง id_token มาให้เลย
   LINE_LOGIN_CHANNEL_ID: z.string().optional().default(''),
+  LINE_LOGIN_CHANNEL_SECRET: z.string().optional().default(''),
 
   // ── Supabase (จำเป็น: ไม่มีก็เขียน/อ่าน DB ไม่ได้เลย) ──────────────────────
   SUPABASE_URL: z.string().url('ต้องเป็น URL เต็ม เช่น https://xxxx.supabase.co'),
@@ -54,11 +60,13 @@ const envSchema = z.object({
   AI_TIMEOUT_MS: intFromString(8000),
 
   // ── งานที่ยังไม่ได้ทำ แต่ .env.example ประกาศไว้แล้ว ───────────────────────
-  LIFF_ID: z.string().optional().default(''),
-  // โดเมนที่หน้า LIFF ถูก host ไว้ คั่นด้วย comma ถ้ามีหลายอัน
-  // เช่น "https://6931503045-design.github.io" — ต้องตั้งเมื่อ LIFF กับ backend อยู่คนละโดเมน
-  // ไม่ตั้ง = ไม่เปิด CORS ให้ใครเลย (same-origin เท่านั้น)
-  LIFF_ORIGIN: z.string().optional().default(''),
+  // URL ที่ผู้ใช้เปิดเว็บนี้ ใช้ประกอบ redirect_uri ตอน OAuth และเช็ค Origin กัน CSRF
+  // เช่น "https://jodtang.onrender.com" (ไม่ต้องมี / ปิดท้าย)
+  APP_BASE_URL: z.string().optional().default(''),
+
+  // กุญแจเซ็น session cookie — สุ่มเองด้วย `openssl rand -hex 32`
+  // เปลี่ยนค่านี้เมื่อไหร่ = ทุกคนหลุดล็อกอินทันที (ซึ่งเป็นสิ่งที่ต้องการเวลาสงสัยว่ากุญแจรั่ว)
+  SESSION_SECRET: z.string().optional().default(''),
   CRON_SECRET: z.string().optional().default(''),
   GMAIL_USER: z.string().optional().default(''),
   GMAIL_APP_PASSWORD: z.string().optional().default(''),
@@ -85,6 +93,7 @@ export const env = {
   lineChannelAccessToken: raw.LINE_CHANNEL_ACCESS_TOKEN,
   lineChannelSecret: raw.LINE_CHANNEL_SECRET,
   lineLoginChannelId: raw.LINE_LOGIN_CHANNEL_ID,
+  lineLoginChannelSecret: raw.LINE_LOGIN_CHANNEL_SECRET,
   supabaseUrl: raw.SUPABASE_URL,
   supabaseServiceRoleKey: raw.SUPABASE_SERVICE_ROLE_KEY,
   aiProvider: raw.AI_PROVIDER,
@@ -94,8 +103,8 @@ export const env = {
   aiDailyLimitPerUser: raw.AI_DAILY_LIMIT_PER_USER,
   aiDailyLimitGlobal: raw.AI_DAILY_LIMIT_GLOBAL,
   aiTimeoutMs: raw.AI_TIMEOUT_MS,
-  liffId: raw.LIFF_ID,
-  liffOrigins: raw.LIFF_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
+  appBaseUrl: raw.APP_BASE_URL.replace(/\/$/, ''),
+  sessionSecret: raw.SESSION_SECRET,
   cronSecret: raw.CRON_SECRET,
   gmailUser: raw.GMAIL_USER,
   gmailAppPassword: raw.GMAIL_APP_PASSWORD,

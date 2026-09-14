@@ -1,0 +1,54 @@
+// ไฟล์นี้ทำหน้าที่อะไร: helper เรียก backend API จากหน้าเว็บ
+// ใครรับผิดชอบ: ④ Frontend
+// เขียนในสัปดาห์: W5
+// ⚖️ กฎเหล็ก G6
+//
+// เดิมไฟล์นี้แนบ LIFF ID token ใน Authorization header ทุก request
+// ตอนนี้หน้าเว็บกับ API อยู่โดเมนเดียวกัน จึงใช้ session cookie แทน — เบราว์เซอร์แนบให้เอง
+// หน้าเว็บไม่เคยเห็น token ใดๆ เลย (cookie เป็น httpOnly) และไม่เคยส่ง user_id เอง
+
+(function () {
+  /** error ที่มี status ติดมาด้วย ให้ผู้เรียกแยกได้ว่า 401 (ยังไม่ล็อกอิน) หรืออย่างอื่น */
+  class ApiError extends Error {
+    constructor(message, status) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+    }
+  }
+
+  async function request(path, options) {
+    const response = await fetch(`/api${path}`, {
+      // สำคัญ: ถ้าไม่ใส่ credentials เบราว์เซอร์อาจไม่แนบ cookie ไปด้วย
+      credentials: 'same-origin',
+      ...options,
+    });
+
+    if (!response.ok) {
+      let message = `เรียก ${path} ไม่สำเร็จ`;
+      try {
+        const body = await response.json();
+        if (body && body.error) message = body.error;
+      } catch (_) {
+        // body ไม่ใช่ JSON ก็ใช้ข้อความ default
+      }
+      throw new ApiError(message, response.status);
+    }
+
+    return response.json();
+  }
+
+  window.moneyBotApi = {
+    ApiError,
+    fetchMe: () => request('/me'),
+    fetchSummary: () => request('/summary'),
+    fetchTransactions: () => request('/transactions?limit=100'),
+    fetchCategories: () => request('/categories'),
+    fetchSettings: () => request('/settings'),
+    rotateEmailToken: () => request('/settings/email-token/rotate', { method: 'POST' }),
+    logout: () =>
+      fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }).then(() => {
+        window.location.href = '/';
+      }),
+  };
+})();

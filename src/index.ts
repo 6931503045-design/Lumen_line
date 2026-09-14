@@ -6,6 +6,7 @@
 // ถ้ามี json parser กินไปก่อน ลายเซ็นจะตรวจไม่ผ่านทุก request — json parser จึงผูกไว้
 // เฉพาะ /api และ /jobs เท่านั้น
 
+import path from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { JSONParseError, SignatureValidationFailed } from '@line/bot-sdk';
 import { env } from './config/env';
@@ -13,18 +14,26 @@ import { healthRouter } from './routes/health';
 import { webhookRouter } from './routes/webhook';
 import { apiRouter } from './routes/api';
 import { jobsRouter } from './routes/jobs';
-import { liffCors } from './middleware/cors';
+import { authRouter } from './routes/auth';
 
 const app = express();
 
 app.use('/webhook', webhookRouter);
 app.use('/health', healthRouter);
-app.use('/api', liffCors, express.json(), apiRouter);
+app.use('/auth', express.urlencoded({ extended: false }), authRouter);
+app.use('/api', express.json(), apiRouter);
 app.use('/jobs', express.json(), jobsRouter);
 
-app.get('/', (_req, res) => {
-  res.json({ name: 'JOD tang', status: 'scaffold-ready' });
-});
+// เสิร์ฟหน้าเว็บจากโดเมนเดียวกับ API
+//
+// ทำไมต้องโดเมนเดียว: session เก็บใน cookie ถ้าหน้าเว็บอยู่คนละโดเมนกับ API
+// cookie จะกลายเป็น third-party cookie ซึ่ง Safari บล็อกโดยปริยายและ Chrome กำลังทยอยเลิกรองรับ
+// = ล็อกอินค้างไม่ได้กับผู้ใช้บางกลุ่มแบบพังเงียบๆ อยู่โดเมนเดียวกันตัดปัญหานี้ทิ้งทั้งหมด
+// และเป็นเหตุผลที่ middleware/cors.ts ถูกลบไปแล้ว — ไม่มี cross-origin ให้ต้องอนุญาตอีก
+//
+// วางไว้ท้ายสุดของ route ทั้งหมด เพื่อไม่ให้ไฟล์ static ไปบังเส้นทาง /api หรือ /auth
+const WEB_ROOT = path.join(__dirname, '..', 'web');
+app.use(express.static(WEB_ROOT));
 
 // error handler ต้องอยู่ท้ายสุดและต้องรับครบ 4 พารามิเตอร์ Express ถึงจะรู้ว่าเป็น error handler
 //

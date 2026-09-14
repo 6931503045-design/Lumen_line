@@ -63,9 +63,13 @@
           <div class="panel-head">
             <h3>อีเมลสำหรับ forward</h3>
           </div>
-          <p class="email-address" id="ingestEmail">user+ab12cd34@gmail.com</p>
+          <p class="email-address" id="ingestEmail">กำลังโหลด…</p>
           <button id="rotateTokenBtn" class="chip-button">สร้าง token ใหม่</button>
           <p class="ai-disclaimer">การสร้าง token ใหม่จะทำให้ที่อยู่เดิมใช้ไม่ได้ทันที</p>
+        </section>
+
+        <section class="glass-panel section-panel" id="accountPanel" hidden>
+          <button id="logoutBtn" class="chip-button">ออกจากระบบ</button>
         </section>
       </main>
 
@@ -78,12 +82,10 @@
       </nav>
     </div>
 
-    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <script src="js/config.js"></script>
     <script src="js/api.js"></script>
-    <!-- mock-data.js เป็นค่าตั้งต้น/ตัวสำรองเมื่อเปิดนอกแอป LINE — liff-init.js จะทับด้วยข้อมูลจริง -->
+    <!-- mock-data.js เป็นค่าตั้งต้น/ตัวอย่างตอนยังไม่ล็อกอิน — boot.js จะทับด้วยข้อมูลจริง -->
     <script src="js/mock-data.js"></script>
     <script src="js/app.js"></script>
-    <script src="js/liff-init.js"></script>
+    <script src="js/boot.js"></script>
   </body>
 </html>

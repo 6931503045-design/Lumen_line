@@ -1535,14 +1535,9 @@ function bindTransactionControls() {
   }
 }
 
-function bindSettingsActions() {
-  const rotateButton = document.getElementById('rotateTokenBtn');
-  if (rotateButton) {
-    rotateButton.addEventListener('click', () => {
-      showSuccessModal('token ใหม่ถูกสร้างเรียบร้อยแล้ว');
-    });
-  }
-}
+// ปุ่ม "สร้าง token ใหม่" ถูกผูกไว้ที่ js/boot.js แทน เพราะต้องเรียก API จริง
+// เดิมผูกไว้ที่นี่แล้วโชว์ข้อความว่าสำเร็จทันทีโดยไม่ได้เรียกอะไรเลย ซึ่งเป็นการบอกผู้ใช้ผิด
+function bindSettingsActions() {}
 
 function initializePage() {
   setupThemeToggle();
