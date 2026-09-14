@@ -1,0 +1,35 @@
+// ไฟล์นี้ทำหน้าที่อะไร: สัญญากลางของ parser อีเมลธนาคารแต่ละเจ้า
+// ใครรับผิดชอบ: ⑤ Integration
+// เขียนในสัปดาห์: W4
+// อ้างอิง: SPEC.md §S8 "pattern ของแต่ละธนาคารแยกเป็นฟังก์ชัน/ไฟล์ ห้ามเขียนปนใน logic หลัก"
+// ⚖️ กฎเหล็ก G1, G3
+
+/** ผลการอ่านอีเมลหนึ่งฉบับ — ทุกฟิลด์ต้องมาจากข้อความในอีเมลตรงๆ ห้ามเดา (G1) */
+export type BankEmailParseResult = {
+  /** จำนวนเงินหน่วยสตางค์ (G3) */
+  amountSatang: number;
+  /** เงินเข้า = income, เงินออก = expense (transfer ต้องให้ผู้ใช้เลือกเองในภายหลัง) */
+  type: 'income' | 'expense';
+  /** เวลาที่เกิดรายการตามที่อีเมลระบุ — null ถ้าอ่านไม่ได้ ผู้เรียกจะใช้เวลาที่อีเมลเข้ามาแทน */
+  occurredAt: Date | null;
+  /** เลขอ้างอิงรายการ ใช้เป็นกุญแจกันซ้ำที่แม่นที่สุดตาม S10 — null ถ้าอีเมลไม่มี */
+  refNumber: string | null;
+};
+
+export type BankEmailParser = {
+  /** ชื่อย่อธนาคาร ใช้ใน log เท่านั้น */
+  readonly bank: string;
+
+  /**
+   * โดเมนที่ยอมรับใน Authentication-Results (dkim=pass header.d=...)
+   * SPEC §S8: "MUST ตรวจ DKIM ของโดเมนธนาคาร (SPF มักไม่ผ่านหลัง forward)"
+   * ถ้าไม่ตรวจ ใครที่รู้ที่อยู่ +token ก็ส่งรายการปลอมเข้ามาได้
+   */
+  readonly dkimDomains: readonly string[];
+
+  /** อีเมลฉบับนี้เป็นของธนาคารนี้ไหม ดูจากผู้ส่งและเนื้อความ */
+  matches(fromAddress: string, subject: string, text: string): boolean;
+
+  /** อ่านรายละเอียด คืน null ถ้าอ่านไม่ครบ — ห้ามเดาค่าที่หายไป */
+  parse(text: string): BankEmailParseResult | null;
+};

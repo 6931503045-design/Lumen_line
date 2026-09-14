@@ -25,6 +25,8 @@ export type InsertTransactionInput = {
   occurredAt: string; // ISO string (timestamptz)
   source: TransactionSource;
   parsedBy: TransactionParsedBy;
+  /** เลขอ้างอิงจากธนาคาร/สลิป ใช้กันรายการซ้ำตาม S10 — มีเฉพาะรายการที่มาจากอีเมลหรือสลิป */
+  refNumber?: string | null;
 };
 
 export type InsertedTransaction = {
@@ -48,6 +50,7 @@ export async function insertTransaction(
       occurred_at: input.occurredAt,
       source: input.source,
       parsed_by: input.parsedBy,
+      ref_number: input.refNumber ?? null,
     })
     .select('id, amount, type, occurred_at')
     .single();
@@ -161,4 +164,91 @@ export async function listTransactionsByUser(
     throw error;
   }
   return (data ?? []) as unknown as TransactionListRow[];
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// query สำหรับ S10 Dedup — ใช้โดย services/dedup.service.ts
+// ────────────────────────────────────────────────────────────────────────────
+
+export type DedupCandidate = {
+  id: string;
+  amount: string;
+  type: TransactionType;
+  occurred_at: string;
+  ref_number: string | null;
+};
+
+/**
+ * หารายการที่มี ref_number ตรงกันของผู้ใช้คนนี้ (S10 เงื่อนไขที่ 1 = ซ้ำแน่นอน)
+ * นับเฉพาะรายการที่ยังไม่ถูกลบ ให้ตรงกับ partial unique index uq_tx_ref
+ */
+export async function findTransactionByRefNumber(
+  userId: string,
+  refNumber: string
+): Promise<DedupCandidate | null> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, amount, type, occurred_at, ref_number')
+    .eq('user_id', userId)
+    .eq('ref_number', refNumber)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * หารายการยอดเท่ากันเป๊ะ ประเภทเดียวกัน ในช่วงเวลา +/- window (S10 เงื่อนไขที่ 2 = น่าจะซ้ำ)
+ * เทียบ amount เป็น string ของ numeric(12,2) ตรงๆ ได้ เพราะ fromSatang() คุมรูปแบบให้เป็น
+ * ทศนิยม 2 ตำแหน่งเสมอ ("80.00") จึงไม่มีปัญหา "80" กับ "80.00" ไม่ตรงกัน
+ */
+export async function findSimilarTransaction(
+  userId: string,
+  type: TransactionType,
+  amountNumeric: string,
+  fromIso: string,
+  toIso: string
+): Promise<DedupCandidate | null> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, amount, type, occurred_at, ref_number')
+    .eq('user_id', userId)
+    .eq('type', type)
+    .eq('amount', amountNumeric)
+    .is('deleted_at', null)
+    .gte('occurred_at', fromIso)
+    .lte('occurred_at', toIso)
+    .order('occurred_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * เติม ref_number ให้รายการที่มีอยู่แล้ว (S10: กรณี "น่าจะซ้ำ" ที่มาจากอีเมล)
+ * เขียนทับเฉพาะแถวที่ยังไม่มี ref_number เพื่อไม่ให้ไปทับเลขอ้างอิงเดิมที่ถูกต้องอยู่แล้ว
+ * ⚖️ G6: กรอง user_id ด้วยเสมอ
+ */
+export async function backfillRefNumber(
+  transactionId: string,
+  userId: string,
+  refNumber: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('transactions')
+    .update({ ref_number: refNumber, updated_at: new Date().toISOString() })
+    .eq('id', transactionId)
+    .eq('user_id', userId)
+    .is('ref_number', null);
+
+  if (error) {
+    throw error;
+  }
 }

@@ -1,5 +1,6 @@
 import { supabase } from '../db/supabase';
 import { DEFAULT_CATEGORIES } from '../config/constants';
+import { ensureEmailIngestToken } from '../db/queries/users';
 
 type LineEventLike = {
   source?: { userId?: string };
@@ -58,6 +59,15 @@ export async function handleFollow(event: LineEventLike): Promise<void> {
   const { error: seedError } = await supabase.from('categories').insert(categoryRows);
   if (seedError) {
     console.error('[followHandler] seed default categories error:', seedError);
+  }
+
+  // สร้างที่อยู่ +token สำหรับ forward อีเมลธนาคาร (SPEC §S8) ให้ตั้งแต่ตอนนี้
+  // ผู้ใช้จะเห็นที่อยู่เต็มได้ในหน้า settings ของ LIFF โดยไม่ต้องรอให้ระบบสร้างทีหลัง
+  // ล้มเหลวไม่ถือว่าร้ายแรง: ensureEmailIngestToken() จะสร้างให้เองตอนเปิดหน้า settings
+  try {
+    await ensureEmailIngestToken(newUser.id);
+  } catch (err) {
+    console.error('[followHandler] สร้าง email_ingest_token ไม่สำเร็จ:', err);
   }
 }
 

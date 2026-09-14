@@ -12,6 +12,8 @@
 import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { env } from '../config/env';
+import { isJobName, JOBS } from '../jobs';
+import { logger } from '../utils/logger';
 
 export const jobsRouter = express.Router();
 
@@ -41,6 +43,35 @@ jobsRouter.use((req, res, next) => {
   next();
 });
 
-jobsRouter.post('/run', (_req, res) => {
-  res.status(200).json({ ok: true, message: 'Cron job scaffold ready' });
+/**
+ * รันงานตามชื่อ เช่น POST /jobs/run?job=emailPoll
+ *
+ * ตอบ 200 พร้อมสรุปผลเสมอเมื่องานรันจบ แม้ผลจะเป็น 0 รายการ เพื่อให้ GitHub Actions
+ * แยกออกว่า "งานรันแล้วไม่มีอะไรทำ" (200) ต่างจาก "งานพัง" (500) — สองอย่างนี้
+ * ต้องไม่หน้าตาเหมือนกันใน log ไม่งั้นระบบตายเงียบแล้วไม่มีใครรู้
+ */
+jobsRouter.post('/run', (req, res, next) => {
+  const requested = String(req.query.job ?? req.body?.job ?? '');
+
+  if (!requested) {
+    res.status(400).json({ ok: false, error: 'ต้องระบุชื่องาน เช่น ?job=emailPoll' });
+    return;
+  }
+  if (!isJobName(requested)) {
+    res.status(404).json({
+      ok: false,
+      error: `ไม่รู้จักงานชื่อ "${requested}"`,
+      available: Object.keys(JOBS),
+    });
+    return;
+  }
+
+  const startedAt = Date.now();
+  JOBS[requested]()
+    .then((result) => {
+      const durationMs = Date.now() - startedAt;
+      logger.info(`[jobs] ${requested} เสร็จใน ${durationMs}ms`, result);
+      res.status(200).json({ ok: true, job: requested, durationMs, result });
+    })
+    .catch(next);
 });
