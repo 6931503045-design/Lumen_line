@@ -1,9 +1,21 @@
+// ไฟล์นี้ทำหน้าที่อะไร: endpoint สำหรับ LINE webhook รับข้อความ ตรวจลายเซ็น กันซ้ำ แล้วแยกงานไปแต่ละ handler
+// ใครรับผิดชอบ: ① Bot Core
+// เขียนในสัปดาห์: W1
+// อ้างอิง: SPEC.md §3 S1 (event follow/unfollow/message.text/postback), README.md แผนภาพ webhook
+// ⚖️ กฎเหล็ก G5, G6
+//
+// 🆕 เพิ่ม dispatch ไป postback event (สำหรับปุ่ม ↩️ ยกเลิก / ✏️ แก้หมวด ใน confirmCard)
+//
+// รูปแบบตาม SPEC: ต้องตอบ 200 ภายใน < 1 วิ ก่อน แล้วค่อยประมวลผล event ต่อแบบ async (ไม่ await handler
+// ก่อนตอบ res เพื่อไม่ให้ LINE คิดว่า timeout แล้ว retry ซ้ำจนเกิด event ซ้ำมากขึ้นไปอีก)
+
 import express from 'express';
 import { middleware } from '@line/bot-sdk';
 import { env } from '../config/env';
 import { supabase } from '../db/supabase';
 import { handleFollow, handleUnfollow } from '../handlers/followHandler';
 import { handleText } from '../handlers/textHandler';
+import { handlePostback } from '../handlers/postbackHandler';
 
 export const webhookRouter = express.Router();
 
@@ -12,15 +24,25 @@ const lineConfig = {
   channelSecret: env.lineChannelSecret,
 };
 
+/**
+ * โครงสร้าง event แบบคร่าวๆ พอสำหรับ W1 (follow / unfollow / message.text / postback)
+ * ตั้งใจไม่ import type เต็มจาก @line/bot-sdk เพราะ namespace ของ type ใน SDK เปลี่ยนบ่อยระหว่างเวอร์ชัน
+ * (v7 ใช้ WebhookEvent ตรงๆ, v8 ย้ายไปอยู่ใต้ `webhook.Event`) — ก่อนจะ narrow type ให้แม่นขึ้น
+ * ให้เช็คเวอร์ชัน @line/bot-sdk ใน package.json ก่อนเสมอ
+ */
 type LineWebhookEvent = {
   type: string;
   webhookEventId?: string;
   replyToken?: string;
   source?: { userId?: string; type?: string };
   message?: { type: string; text?: string };
+  postback?: { data?: string };
 };
 
+// middleware ของ @line/bot-sdk ต้องมาก่อน handler เสมอ — เป็นตัวตรวจ x-line-signature ด้วย raw body
+// (ดูคอมเมนต์ใน index.ts ว่าทำไมห้ามมี express.json() ครอบมาก่อนหน้านี้)
 webhookRouter.post('/', middleware(lineConfig), (req, res) => {
+  // ต้องตอบ 200 ทันทีก่อนประมวลผลต่อ (< 1 วิ ตาม SPEC) — ไม่ await handler ตรงนี้
   res.status(200).json({ ok: true });
 
   const events = (req.body?.events ?? []) as LineWebhookEvent[];
@@ -32,10 +54,12 @@ webhookRouter.post('/', middleware(lineConfig), (req, res) => {
 });
 
 async function processEvent(event: LineWebhookEvent): Promise<void> {
+  // กันประมวลผลซ้ำ: insert webhookEventId ลง webhook_events ถ้าชน primary key (เคยทำแล้ว) ให้ข้าม
   if (event.webhookEventId) {
     const { error } = await supabase.from('webhook_events').insert({ id: event.webhookEventId });
 
     if (error) {
+      // 23505 = unique_violation ของ Postgres แปลว่าเคย insert แถวนี้ไปแล้ว = event ซ้ำ ข้ามได้เลย (idempotent)
       if (error.code === '23505') return;
       console.error('[webhook] insert webhook_events error:', error);
       return;
@@ -54,7 +78,11 @@ async function processEvent(event: LineWebhookEvent): Promise<void> {
         await handleText(event);
       }
       break;
+    case 'postback':
+      await handlePostback(event);
+      break;
     default:
+      // event ประเภทอื่น (join ฯลฯ) ยังไม่จัดการใน W1
       break;
   }
 }
