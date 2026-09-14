@@ -1,0 +1,30 @@
+เรียน ผู้ใช้โทรศัพท์มือถือหมายเลข 09-XXXX-0000
+เรื่อง แจ้งผลการทำรายการโอนเงินพร้อมเพย์ (สำเร็จ)
+
+ตามที่คุณได้ทำรายการโอนเงินพร้อมเพย์ผ่านบริการ K PLUS โดยมีรายละเอียด ดังนี้
+
+        วันที่ทำรายการ: 07/09/2026  11:57:40
+        เลขที่รายการ: 019900000000DPP00000
+        โอนเงินจากบัญชี: xxx-x-x0000-x
+        ให้ Wallet ID: 140-xxxxxxxx-0000
+        ชื่อ Wallet: สมหญิง ทดสอบ
+        จำนวนเงิน (บาท): 1,080.25
+        ค่าธรรมเนียม (บาท): 0.00
+        ยอดถอนได้ (บาท): 2,345.15
+
+ธนาคารขอเรียนให้ทราบว่า ธนาคารได้ดำเนินการโอนเงินตามที่คุณได้ทำรายการไว้เรียบร้อยแล้ว
+
+Dear Customer of mobile number 09-XXXX-0000
+Subject: Result of PromptPay Funds Transfer (Success)
+
+        Transaction Date: 07/09/2026  11:57:40
+        Transaction Number: 019900000000DPP00000
+        From Account: xxx-x-x0000-x
+        To Wallet ID: 140-xxxxxxxx-0000
+        Wallet Name: SOMYING TESTER
+        Amount (THB): 1,080.25
+        Fee (THB): 0.00
+        Available Balance (THB): 2,345.15
+
+Yours sincerely,
+KASIKORNBANK PCL.

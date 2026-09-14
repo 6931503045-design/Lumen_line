@@ -1,0 +1,30 @@
+เรียน ผู้ใช้โทรศัพท์มือถือหมายเลข 09-XXXX-0000
+เรื่อง แจ้งผลการทำรายการโอนเงินพร้อมเพย์ (สำเร็จ)
+
+ตามที่คุณได้ทำรายการโอนเงินพร้อมเพย์ผ่านบริการ K PLUS โดยมีรายละเอียด ดังนี้
+
+        วันที่ทำรายการ: 13/09/2026  16:36:11
+        เลขที่รายการ: 019900000000CPP00000
+        โอนเงินจากบัญชี: xxx-x-x0000-x
+        ให้รหัสพร้อมเพย์: xxx-xxx-0000
+        ชื่อผู้รับเงิน: นาย สมชาย ทดสอบ
+        จำนวนเงิน (บาท): 250.00
+        ค่าธรรมเนียม (บาท): 0.00
+        ยอดถอนได้ (บาท): 984.20
+
+ธนาคารขอเรียนให้ทราบว่า ธนาคารได้ดำเนินการโอนเงินตามที่คุณได้ทำรายการไว้เรียบร้อยแล้ว
+
+Dear Customer of mobile number 09-XXXX-0000
+Subject: Result of PromptPay Funds Transfer (Success)
+
+        Transaction Date: 13/09/2026  16:36:11
+        Transaction Number: 019900000000CPP00000
+        From Account: xxx-x-x0000-x
+        To PromptPay ID: xxx-xxx-0000
+        Received Name: SOMCHAI TESTER
+        Amount (THB): 250.00
+        Fee (THB): 0.00
+        Available Balance (THB): 984.20
+
+Yours sincerely,
+KASIKORNBANK PCL.

@@ -1,23 +1,31 @@
-// ไฟล์นี้ทำหน้าที่อะไร: test parser อีเมลแจ้งเตือนของ K PLUS
+// ไฟล์นี้ทำหน้าที่อะไร: test parser อีเมลแจ้งเตือนของ K PLUS กับตัวอย่างรูปแบบจริง
 // ใครรับผิดชอบ: ⑤ Integration
 // เขียนในสัปดาห์: W4
-// อ้างอิง: SPEC.md §S8
+// อ้างอิง: SPEC.md §S8 / tests/fixtures/kplus/
 // ⚖️ กฎเหล็ก G1, G3
 //
-// ⚠️ ข้อความตัวอย่างในไฟล์นี้เป็นข้อความที่แต่งขึ้นเอง ไม่ใช่อีเมลจริงของธนาคาร
-// (SPEC §S8 บังคับว่าตัวอย่างใน repo ต้องไม่มีเลขบัญชี ชื่อ หรือยอดเงินจริง)
-// เมื่อได้อีเมล K PLUS ของจริงมาแล้ว ให้เพิ่มเป็น fixture แล้วปรับ pattern ใน kbank.ts
+// fixture คัดโครงสร้างจากอีเมลจริง แต่ลบเลขบัญชี ชื่อ และยอดเงินจริงออกแล้วตามที่ SPEC บังคับ
+// ดูรายละเอียดการลบข้อมูลได้ที่ tests/fixtures/kplus/README.md
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { kbankParser } from '../src/services/email/banks/kbank';
 
+const FIXTURES = join(__dirname, 'fixtures', 'kplus');
+const load = (name: string) => readFileSync(join(FIXTURES, name), 'utf8');
+
+const billPayment = load('bill-payment-success.txt');
+const promptPay = load('promptpay-transfer-success.txt');
+const wallet = load('promptpay-wallet-success.txt');
+
 describe('kbankParser.matches', () => {
-  it('จับอีเมลจากโดเมนกสิกร', () => {
-    expect(kbankParser.matches('no-reply@kasikornbank.com', 'แจ้งเตือน', '')).toBe(true);
+  it('จับอีเมลจากที่อยู่ของ K PLUS', () => {
+    expect(kbankParser.matches('K PLUS <KPLUS@kasikornbank.com>', '', '')).toBe(true);
   });
 
   it('จับจากเนื้อความภาษาไทย', () => {
-    expect(kbankParser.matches('a@b.com', '', 'ธนาคารกสิกรไทย แจ้งเตือน')).toBe(true);
+    expect(kbankParser.matches('a@b.com', '', 'บมจ. ธนาคารกสิกรไทย')).toBe(true);
   });
 
   it('ไม่จับอีเมลทั่วไป', () => {
@@ -25,76 +33,124 @@ describe('kbankParser.matches', () => {
   });
 });
 
-describe('kbankParser.parse — อ่านได้', () => {
-  it('เงินออก: อ่านยอด ทิศทาง เลขอ้างอิง และเวลาได้ครบ', () => {
-    const text = [
-      'ธนาคารกสิกรไทย แจ้งเตือนรายการ',
-      'ชำระเงิน ร้านตัวอย่าง',
-      'จำนวนเงิน 1,250.50 บาท',
-      'วันที่ 14/09/2569 10:30',
-      'เลขที่รายการ KB1234567890',
-    ].join('\n');
-
-    expect(kbankParser.parse(text)).toEqual({
-      amountSatang: 125050,
+describe('kbankParser.parse — ชำระค่าสินค้าและบริการ', () => {
+  it('อ่านครบทุกฟิลด์', () => {
+    expect(kbankParser.parse(billPayment)).toEqual({
+      amountSatang: 12550,
       type: 'expense',
-      occurredAt: new Date('2026-09-14T10:30:00+07:00'),
-      refNumber: 'KB1234567890',
+      occurredAt: new Date('2026-09-14T09:36:15+07:00'),
+      refNumber: '019900000000CPM00000',
+    });
+  });
+});
+
+describe('kbankParser.parse — โอนเงินพร้อมเพย์', () => {
+  it('โอนไปเบอร์พร้อมเพย์ = เงินออก', () => {
+    expect(kbankParser.parse(promptPay)).toEqual({
+      amountSatang: 25000,
+      type: 'expense',
+      occurredAt: new Date('2026-09-13T16:36:11+07:00'),
+      refNumber: '019900000000CPP00000',
     });
   });
 
-  it('เงินเข้า: ทิศทางเป็น income', () => {
-    const text = 'เงินเข้าบัญชี\nจำนวนเงิน 500.00 บาท\nวันที่ 01/09/2569 08:00';
-    expect(kbankParser.parse(text)?.type).toBe('income');
+  it('โอนไป Wallet และยอดมี comma คั่นหลักพัน', () => {
+    expect(kbankParser.parse(wallet)).toEqual({
+      amountSatang: 108025,
+      type: 'expense',
+      occurredAt: new Date('2026-09-07T11:57:40+07:00'),
+      refNumber: '019900000000DPP00000',
+    });
+  });
+});
+
+describe('kbankParser.parse — ต้องไม่หยิบตัวเลขผิดตัว', () => {
+  // อีเมลจริงมีตัวเลขหน่วยบาท 3 ตัววางติดกัน นี่คือจุดที่ regex กว้างเกินจะพลาด
+  it('ไม่เอา "ค่าธรรมเนียม (บาท): 0.00" มาเป็นยอดรายการ', () => {
+    expect(kbankParser.parse(billPayment)?.amountSatang).not.toBe(0);
   });
 
-  it('แปลงปี ค.ศ. 4 หลักได้', () => {
-    const text = 'เงินเข้า\nจำนวนเงิน 100.00 บาท\nวันที่ 14/09/2026 09:00';
-    expect(kbankParser.parse(text)?.occurredAt).toEqual(new Date('2026-09-14T09:00:00+07:00'));
+  it('ไม่เอา "ยอดถอนได้ (บาท): 1,234.56" (ยอดคงเหลือ) มาเป็นยอดรายการ', () => {
+    expect(kbankParser.parse(billPayment)?.amountSatang).not.toBe(123456);
   });
 
-  it('แปลงปี พ.ศ. 2 หลักได้ (69 = 2569 = ค.ศ. 2026)', () => {
-    const text = 'เงินเข้า\nจำนวนเงิน 100.00 บาท\nวันที่ 14/09/69 09:00';
-    expect(kbankParser.parse(text)?.occurredAt).toEqual(new Date('2026-09-14T09:00:00+07:00'));
+  it('ยอดที่ได้ต้องตรงกับบรรทัด "จำนวนเงิน" เท่านั้น', () => {
+    expect(kbankParser.parse(wallet)?.amountSatang).toBe(108025); // ไม่ใช่ 234515 ของยอดถอนได้
   });
 
-  it('ไม่มีเลขอ้างอิงก็ยังอ่านได้ แค่ refNumber เป็น null', () => {
-    const text = 'ชำระเงิน\nจำนวนเงิน 80.00 บาท';
-    const result = kbankParser.parse(text);
-    expect(result?.amountSatang).toBe(8000);
-    expect(result?.refNumber).toBeNull();
+  it('ไม่เอาเลขวันที่หรือเบอร์โทรมาเป็นยอด', () => {
+    const amount = kbankParser.parse(promptPay)?.amountSatang;
+    expect(amount).toBe(25000);
+  });
+});
+
+describe('kbankParser.parse — รายการที่ไม่สำเร็จต้องไม่ถูกบันทึก', () => {
+  it('อีเมลที่มีคำว่า "ไม่สำเร็จ" ต้องคืน null', () => {
+    const failed = billPayment.replace('(สำเร็จ)', '(ไม่สำเร็จ)');
+    expect(kbankParser.parse(failed)).toBeNull();
   });
 
-  it('ไม่มีวันเวลาก็ยังอ่านได้ แค่ occurredAt เป็น null', () => {
-    const text = 'ชำระเงิน\nจำนวนเงิน 80.00 บาท';
-    expect(kbankParser.parse(text)?.occurredAt).toBeNull();
+  it('อีเมลภาษาอังกฤษที่ Unsuccessful ต้องคืน null', () => {
+    const failed = billPayment
+      .replace('(สำเร็จ)', '(ไม่สำเร็จ)')
+      .replace('(Success)', '(Unsuccessful)');
+    expect(kbankParser.parse(failed)).toBeNull();
   });
 
-  it('เก็บทศนิยมสตางค์ไว้ครบ ไม่ปัดทิ้ง', () => {
-    const text = 'ชำระเงิน\nจำนวนเงิน 45.50 บาท';
-    expect(kbankParser.parse(text)?.amountSatang).toBe(4550);
+  it('ไม่มีคำยืนยันว่าสำเร็จเลยก็ต้องคืน null (fail closed)', () => {
+    const unclear = billPayment.replaceAll('สำเร็จ', '').replaceAll('Success', '');
+    expect(kbankParser.parse(unclear)).toBeNull();
   });
 });
 
 describe('kbankParser.parse — ต้องคืน null (ห้ามเดา)', () => {
-  it('ไม่มีคำบอกทิศทางเงิน', () => {
-    expect(kbankParser.parse('จำนวนเงิน 100.00 บาท')).toBeNull();
+  it('ไม่มีบรรทัดบอกบัญชีต้นทาง = อ่านทิศทางไม่ได้', () => {
+    const noDirection = billPayment.replace('ชำระเงินจากบัญชี', 'ข้อมูลอื่น')
+      .replace('Paid From Account', 'Other Info');
+    expect(kbankParser.parse(noDirection)).toBeNull();
   });
 
-  it('ไม่มีจำนวนเงิน', () => {
-    expect(kbankParser.parse('ชำระเงิน ร้านตัวอย่าง เรียบร้อย')).toBeNull();
+  it('ไม่มีบรรทัดจำนวนเงิน', () => {
+    const noAmount = billPayment
+      .replace('จำนวนเงิน (บาท): 125.50', '')
+      .replace('Amount (THB): 125.50', '');
+    expect(kbankParser.parse(noAmount)).toBeNull();
   });
 
   it('ข้อความว่าง', () => {
     expect(kbankParser.parse('')).toBeNull();
   });
 
-  it('ยอดเกินเพดาน MAX_AMOUNT_SATANG ต้องไม่ผ่าน', () => {
-    // 10,000,001 บาท เกินเพดาน 10 ล้านบาทของตาราง transactions
-    expect(kbankParser.parse('ชำระเงิน\nจำนวนเงิน 10000001.00 บาท')).toBeNull();
+  it('ยอดเกินเพดาน 10 ล้านบาทต้องไม่ผ่าน', () => {
+    const huge = billPayment.replace('125.50', '10000001.00');
+    expect(kbankParser.parse(huge)).toBeNull();
   });
 
-  it('ยอดเป็นศูนย์ต้องไม่ผ่าน (G3 เงินต้องมากกว่า 0)', () => {
-    expect(kbankParser.parse('ชำระเงิน\nจำนวนเงิน 0.00 บาท')).toBeNull();
+  it('ยอดเป็นศูนย์ต้องไม่ผ่าน (G3)', () => {
+    const zero = billPayment
+      .replace('จำนวนเงิน (บาท): 125.50', 'จำนวนเงิน (บาท): 0.00')
+      .replace('Amount (THB): 125.50', 'Amount (THB): 0.00');
+    expect(kbankParser.parse(zero)).toBeNull();
+  });
+});
+
+describe('kbankParser.parse — อ่านจากภาษาอังกฤษได้ถ้าส่วนไทยหาย', () => {
+  it('เหลือแต่ส่วนอังกฤษก็ยังอ่านออก', () => {
+    const englishOnly = [
+      'Subject: Result of Payment (Success)',
+      '        Transaction Date: 14/09/2026  09:36:15',
+      '        Transaction Number: 019900000000CPM00000',
+      '        Paid From Account: xxx-x-x0000-x',
+      '        Amount (THB): 125.50',
+      '        Fee (THB): 0.00',
+      '        Available Balance (THB): 1,234.56',
+    ].join('\n');
+
+    expect(kbankParser.parse(englishOnly)).toEqual({
+      amountSatang: 12550,
+      type: 'expense',
+      occurredAt: new Date('2026-09-14T09:36:15+07:00'),
+      refNumber: '019900000000CPM00000',
+    });
   });
 });

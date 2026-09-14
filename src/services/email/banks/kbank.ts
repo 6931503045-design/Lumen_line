@@ -1,62 +1,118 @@
-// ไฟล์นี้ทำหน้าที่อะไร: อ่านอีเมลแจ้งเตือนของ K PLUS / กสิกรไทย
+// ไฟล์นี้ทำหน้าที่อะไร: อ่านอีเมลแจ้งเตือนของ K PLUS / ธนาคารกสิกรไทย
 // ใครรับผิดชอบ: ⑤ Integration
 // เขียนในสัปดาห์: W4
-// อ้างอิง: SPEC.md §S8 (ธนาคารแรกที่ต้องรองรับคือ K PLUS)
+// อ้างอิง: SPEC.md §S8 / ตัวอย่างอีเมลจริงใน tests/fixtures/kplus/
 // ⚖️ กฎเหล็ก G1, G3 — ดึงเลขที่อีเมลเขียนไว้เท่านั้น ไม่คำนวณ ไม่เดา
 //
-// 🔴 สิ่งที่ทีมต้องทำก่อนใช้จริง: pattern ด้านล่างเขียนจากรูปแบบข้อความแจ้งเตือนภาษาไทย
-// แบบทั่วไป ยังไม่ได้ตรวจกับอีเมล K PLUS ของจริง เพราะ repo ไม่มีตัวอย่างอีเมลเก็บไว้เลย
-// ให้เอาอีเมลจริง 1 ฉบับมาลบเลขบัญชี/ชื่อ/ยอดเงินออก (SPEC §S8 บังคับ) แล้วเพิ่มเป็น fixture
-// ใน tests/fixtures/ แล้วปรับ pattern ให้ตรง — ออกแบบให้แก้ไฟล์นี้ไฟล์เดียวจบ
+// ✅ pattern ชุดนี้เขียนจากอีเมล K PLUS ของจริง 3 ฉบับ (ชำระค่าสินค้า, โอนพร้อมเพย์ไปเบอร์,
+//    โอนพร้อมเพย์ไป Wallet) ไม่ใช่การเดารูปแบบอีกต่อไป
 //
-// ระหว่างที่ยังไม่ได้ตรวจ parser จะคืน null เมื่ออ่านไม่ครบ ซึ่งทำให้อีเมลถูกบันทึกไว้
-// ใน user_emails แบบ parsed=false โดยไม่สร้างรายการผิดๆ — ปลอดภัยกว่าเดา
+// รูปแบบจริงที่ต้องระวังเป็นพิเศษ:
+//
+// 1) ชื่อฟิลด์มีวงเล็บหน่วยคั่นก่อน colon เสมอ → "จำนวนเงิน (บาท): 125.50"
+//    ไม่ใช่ "จำนวนเงิน: 125.50" — pattern เดิมที่ไม่รองรับวงเล็บอ่านไม่ออกทั้ง 3 ฉบับ
+//
+// 2) ในอีเมลฉบับเดียวมีตัวเลขหน่วยบาทถึง 3 ตัว วางติดกัน:
+//        จำนวนเงิน (บาท): 125.50      ← อันนี้เท่านั้นที่เป็นยอดรายการ
+//        ค่าธรรมเนียม (บาท): 0.00      ← ค่าธรรมเนียม
+//        ยอดถอนได้ (บาท): 1,234.56     ← ยอดคงเหลือในบัญชี
+//    ห้ามใช้ regex กว้างๆ ที่จับ "ตัวเลขตามหลังคำว่าบาท" เด็ดขาด เพราะจะคว้ายอดคงเหลือ
+//    มาบันทึกเป็นรายจ่ายได้ ทุก pattern จึงผูกกับชื่อฟิลด์ตรงๆ
+//
+// 3) เนื้ออีเมลมีทั้งภาษาไทยและอังกฤษที่ข้อมูลซ้ำกัน อ่านไทยก่อน ถ้าไม่เจอค่อยลองอังกฤษ
+//
+// 4) วันที่เป็น ค.ศ. 4 หลัก ("14/09/2026") ไม่ใช่ พ.ศ. — และมีเว้นวรรค 2 ตัวก่อนเวลา
+//
+// 5) ต้องเช็ค "(สำเร็จ)" ก่อนสร้างรายการ ไม่งั้นวันที่ธนาคารส่งอีเมลแจ้งรายการที่ล้มเหลว
+//    ระบบจะบันทึกเงินที่ไม่เคยออกจากบัญชีจริง — และต้องเช็ค "ไม่สำเร็จ" ก่อน เพราะคำนั้น
+//    มีคำว่า "สำเร็จ" อยู่ข้างใน
 
 import { toSatang } from '../../../utils/money';
 import type { BankEmailParseResult, BankEmailParser } from './types';
 
-/** จำนวนเงิน: "250.00 บาท", "1,250 บาท", "THB 250.00" */
-const AMOUNT_PATTERN = /(?:จำนวนเงิน|จำนวน|ยอดเงิน|THB|บาท)\s*[:：]?\s*([\d,]+(?:\.\d{1,2})?)\s*(?:บาท|THB)?/;
+/** ตัวเลขเงิน: มี comma คั่นหลักพันได้ มีทศนิยมได้ */
+const MONEY = '([\\d,]+(?:\\.\\d{1,2})?)';
 
-/** เลขที่รายการ / เลขอ้างอิง */
-const REF_PATTERN = /(?:เลขที่รายการ|เลขอ้างอิง|รหัสอ้างอิง|Ref(?:erence)?(?:\s*No\.?)?)\s*[:：]?\s*([A-Za-z0-9]{6,30})/;
+/** สร้าง pattern ของฟิลด์ที่มีวงเล็บหน่วยคั่น เช่น "จำนวนเงิน (บาท): 125.50" */
+const moneyField = (label: string, unit: string) =>
+  new RegExp(`${label}\\s*\\(${unit}\\)\\s*[:：]\\s*${MONEY}`);
 
-/** วันเวลา: "14/09/26 10:30", "14/09/2569 10:30:15", "14-09-2026 10:30" */
-const DATETIME_PATTERN = /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/;
+/** ยอดรายการ — ผูกกับชื่อฟิลด์ตรงๆ ห้ามจับ "ค่าธรรมเนียม" หรือ "ยอดถอนได้" มาแทน */
+const AMOUNT_TH = moneyField('จำนวนเงิน', 'บาท');
+const AMOUNT_EN = moneyField('Amount', 'THB');
 
-/** คำที่บอกว่าเงิน "เข้า" — ตรวจก่อนคำเงินออกเสมอ */
-const INCOME_WORDS = ['เงินเข้า', 'รับโอน', 'โอนเข้า', 'ฝากเงิน', 'เงินโอนเข้า'];
+/** เลขที่รายการ เช่น "016257093615CPM09819" */
+const REF_TH = /เลขที่รายการ\s*[:：]\s*([A-Za-z0-9]{6,40})/;
+const REF_EN = /Transaction\s+Number\s*[:：]\s*([A-Za-z0-9]{6,40})/i;
 
-/** คำที่บอกว่าเงิน "ออก" */
-const EXPENSE_WORDS = ['เงินออก', 'ถอนเงิน', 'โอนออก', 'ชำระเงิน', 'ใช้จ่ายผ่านบัตร', 'หักบัญชี', 'ซื้อสินค้า'];
+/** วันเวลา "14/09/2026  09:36:15" (เว้นวรรคกี่ตัวก็ได้ วินาทีมีหรือไม่มีก็ได้) */
+const DATETIME_TH = /วันที่ทำรายการ\s*[:：]\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/;
+const DATETIME_EN = /Transaction\s+Date\s*[:：]\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/i;
 
-function detectDirection(text: string): 'income' | 'expense' | null {
-  if (INCOME_WORDS.some((word) => text.includes(word))) return 'income';
-  if (EXPENSE_WORDS.some((word) => text.includes(word))) return 'expense';
+/** คำที่บอกว่ารายการ "ล้มเหลว" — ต้องเช็คก่อนคำว่าสำเร็จเสมอ เพราะ "ไม่สำเร็จ" มี "สำเร็จ" อยู่ข้างใน */
+const FAILURE_WORDS = ['ไม่สำเร็จ', 'ยกเลิก', 'unsuccessful', 'failed', 'failure'];
+
+/** คำที่ยืนยันว่ารายการ "สำเร็จ" */
+const SUCCESS_WORDS = ['(สำเร็จ)', 'สำเร็จ', '(success)', 'successful'];
+
+/**
+ * เงินออกจากบัญชีผู้ใช้ — ทั้งชำระค่าสินค้าและโอนออก
+ * K PLUS ใช้คำว่า "จากบัญชี" กำกับบัญชีต้นทางเสมอ ซึ่งเป็นสัญญาณที่ชัดที่สุด
+ */
+const EXPENSE_MARKERS = [
+  'ชำระเงินจากบัญชี',
+  'โอนเงินจากบัญชี',
+  'หักบัญชี',
+  'paid from account',
+  'from account',
+];
+
+/**
+ * เงินเข้าบัญชีผู้ใช้
+ * ⚠️ ยังไม่ได้ตรวจกับอีเมลจริง — ยังไม่เคยเห็นอีเมลแบบเงินเข้าของ K PLUS
+ * ถ้าได้ตัวอย่างมาแล้วให้เพิ่ม fixture ใน tests/fixtures/kplus/ แล้วปรับคำที่นี่
+ */
+const INCOME_MARKERS = ['เงินเข้าบัญชี', 'รับโอนเงิน', 'โอนเงินเข้าบัญชี', 'deposit to account'];
+
+function includesAny(haystack: string, needles: readonly string[]): boolean {
+  return needles.some((needle) => haystack.includes(needle));
+}
+
+function detectDirection(lowerText: string): 'income' | 'expense' | null {
+  if (includesAny(lowerText, INCOME_MARKERS)) return 'income';
+  if (includesAny(lowerText, EXPENSE_MARKERS)) return 'expense';
   return null;
 }
 
-/**
- * แปลงวันเวลาไทยเป็น Date โดยถือว่าเวลาในอีเมลเป็นเวลาไทย (+07:00)
- * รองรับทั้งปี พ.ศ. 4 หลัก (2569), ค.ศ. 4 หลัก (2026) และ 2 หลัก (26)
- */
-function parseThaiDateTime(text: string): Date | null {
-  const match = DATETIME_PATTERN.exec(text);
+/** รายการนี้สำเร็จจริงไหม — ไม่แน่ใจถือว่าไม่สำเร็จ (fail closed) */
+function isSuccessful(lowerText: string): boolean {
+  if (includesAny(lowerText, FAILURE_WORDS)) return false;
+  return includesAny(lowerText, SUCCESS_WORDS);
+}
+
+/** อ่านยอดเงินจาก pattern ไทยก่อน ถ้าไม่เจอลองอังกฤษ */
+function readMoney(text: string, thai: RegExp, english: RegExp): number | null {
+  const raw = thai.exec(text)?.[1] ?? english.exec(text)?.[1];
+  if (!raw) return null;
+
+  try {
+    const satang = toSatang(raw.replace(/,/g, ''));
+    return satang > 0 ? satang : null;
+  } catch {
+    // เกินเพดาน MAX_AMOUNT_SATANG หรือรูปแบบเพี้ยน — ถือว่าอ่านไม่ได้ ดีกว่าบันทึกยอดผิด
+    return null;
+  }
+}
+
+/** วันเวลาในอีเมลเป็นเวลาไทยเสมอ จึงต่อ +07:00 ตอนแปลง */
+function readDateTime(text: string): Date | null {
+  const match = DATETIME_TH.exec(text) ?? DATETIME_EN.exec(text);
   if (!match) return null;
 
-  const [, dayText, monthText, yearText, hourText, minuteText, secondText] = match as unknown as string[];
-  let year = Number(yearText);
-
-  if (year < 100) {
-    // 2 หลัก: ธนาคารไทยมักใช้ปี พ.ศ. ท้ายสองหลัก เช่น 69 = 2569 = ค.ศ. 2026
-    year += year >= 50 ? 2500 : 2000;
-  }
-  // ปี พ.ศ. อยู่ในช่วง 2400-2700 แปลงเป็น ค.ศ.
-  if (year >= 2400) year -= 543;
-
+  const [, day, month, year, hour, minute, second] = match as unknown as string[];
   const iso =
-    `${String(year).padStart(4, '0')}-${monthText!.padStart(2, '0')}-${dayText!.padStart(2, '0')}` +
-    `T${hourText!.padStart(2, '0')}:${minuteText}:${(secondText ?? '00').padStart(2, '0')}+07:00`;
+    `${year}-${month!.padStart(2, '0')}-${day!.padStart(2, '0')}` +
+    `T${hour!.padStart(2, '0')}:${minute}:${second ?? '00'}+07:00`;
 
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -78,28 +134,24 @@ export const kbankParser: BankEmailParser = {
   },
 
   parse(text): BankEmailParseResult | null {
-    const type = detectDirection(text);
+    // toLowerCase ใช้กับการเทียบคำอังกฤษ ส่วนคำไทยไม่มีตัวพิมพ์เล็กใหญ่จึงไม่กระทบ
+    const lower = text.toLowerCase();
+
+    if (!isSuccessful(lower)) return null;
+
+    const type = detectDirection(lower);
     if (!type) return null;
 
-    const amountMatch = AMOUNT_PATTERN.exec(text);
-    if (!amountMatch?.[1]) return null;
+    const amountSatang = readMoney(text, AMOUNT_TH, AMOUNT_EN);
+    if (amountSatang === null) return null;
 
-    let amountSatang: number;
-    try {
-      amountSatang = toSatang(amountMatch[1].replace(/,/g, ''));
-    } catch {
-      // เกินเพดาน หรือรูปแบบเพี้ยน — ถือว่าอ่านไม่ได้ ดีกว่าบันทึกยอดผิด
-      return null;
-    }
-    if (amountSatang <= 0) return null;
-
-    const refMatch = REF_PATTERN.exec(text);
+    const ref = REF_TH.exec(text)?.[1] ?? REF_EN.exec(text)?.[1] ?? null;
 
     return {
       amountSatang,
       type,
-      occurredAt: parseThaiDateTime(text),
-      refNumber: refMatch?.[1] ?? null,
+      occurredAt: readDateTime(text),
+      refNumber: ref,
     };
   },
 };
