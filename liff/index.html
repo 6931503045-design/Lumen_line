@@ -38,14 +38,14 @@
           <article class="mini-card glass-panel">
             <div class="card-row">
               <span>รายรับ</span>
-              <span class="trend up">▲ 12.4%</span>
+              <span class="trend neutral">เดือนนี้</span>
             </div>
             <strong id="incomeAmount">฿0</strong>
           </article>
           <article class="mini-card glass-panel">
             <div class="card-row">
               <span>รายจ่าย</span>
-              <span class="trend down">▼ 6.1%</span>
+              <span class="trend neutral">เดือนนี้</span>
             </div>
             <strong id="expenseAmount">฿0</strong>
           </article>
@@ -111,7 +111,12 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <!-- mock-data.js เป็นค่าตั้งต้น/ตัวสำรองเมื่อเปิดนอกแอป LINE — liff-init.js จะทับด้วยข้อมูลจริง -->
     <script src="js/mock-data.js"></script>
     <script src="js/app.js"></script>
+    <script src="js/liff-init.js"></script>
   </body>
 </html>

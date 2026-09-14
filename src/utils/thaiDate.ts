@@ -43,3 +43,45 @@ export function getTodayIso(date: Date = new Date()): string {
 export function formatThaiDate(date: Date = new Date()): string {
   return THAI_DISPLAY.format(date);
 }
+
+/**
+ * วันแรกของเดือนปัจจุบันตามเวลาไทย รูปแบบ ISO `YYYY-MM-01`
+ * ใช้เป็นขอบล่างตอน query ยอดรวม "เดือนนี้"
+ */
+export function getMonthStartIso(date: Date = new Date()): string {
+  return `${getTodayIso(date).slice(0, 7)}-01`;
+}
+
+/**
+ * วันแรกของเดือนที่ย้อนหลังไป n เดือนตามเวลาไทย รูปแบบ ISO `YYYY-MM-01`
+ * getMonthStartIso() คือกรณี n = 0 — ใช้ทำกราฟย้อนหลัง 6 เดือน
+ *
+ * คำนวณด้วยเลขปี/เดือนตรงๆ ไม่ใช่ลบวัน เพราะเดือนยาวไม่เท่ากัน
+ */
+export function getMonthStartIsoAgo(monthsAgo: number, date: Date = new Date()): string {
+  const [yearText, monthText] = getTodayIso(date).split('-') as [string, string, string];
+  const zeroBasedMonth = Number(yearText) * 12 + (Number(monthText) - 1) - monthsAgo;
+  const year = Math.floor(zeroBasedMonth / 12);
+  const month = (zeroBasedMonth % 12) + 1;
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+
+/** ป้ายเดือนแบบสั้นภาษาไทยสำหรับแกนกราฟ เช่น "2026-09" -> "ก.ย." */
+export function formatThaiMonthLabel(isoMonth: string): string {
+  const [yearText, monthText] = isoMonth.split('-') as [string, string];
+  // ใช้วันที่ 15 เพื่อเลี่ยงปัญหาขอบเดือนตอนแปลง timezone
+  const date = new Date(`${yearText}-${monthText}-15T00:00:00Z`);
+  return new Intl.DateTimeFormat('th-TH', { timeZone: TIMEZONE, month: 'short' }).format(date);
+}
+
+/**
+ * แปลงวันที่ ISO (`YYYY-MM-DD`) เป็นเวลาเริ่มต้นของวันนั้น "ตามเวลาไทย" ในรูป timestamptz
+ * เช่น "2026-09-01" -> "2026-09-01T00:00:00+07:00"
+ *
+ * จำเป็นเพราะคอลัมน์ occurred_at เป็น timestamptz ถ้าส่งแค่ "2026-09-01" เข้าไปเทียบ
+ * Postgres จะตีความเป็นเที่ยงคืน UTC ซึ่งเร็วกว่าเที่ยงคืนกรุงเทพ 7 ชั่วโมง
+ * ทำให้รายการช่วงหัวค่ำของวันสิ้นเดือนก่อนหน้าหลุดเข้ามาปนในเดือนนี้
+ */
+export function toBangkokDayStart(isoDate: string): string {
+  return `${isoDate}T00:00:00+07:00`;
+}

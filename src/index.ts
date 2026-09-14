@@ -13,12 +13,13 @@ import { healthRouter } from './routes/health';
 import { webhookRouter } from './routes/webhook';
 import { apiRouter } from './routes/api';
 import { jobsRouter } from './routes/jobs';
+import { liffCors } from './middleware/cors';
 
 const app = express();
 
 app.use('/webhook', webhookRouter);
 app.use('/health', healthRouter);
-app.use('/api', express.json(), apiRouter);
+app.use('/api', liffCors, express.json(), apiRouter);
 app.use('/jobs', express.json(), jobsRouter);
 
 app.get('/', (_req, res) => {

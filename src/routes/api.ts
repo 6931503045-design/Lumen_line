@@ -1,60 +1,119 @@
-// ไฟล์นี้ทำหน้าที่อะไร: route สำหรับเอกสาร/JSON API ระหว่าง LIFF หรือ external service
+// ไฟล์นี้ทำหน้าที่อะไร: JSON API สำหรับหน้า LIFF — ข้อมูลจริงจาก DB ของผู้ใช้ที่ล็อกอินเท่านั้น
 // ใครรับผิดชอบ: ④ Frontend / ① Bot Core
 // เขียนในสัปดาห์: W3
-// TODO: เพิ่ม routes สำหรับ summary, transactions, plans, categories
-// ⚖️ กฎเหล็ก G6
+// ⚖️ กฎเหล็ก G6, G7
+//
+// 🆕 เดิมทุก route คืน mock ก้อนเดียวกันหมดและไม่มี auth เลย ตอนนี้ทุก route ใต้ /api
+// (ยกเว้น /api/ping) ผ่าน liffAuth ก่อน แล้วอ่านเฉพาะข้อมูลของ req.userId เท่านั้น
+//
+// ⚠️ ความซื่อสัตย์ของตัวเลข: อะไรที่ backend ยังคำนวณไม่ได้จริง จะไม่ส่งเลขหลอกมาให้
+// แต่จะบอกชื่อไว้ใน `unavailable` เพื่อให้หน้าเว็บแสดงสถานะ "ยังไม่มีข้อมูล" ได้ถูกต้อง
+// แทนที่จะโชว์ ฿0.00 ซึ่งผู้ใช้จะอ่านว่า "ฉันมีเงินศูนย์บาท"
 
 import express from 'express';
+import { liffAuth, type AuthedRequest } from '../middleware/liffAuth';
+import { getUserSummary } from '../services/summary.service';
+import { listTransactionsByUser } from '../db/queries/transactions';
+import { listCategoriesByUser } from '../db/queries/categories';
+import { toSatang } from '../utils/money';
 
 export const apiRouter = express.Router();
 
-const mockSummary = {
-  totalIncomeSatang: 420000,
-  totalExpenseSatang: 275000,
-  balanceSatang: 145000,
-  monthlyGoalSatang: 200000,
-  categories: [
-    { name: 'อาหาร', amountSatang: 68000, type: 'expense' },
-    { name: 'เดินทาง', amountSatang: 54000, type: 'expense' },
-    { name: 'เงินเดือน', amountSatang: 420000, type: 'income' },
-    { name: 'ออม', amountSatang: 150000, type: 'transfer' },
-  ],
-};
+/** จำนวนรายการสูงสุดที่หน้า LIFF ขอได้ต่อครั้ง */
+const MAX_TRANSACTION_LIMIT = 200;
 
-const mockTransactions = [
-  { id: 't1', title: 'ค่าอาหาร', amountSatang: 35000, type: 'expense', category: 'อาหาร', occurredAt: '2026-09-13T08:15:00+07:00' },
-  { id: 't2', title: 'เงินเดือน', amountSatang: 420000, type: 'income', category: 'เงินเดือน', occurredAt: '2026-09-01T09:00:00+07:00' },
-  { id: 't3', title: 'ค่ารถ', amountSatang: 22000, type: 'expense', category: 'เดินทาง', occurredAt: '2026-09-10T17:30:00+07:00' },
-  { id: 't4', title: 'โอนเข้ากองทุน', amountSatang: 15000, type: 'transfer', category: 'ออม', occurredAt: '2026-09-11T07:00:00+07:00' },
-  { id: 't5', title: 'กาแฟ', amountSatang: 12000, type: 'expense', category: 'อาหาร', occurredAt: '2026-09-12T10:45:00+07:00' },
-];
-
-const mockPlans = [
-  { id: 'p1', title: 'ซื้อ laptop', targetSatang: 5000000, savedSatang: 1500000, status: 'active' },
-  { id: 'p2', title: 'ทุนการศึกษา', targetSatang: 1800000, savedSatang: 800000, status: 'draft' },
-];
-
+/** ping ไม่ต้องล็อกอิน ใช้เช็คว่า API ยังอยู่ ไม่มีข้อมูลผู้ใช้ปนอยู่ในนี้ */
 apiRouter.get('/ping', (_req, res) => {
-  res.json({ ok: true, message: 'API scaffold ready' });
+  res.json({ ok: true, message: 'API ready' });
 });
 
-apiRouter.get('/summary', (_req, res) => {
-  res.json(mockSummary);
-});
+// ทุก route ใต้บรรทัดนี้ต้องมี LIFF ID token
+apiRouter.use(liffAuth);
 
-apiRouter.get('/transactions', (_req, res) => {
-  res.json(mockTransactions);
-});
+/** ตัวช่วยห่อ handler ที่เป็น async ให้ error วิ่งไปที่ error handler กลางของ Express */
+function handle(
+  fn: (req: AuthedRequest, res: express.Response) => Promise<void>
+): express.RequestHandler {
+  return (req, res, next) => {
+    fn(req as AuthedRequest, res).catch(next);
+  };
+}
 
+apiRouter.get(
+  '/summary',
+  handle(async (req, res) => {
+    const summary = await getUserSummary(req.userId!);
+    res.json({
+      ...summary,
+      // ตัวเลขที่ SPEC ออกแบบไว้แต่ยังไม่มี service คำนวณให้ — ห้ามเดา ห้ามส่ง 0 มาแทน
+      unavailable: ['safeToSpend', 'confidence', 'monthlyBudget', 'savingProgress'],
+    });
+  })
+);
+
+apiRouter.get(
+  '/transactions',
+  handle(async (req, res) => {
+    const requested = Number(req.query.limit ?? 100);
+    const limit = Number.isFinite(requested)
+      ? Math.min(Math.max(Math.trunc(requested), 1), MAX_TRANSACTION_LIMIT)
+      : 100;
+
+    const rows = await listTransactionsByUser(req.userId!, limit);
+    res.json(
+      rows.map((row) => ({
+        id: row.id,
+        // note คือสิ่งที่ผู้ใช้พิมพ์ ถ้าไม่มีก็ใช้ชื่อหมวดแทนเพื่อให้การ์ดไม่ว่าง
+        title: row.note ?? row.categories?.name ?? 'ไม่ระบุ',
+        type: row.type,
+        amountSatang: toSatang(row.amount),
+        category: row.categories?.name ?? null,
+        emoji: row.categories?.emoji ?? null,
+        occurredAt: row.occurred_at,
+        parsedBy: row.parsed_by,
+        source: row.source,
+      }))
+    );
+  })
+);
+
+apiRouter.get(
+  '/categories',
+  handle(async (req, res) => {
+    const categories = await listCategoriesByUser(req.userId!);
+    res.json(
+      categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        type: category.type,
+        emoji: category.emoji,
+        isEssential: category.is_essential,
+        isDefault: category.is_default,
+      }))
+    );
+  })
+);
+
+/**
+ * แผนออมยังไม่เปิดใช้งาน: ตาราง plans มีแล้วแต่ services/plan.service.ts ยังว่าง
+ * และไม่มีโค้ดไหนเขียนแถวลง plans เลย จึงตอบ [] พร้อมบอกเหตุผลตรงๆ
+ * แทนที่จะส่งแผนปลอมมาให้หน้าเว็บวาด
+ */
 apiRouter.get('/plans', (_req, res) => {
-  res.json(mockPlans);
+  res.json({
+    items: [],
+    available: false,
+    reason: 'ยังไม่ได้ทำ plan.service — ตาราง plans ยังไม่มีข้อมูลจากที่ไหนเลย',
+  });
 });
 
-apiRouter.get('/categories', (_req, res) => {
-  res.json([
-    { name: 'อาหาร', type: 'expense' },
-    { name: 'เดินทาง', type: 'expense' },
-    { name: 'เงินเดือน', type: 'income' },
-    { name: 'ออม', type: 'transfer' },
-  ]);
+/**
+ * งบประมาณรายเดือนยังไม่เปิดใช้งานด้วยเหตุผลเดียวกัน (budget.service.ts ยังว่าง)
+ */
+apiRouter.get('/budgets', (_req, res) => {
+  res.json({
+    items: [],
+    available: false,
+    reason: 'ยังไม่ได้ทำ budget.service — ตาราง budgets ยังไม่มีข้อมูลจากที่ไหนเลย',
+  });
 });

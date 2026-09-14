@@ -55,6 +55,10 @@ const envSchema = z.object({
 
   // ── งานที่ยังไม่ได้ทำ แต่ .env.example ประกาศไว้แล้ว ───────────────────────
   LIFF_ID: z.string().optional().default(''),
+  // โดเมนที่หน้า LIFF ถูก host ไว้ คั่นด้วย comma ถ้ามีหลายอัน
+  // เช่น "https://6931503045-design.github.io" — ต้องตั้งเมื่อ LIFF กับ backend อยู่คนละโดเมน
+  // ไม่ตั้ง = ไม่เปิด CORS ให้ใครเลย (same-origin เท่านั้น)
+  LIFF_ORIGIN: z.string().optional().default(''),
   CRON_SECRET: z.string().optional().default(''),
   GMAIL_USER: z.string().optional().default(''),
   GMAIL_APP_PASSWORD: z.string().optional().default(''),
@@ -91,6 +95,7 @@ export const env = {
   aiDailyLimitGlobal: raw.AI_DAILY_LIMIT_GLOBAL,
   aiTimeoutMs: raw.AI_TIMEOUT_MS,
   liffId: raw.LIFF_ID,
+  liffOrigins: raw.LIFF_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean),
   cronSecret: raw.CRON_SECRET,
   gmailUser: raw.GMAIL_USER,
   gmailAppPassword: raw.GMAIL_APP_PASSWORD,
