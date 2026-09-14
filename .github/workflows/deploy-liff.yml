@@ -1,0 +1,48 @@
+name: Deploy LIFF UI
+
+on:
+  push:
+    branches:
+      - main
+      - backend
+      - V3.1
+      - claude/wizardly-goodall-pm2et8
+    paths:
+      - 'liff/**'
+      - '.github/workflows/deploy-liff.yml'
+  workflow_dispatch:
+
+# อนุญาตให้ job เขียน GitHub Pages ได้ (id-token ใช้ตอน deploy)
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# ให้ deploy ทีละคิว ไม่ยกเลิกตัวที่กำลังรันอยู่
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          # พยายามเปิด Pages ให้อัตโนมัติ (ต้องเป็น public repo หรือมี GitHub Pro)
+          enablement: true
+
+      - name: Upload liff/ as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: liff
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
