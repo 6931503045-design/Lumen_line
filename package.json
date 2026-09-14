@@ -19,11 +19,14 @@
     "dayjs": "^1.11.23",
     "dotenv": "^17.4.2",
     "express": "^4.22.2",
+    "imapflow": "^2.0.2",
+    "mailparser": "^3.9.26",
     "node-cron": "^3.0.3",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/express": "^4.17.25",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^22.20.2",
     "@types/node-cron": "^3.0.11",
     "tsx": "^4.23.13",

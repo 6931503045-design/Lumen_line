@@ -24,7 +24,7 @@ export function liffCors(req: Request, res: Response, next: NextFunction): void 
     res.setHeader('Access-Control-Allow-Origin', origin);
     // บอก cache/proxy ว่าคำตอบต่างกันตาม Origin ไม่งั้นอาจตอบ header ของโดเมนอื่นให้ผิดคน
     res.setHeader('Vary', 'Origin');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
     res.setHeader('Access-Control-Max-Age', '600');
   }

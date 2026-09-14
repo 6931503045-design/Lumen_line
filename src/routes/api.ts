@@ -15,6 +15,9 @@ import { liffAuth, type AuthedRequest } from '../middleware/liffAuth';
 import { getUserSummary } from '../services/summary.service';
 import { listTransactionsByUser } from '../db/queries/transactions';
 import { listCategoriesByUser } from '../db/queries/categories';
+import { ensureEmailIngestToken, rotateEmailIngestToken } from '../db/queries/users';
+import { countUnparsedEmails } from '../db/queries/emails';
+import { env } from '../config/env';
 import { toSatang } from '../utils/money';
 
 export const apiRouter = express.Router();
@@ -117,3 +120,44 @@ apiRouter.get('/budgets', (_req, res) => {
     reason: 'ยังไม่ได้ทำ budget.service — ตาราง budgets ยังไม่มีข้อมูลจากที่ไหนเลย',
   });
 });
+
+/**
+ * ที่อยู่อีเมลสำหรับ forward ของผู้ใช้คนนี้ (SPEC §S8 ขั้นตอนตั้งค่าของผู้ใช้)
+ * รูปแบบ: <ส่วนหน้าของ GMAIL_USER>+<email_ingest_token>@<โดเมนของ GMAIL_USER>
+ * ผู้ใช้เอาที่อยู่นี้ไปตั้ง Gmail filter ให้ forward อีเมลธนาคารเข้ามา
+ */
+function buildIngestAddress(token: string): string | null {
+  if (!env.gmailUser || !env.gmailUser.includes('@')) return null;
+  const [localPart, domain] = env.gmailUser.split('@') as [string, string];
+  return `${localPart}+${token}@${domain}`;
+}
+
+apiRouter.get(
+  '/settings',
+  handle(async (req, res) => {
+    const token = await ensureEmailIngestToken(req.userId!);
+    const unparsedEmails = await countUnparsedEmails(req.userId!);
+
+    res.json({
+      emailIngest: {
+        // ไม่ได้ตั้ง GMAIL_USER = ระบบรับอีเมลยังไม่พร้อม บอกตรงๆ ไม่ต้องแสดงที่อยู่ครึ่งๆ
+        address: buildIngestAddress(token),
+        available: Boolean(env.gmailUser),
+        unparsedCount: unparsedEmails,
+      },
+      aiEnabled: env.aiEnabled,
+    });
+  })
+);
+
+/**
+ * สุ่ม token ใหม่ — ที่อยู่เดิมใช้ไม่ได้ทันที (SPEC: "ที่อยู่เดิมใช้ไม่ได้ทันที")
+ * ใช้เมื่อผู้ใช้สงสัยว่าที่อยู่หลุดไปถึงคนอื่น
+ */
+apiRouter.post(
+  '/settings/email-token/rotate',
+  handle(async (req, res) => {
+    const token = await rotateEmailIngestToken(req.userId!);
+    res.json({ ok: true, address: buildIngestAddress(token) });
+  })
+);

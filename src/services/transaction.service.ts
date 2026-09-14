@@ -17,6 +17,11 @@ export type CreateTransactionInput = {
   occurredAt?: Date;
   source: TransactionSource;
   parsedBy: TransactionParsedBy;
+  /**
+   * เลขอ้างอิงจากธนาคาร (อีเมล) หรือสลิป — ใช้เป็นกุญแจกันรายการซ้ำที่แม่นที่สุดตาม S10
+   * ผู้เรียกที่มาจากแชทไม่ต้องส่ง เพราะผู้ใช้พิมพ์เองไม่มีเลขอ้างอิง
+   */
+  refNumber?: string | null;
 };
 
 export type CreatedTransaction = {
@@ -52,6 +57,7 @@ export async function createTransaction(
     occurredAt,
     source: input.source,
     parsedBy: input.parsedBy,
+    refNumber: input.refNumber ?? null,
   });
 
   return {

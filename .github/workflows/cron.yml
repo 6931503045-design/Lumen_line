@@ -1,12 +1,48 @@
 name: Cron
 
+# ตารางตาม SPEC.md ตาราง "งานตามเวลา": emailPoll ทุก 5 นาที
+# งานอื่น (dailySummary, planCheck, recurringJob, cleanup) ยังไม่ได้เขียน
+# เพิ่ม schedule + job ที่นี่เมื่อเขียนเสร็จ — ตอนนี้เรียกไปก็ได้ 404 เปล่าๆ
+#
+# ต้องตั้ง 2 secrets ในหน้า Settings > Secrets and variables > Actions ของ repo:
+#   BACKEND_URL  - URL ของ backend ที่ deploy แล้ว เช่น https://jodtang.onrender.com
+#   CRON_SECRET  - ค่าเดียวกับ env CRON_SECRET ของ backend
+# ถ้ายังไม่ตั้ง workflow จะข้ามไปเงียบๆ ไม่ใช่ล้มเหลว เพราะยังไม่มีอะไรให้เรียก
+#
+# ⚠️ GitHub Actions ไม่รับประกันเวลาของ schedule โดยเฉพาะ */5 ที่อาจถูกเลื่อนหรือรวบรอบได้
+# งาน emailPoll จึงต้อง idempotent อยู่แล้ว (กันซ้ำด้วย Message-ID + S10 dedup)
+
 on:
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
-  cron:
+  email-poll:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Cron workflow scaffold ready"
+      - name: เรียก emailPoll
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
+            exit 0
+          fi
+
+          status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
+            -X POST "$BACKEND_URL/jobs/run?job=emailPoll" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            --max-time 120)
+
+          echo "HTTP $status"
+          cat /tmp/jobs-response.json
+          echo
+
+          # 200 เท่านั้นที่ถือว่าสำเร็จ — งานที่ไม่เจออีเมลเลยก็ยังตอบ 200
+          # ส่วน 401/404/500 ต้องทำให้ workflow แดง ไม่ใช่ผ่านไปเงียบๆ
+          if [ "$status" != "200" ]; then
+            echo "::error::เรียก emailPoll ไม่สำเร็จ (HTTP $status)"
+            exit 1
+          fi
