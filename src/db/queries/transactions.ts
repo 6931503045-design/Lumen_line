@@ -127,3 +127,38 @@ export async function restoreTransaction(
     throw error;
   }
 }
+
+export type TransactionListRow = {
+  id: string;
+  type: TransactionType;
+  /** numeric(12,2) มาเป็น string ต้องผ่าน money.toSatang ก่อนใช้ */
+  amount: string;
+  note: string | null;
+  occurred_at: string;
+  parsed_by: TransactionParsedBy | null;
+  source: TransactionSource;
+  categories: { name: string; emoji: string | null } | null;
+};
+
+/**
+ * รายการล่าสุดของผู้ใช้ พร้อมชื่อหมวด (join ผ่าน foreign key ที่ Supabase รู้จักอยู่แล้ว)
+ * ตัดรายการที่ถูก soft delete ออก และเรียงใหม่สุดขึ้นก่อน
+ * ⚖️ G6: กรอง user_id เสมอ
+ */
+export async function listTransactionsByUser(
+  userId: string,
+  limit = 100
+): Promise<TransactionListRow[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, type, amount, note, occurred_at, parsed_by, source, categories(name, emoji)')
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .order('occurred_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? []) as unknown as TransactionListRow[];
+}

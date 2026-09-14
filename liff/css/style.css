@@ -1247,3 +1247,33 @@ h3 {
     height: 240px;
   }
 }
+
+/* ── แถบบอกสถานะข้อมูล (โหมดตัวอย่าง / ยังไม่มีรายการ / โหลดไม่สำเร็จ) ──
+   เพิ่มโดย js/liff-init.js เมื่อหน้าเว็บไม่ได้แสดงข้อมูลจริงของผู้ใช้
+   จงใจวางไว้บนสุดนอก .app-shell เพื่อให้เห็นก่อนตัวเลขใดๆ บนหน้าจอ */
+.data-mode-banner {
+  padding: 10px 18px;
+  font-family: 'Sarabun', sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text);
+  background: var(--surface-strong);
+  border-bottom: 1px solid var(--line);
+}
+.data-mode-banner[data-tone='mock'] {
+  color: var(--purple-3);
+}
+.data-mode-banner[data-tone='empty'] {
+  color: var(--green);
+}
+.data-mode-banner[data-tone='error'] {
+  color: var(--red);
+}
+
+/* ข้อความแทนที่ตัวเลขเมื่อยังไม่มีข้อมูลจริงให้แสดง */
+.empty-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}

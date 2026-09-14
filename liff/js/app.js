@@ -42,6 +42,13 @@ function clamp(value) {
   return Math.max(0, Math.min(100, Number(value) || 0));
 }
 
+// 🔴 แก้บั๊ก: เดิมเอา clamp() ไปแสดงผลตรงๆ ทำให้เห็น "61.66666666666667%" บนการ์ดงบประมาณ
+// clamp ยังคืนทศนิยมเหมือนเดิม (ใช้กับ width ของแถบ progress ที่ต้องการความละเอียด)
+// ส่วนการแสดงผลเป็นตัวเลขให้คนอ่านใช้ตัวนี้แทน
+function formatPercent(value) {
+  return Math.round(clamp(value));
+}
+
 function getProgressTone(value) {
   const percent = clamp(value);
   if (percent > 100) return 'danger';
@@ -82,6 +89,18 @@ function renderMonthlyBudgetSummary() {
   const container = document.getElementById('monthlyBudgetSummary');
   if (!container) return;
 
+  // ยังไม่ได้ตั้งงบ (หรือ backend ยังไม่มี budget.service) — บอกตรงๆ ดีกว่าโชว์ 0%
+  // ซึ่งผู้ใช้จะอ่านว่า "ฉันตั้งงบไว้ 0 บาท"
+  if (mock.summary.monthlyBudgetLimit == null) {
+    container.innerHTML = `
+      <div class="budget-summary-head">
+        <h3>งบประมาณรายเดือน</h3>
+      </div>
+      <p class="empty-note">ยังไม่ได้ตั้งงบประมาณ</p>
+    `;
+    return;
+  }
+
   const limit = safeNumber(mock.summary.monthlyBudgetLimit);
   const used = safeNumber(mock.summary.monthlyBudgetUsed);
   const percent = limit > 0 ? (used / limit) * 100 : 0;
@@ -90,7 +109,7 @@ function renderMonthlyBudgetSummary() {
   container.innerHTML = `
     <div class="budget-summary-head">
       <h3>งบประมาณรายเดือน</h3>
-      <span>${clamp(percent)}%</span>
+      <span>${formatPercent(percent)}%</span>
     </div>
     <div class="budget-row">
       <strong>${formatMoney(used)}</strong>
@@ -113,15 +132,20 @@ function renderDashboard() {
 
   renderMonthlyBudgetSummary();
 
+  // ไม่มีค่าความมั่นใจ = ยังคำนวณไม่ได้ ซ่อนป้ายไปเลยดีกว่าแปะ "ความมั่นใจสูง" ที่ไม่มีที่มา
   if (confidenceBadgeWrap) {
-    confidenceBadgeWrap.innerHTML = renderConfidenceBadge(summary.confidence || 'high');
+    confidenceBadgeWrap.innerHTML = summary.confidence ? renderConfidenceBadge(summary.confidence) : '';
   }
 
   if (netBalance) netBalance.textContent = formatMoney(summary.balance);
   if (incomeAmount) incomeAmount.textContent = formatMoney(summary.income);
   if (expenseAmount) expenseAmount.textContent = formatMoney(summary.expense);
-  if (safeToSpend) safeToSpend.textContent = formatMoney(summary.safeToSpend);
-  if (confidenceScore) confidenceScore.textContent = `${clamp(summary.progress)}%`;
+  if (safeToSpend) {
+    safeToSpend.textContent = summary.safeToSpend == null ? '—' : formatMoney(summary.safeToSpend);
+  }
+  if (confidenceScore) {
+    confidenceScore.textContent = summary.progress == null ? '—' : `${formatPercent(summary.progress)}%`;
+  }
 
   if (transactionList) {
     transactionList.innerHTML = mock.transactions
@@ -149,7 +173,9 @@ function renderDashboard() {
       .join('');
   }
 
-  if (goalCards) {
+  if (goalCards && mock.plans.length === 0) {
+    goalCards.innerHTML = '<p class="empty-note">ยังไม่มีแผนออม</p>';
+  } else if (goalCards) {
     goalCards.innerHTML = mock.plans
       .map((plan) => {
         const statusText = plan.status === 'off_track' ? '⚠️ หลุดเป้า' : plan.status === 'completed' ? '🎉 ครบเป้าแล้ว' : 'ปกติ';

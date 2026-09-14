@@ -67,3 +67,31 @@ export async function findOrCreateCategory(
 
   return created.id;
 }
+
+export type UserCategory = {
+  id: string;
+  name: string;
+  type: 'income' | 'expense';
+  emoji: string | null;
+  is_essential: boolean;
+  is_default: boolean;
+};
+
+/**
+ * รายชื่อหมวดทั้งหมดของผู้ใช้คนหนึ่ง เรียงหมวดตั้งต้นขึ้นก่อนแล้วตามด้วยชื่อ
+ * ใช้ทั้งฝั่ง LIFF (หน้าหมวดหมู่) และ quick reply ของปุ่ม "แก้หมวด" ในอนาคต
+ * ⚖️ G6: กรอง user_id เสมอ
+ */
+export async function listCategoriesByUser(userId: string): Promise<UserCategory[]> {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id, name, type, emoji, is_essential, is_default')
+    .eq('user_id', userId)
+    .order('is_default', { ascending: false })
+    .order('name', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? []) as UserCategory[];
+}
