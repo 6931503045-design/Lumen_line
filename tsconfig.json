@@ -1,8 +1,16 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    // node16 = โหมดที่ตรงกับ Node จริง และเป็นค่าที่ TypeScript 6/7 ยังรองรับ
+    //
+    // เดิมใช้ "CommonJS" + "Node" (ซึ่ง TS เรียกภายในว่า node10) แล้วพังตอน deploy:
+    // เครื่องเราล็อก TypeScript 5.9.3 ไว้ใน lockfile จึงผ่าน แต่ host ไปได้ TypeScript 7
+    // ซึ่งถอด node10 ออกแล้ว -> error TS5108 "has been removed"
+    //
+    // package.json มี "type": "commonjs" อยู่ node16 จึงยัง emit เป็น CommonJS เหมือนเดิม
+    // (ตรวจแล้วว่า dist/ ยังใช้ require() และ node dist/index.js รันได้ปกติ)
+    "module": "node16",
+    "moduleResolution": "node16",
     "lib": ["ES2022"],
     "outDir": "dist",
     "rootDir": ".",

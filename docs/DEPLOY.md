@@ -27,12 +27,19 @@ backend ตัวเดียวทำทุกอย่าง — รับ web
 |---|---|
 | Repository | repo นี้ |
 | Branch | `backend` |
-| Build Command | `npm ci && npm run build` |
+| Build Command | `npm ci --include=dev && npm run build` |
 | Start Command | `npm start` |
+
+> ⚠️ **ต้องเป็น `npm ci --include=dev` ไม่ใช่ `npm install`**
+> - `npm ci` ยึด `package-lock.json` เป๊ะ — `npm install` เลือกเวอร์ชันใหม่กว่าได้ ซึ่งเคยทำให้
+>   host ไปได้ TypeScript คนละตัวกับที่เราทดสอบ แล้ว build พังทั้งที่ในเครื่องผ่าน
+> - `--include=dev` จำเป็นเพราะเราตั้ง `NODE_ENV=production` ไว้ ซึ่งทำให้ npm ข้าม
+>   devDependencies — แล้ว `tsc` จะหายไป build ไม่ได้
 
 ### Railway (ไม่หลับ ใช้เครดิตฟรีรายเดือน)
 
 ตรวจ build/start ให้เองจาก `package.json` ส่วนใหญ่ไม่ต้องตั้งอะไร
+ถ้าตั้งเองให้ใช้คำสั่งชุดเดียวกับ Render ด้านบน
 
 ### ตั้ง env (ทั้งสองเจ้าเหมือนกัน)
 
@@ -130,3 +137,7 @@ Settings → Secrets and variables → Actions → New repository secret
 | ล็อกอินผ่านแต่เด้งไป `?login=no-account` | ยังไม่ได้แอดเพื่อนบอท **หรือ** สอง channel อยู่คนละ provider |
 | บอทไม่ตอบข้อความแรกหลังเงียบนาน | instance หลับ — ตั้ง `BACKEND_URL` ให้ `ping.yml` |
 | อีเมลไม่เข้าเลย | ดู log หาบรรทัด `[email] ข้าม:` จะบอกว่าตกด่านไหน (token/DKIM/ธนาคารไม่รองรับ) |
+| build พัง `TS5108 ... moduleResolution ... has been removed` | host ได้ TypeScript ใหม่กว่าที่ lockfile ล็อก — ใช้ `npm ci --include=dev` แทน `npm install` |
+| build พัง `tsc: not found` | `NODE_ENV=production` ทำให้ devDependencies ถูกข้าม — เติม `--include=dev` |
+| log ขึ้น `Using Node.js version 26.x` | ไม่ควรเกิดแล้วเพราะ `engines` ปักไว้ที่ `22.x` ถ้ายังเกิดให้ตั้ง env `NODE_VERSION=22` เพิ่ม |
+| SQL `relation "users" already exists` | `001_init.sql` ถูกรันไปแล้ว — ดูวิธีเช็ค/ล้างในหัวข้อ Supabase ด้านบน |
