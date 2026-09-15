@@ -30,11 +30,18 @@ backend ตัวเดียวทำทุกอย่าง — รับ web
 | Build Command | `npm ci --include=dev && npm run build` |
 | Start Command | `npm start` |
 
-> ⚠️ **ต้องเป็น `npm ci --include=dev` ไม่ใช่ `npm install`**
-> - `npm ci` ยึด `package-lock.json` เป๊ะ — `npm install` เลือกเวอร์ชันใหม่กว่าได้ ซึ่งเคยทำให้
->   host ไปได้ TypeScript คนละตัวกับที่เราทดสอบ แล้ว build พังทั้งที่ในเครื่องผ่าน
-> - `--include=dev` จำเป็นเพราะเราตั้ง `NODE_ENV=production` ไว้ ซึ่งทำให้ npm ข้าม
->   devDependencies — แล้ว `tsc` จะหายไป build ไม่ได้
+> 🔴 **`--include=dev` ห้ามตัดออก** — เป็นสาเหตุที่ทำให้ build พังมาแล้ว 2 รอบ
+>
+> เราตั้ง `NODE_ENV=production` ไว้ ซึ่งทำให้ npm **ข้าม devDependencies ทั้งหมด**
+> (`typescript`, `@types/*`) แล้วเกิดสองอาการต่อเนื่องกัน:
+>
+> 1. `tsc` หายไปจาก `node_modules` → npm ไปเรียก **tsc ตัว global ของ image** แทน
+>    ซึ่งเป็นคนละเวอร์ชันกับที่ `package-lock.json` ล็อกไว้ → error แปลก ๆ เรื่อง
+>    `moduleResolution` ที่ในเครื่องไม่เคยเจอ
+> 2. `@types/express`, `@types/mailparser` หายไป → `error TS7016` เต็มไปหมด
+>
+> วิธีเช็คว่าตั้งถูก: ใน build log ต้องขึ้น **`added 238 packages`** ถ้าขึ้น
+> **`added 173 packages`** แปลว่า devDependencies ถูกข้าม — `--include=dev` ยังไม่มีผล
 
 ### Railway (ไม่หลับ ใช้เครดิตฟรีรายเดือน)
 
@@ -137,7 +144,8 @@ Settings → Secrets and variables → Actions → New repository secret
 | ล็อกอินผ่านแต่เด้งไป `?login=no-account` | ยังไม่ได้แอดเพื่อนบอท **หรือ** สอง channel อยู่คนละ provider |
 | บอทไม่ตอบข้อความแรกหลังเงียบนาน | instance หลับ — ตั้ง `BACKEND_URL` ให้ `ping.yml` |
 | อีเมลไม่เข้าเลย | ดู log หาบรรทัด `[email] ข้าม:` จะบอกว่าตกด่านไหน (token/DKIM/ธนาคารไม่รองรับ) |
-| build พัง `TS5108 ... moduleResolution ... has been removed` | host ได้ TypeScript ใหม่กว่าที่ lockfile ล็อก — ใช้ `npm ci --include=dev` แทน `npm install` |
-| build พัง `tsc: not found` | `NODE_ENV=production` ทำให้ devDependencies ถูกข้าม — เติม `--include=dev` |
+| build พัง `TS7016 Could not find a declaration file for module 'express'` | devDependencies ถูกข้าม — build command ต้องมี `--include=dev` |
+| build พัง `TS5108 ... moduleResolution ... has been removed` | อาการเดียวกัน: ไม่มี typescript ใน node_modules เลยไปใช้ tsc ตัว global ของ image |
+| build log ขึ้น `added 173 packages` | devDependencies ถูกข้าม (ครบต้องเป็น 238) |
 | log ขึ้น `Using Node.js version 26.x` | ไม่ควรเกิดแล้วเพราะ `engines` ปักไว้ที่ `22.x` ถ้ายังเกิดให้ตั้ง env `NODE_VERSION=22` เพิ่ม |
 | SQL `relation "users" already exists` | `001_init.sql` ถูกรันไปแล้ว — ดูวิธีเช็ค/ล้างในหัวข้อ Supabase ด้านบน |

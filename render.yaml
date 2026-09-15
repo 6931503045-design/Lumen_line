@@ -1,0 +1,64 @@
+# ไฟล์นี้ทำหน้าที่อะไร: ค่าตั้งต้นของ service บน Render (Blueprint)
+# ใครรับผิดชอบ: ⑤ Integration
+#
+# ⚠️ ไฟล์นี้มีผลเฉพาะ service ที่สร้างผ่าน Blueprint เท่านั้น
+# ถ้าสร้าง service ด้วยมือไปแล้ว ต้องไปแก้ค่าในหน้า dashboard เอง — ไฟล์นี้จะเป็นแค่
+# เอกสารว่าค่าที่ถูกต้องคืออะไร
+#
+# 🔴 buildCommand ต้องมี --include=dev เสมอ ห้ามตัดออก
+# เหตุผล: envVars ด้านล่างตั้ง NODE_ENV=production ซึ่งทำให้ npm ข้าม devDependencies
+# ทั้งหมด (typescript, @types/*) ผลคือ:
+#   - tsc หายไปจาก node_modules แล้ว npm ไปเรียก tsc ตัว global ของ image แทน
+#     ซึ่งเป็นคนละเวอร์ชันกับที่เราล็อกไว้ใน package-lock.json
+#   - @types/express, @types/mailparser หายไป -> error TS7016 เต็มไปหมด
+# ทั้งสองอาการนี้เคยทำให้ build พังมาแล้วจริง
+
+services:
+  - type: web
+    name: jodtang
+    runtime: node
+    plan: free
+    branch: backend
+
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+
+    # Render เรียกทุกนาทีเพื่อเช็คว่า service ยังดีอยู่ไหม
+    healthCheckPath: /health
+
+    envVars:
+      # ปักเวอร์ชัน Node ให้ตรงกับที่ทีมพัฒนา ไม่ให้ Render หยิบตัวใหม่สุดมาเอง
+      - key: NODE_VERSION
+        value: 22
+      - key: NODE_ENV
+        value: production
+      - key: TZ
+        value: Asia/Bangkok
+
+      # ค่าที่เป็นความลับ: sync: false = Render จะถามตอนสร้าง ไม่เก็บไว้ใน repo
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: LINE_LOGIN_CHANNEL_ID
+        sync: false
+      - key: LINE_LOGIN_CHANNEL_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
+      # ใส่หลัง deploy รอบแรกเมื่อรู้ domain แล้ว
+      - key: APP_BASE_URL
+        sync: false
+
+      # ระบบอ่านอีเมล — ทำทีหลังได้
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
