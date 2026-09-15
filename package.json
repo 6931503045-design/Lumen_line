@@ -4,6 +4,9 @@
   "private": true,
   "description": "บอทจดเงินบน LINE ที่คุยภาษาคนได้ แต่ไม่ปล่อยให้ AI แตะเงินของผู้ใช้ (JOD tang)",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.build.json",

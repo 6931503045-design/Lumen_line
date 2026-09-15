@@ -1,5 +1,17 @@
 name: Ping
 
+# ปลุก backend ไม่ให้หลับ สำหรับ host แบบ free tier ที่หลับเมื่อไม่มีคนใช้ (เช่น Render)
+#
+# ทำไมถึงจำเป็น: LINE บังคับให้ webhook ตอบภายใน 1 วินาที แต่ instance ที่หลับอยู่
+# ใช้เวลาตื่นราว 30 วินาที = ข้อความแรกหลังหลับจะหลุด บอทจะดูเหมือนงอแงเป็นพักๆ
+#
+# ถ้าใช้ host ที่ไม่หลับ (Railway, Fly.io) จะปิด workflow นี้ทิ้งก็ได้
+#
+# ต้องตั้ง secret BACKEND_URL ใน Settings > Secrets and variables > Actions
+# ยังไม่ตั้ง = ข้ามไปเงียบๆ ไม่ใช่ล้มเหลว เพราะยังไม่มีอะไรให้ปลุก
+#
+# ⚠️ GitHub Actions ไม่รับประกันเวลาของ schedule โดยเฉพาะ */5 ที่อาจถูกเลื่อนได้
+
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -9,4 +21,23 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Ping workflow scaffold ready"
+      - name: ปลุก backend
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+        run: |
+          if [ -z "$BACKEND_URL" ]; then
+            echo "ยังไม่ได้ตั้ง BACKEND_URL — ข้ามรอบนี้"
+            exit 0
+          fi
+
+          status=$(curl -sS -o /tmp/health.json -w '%{http_code}' \
+            "$BACKEND_URL/health" --max-time 60)
+
+          echo "HTTP $status"
+          cat /tmp/health.json
+          echo
+
+          if [ "$status" != "200" ]; then
+            echo "::error::ปลุก backend ไม่สำเร็จ (HTTP $status)"
+            exit 1
+          fi
