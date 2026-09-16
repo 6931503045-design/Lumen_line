@@ -1,30 +1,41 @@
 name: Cron
 
-# ตารางตาม SPEC.md ตาราง "งานตามเวลา": emailPoll ทุก 5 นาที
-# งานอื่น (dailySummary, planCheck, recurringJob, cleanup) ยังไม่ได้เขียน
+# ตารางตาม SPEC.md ตาราง "งานตามเวลา":
+#   emailPoll  ทุก 5 นาที  (*/5 * * * *)
+#   recurring  06:00 ไทย = 23:00 UTC ของวันก่อนหน้า (0 23 * * *)
+# งานอื่น (dailySummary, planCheck, cleanup) ยังไม่ได้เขียน
 # เพิ่ม schedule + job ที่นี่เมื่อเขียนเสร็จ — ตอนนี้เรียกไปก็ได้ 404 เปล่าๆ
 #
 # ต้องตั้ง 2 secrets ในหน้า Settings > Secrets and variables > Actions ของ repo:
-#   BACKEND_URL  - URL ของ backend ที่ deploy แล้ว เช่น https://jodtang.onrender.com
+#   BACKEND_URL  - URL ของ backend ที่ deploy แล้ว เช่น https://lumen-line.onrender.com
 #   CRON_SECRET  - ค่าเดียวกับ env CRON_SECRET ของ backend
 # ถ้ายังไม่ตั้ง workflow จะข้ามไปเงียบๆ ไม่ใช่ล้มเหลว เพราะยังไม่มีอะไรให้เรียก
 #
+# ⚠️ workflow ที่มี schedule จะถูกลงทะเบียนจาก "default branch" เท่านั้น
+# แก้ไฟล์นี้บน branch อื่นแล้วไม่เห็นผล = ปกติ ต้อง merge เข้า default branch ก่อน
+#
 # ⚠️ GitHub Actions ไม่รับประกันเวลาของ schedule โดยเฉพาะ */5 ที่อาจถูกเลื่อนหรือรวบรอบได้
-# งาน emailPoll จึงต้อง idempotent อยู่แล้ว (กันซ้ำด้วย Message-ID + S10 dedup)
+# ทุกงานจึงต้อง idempotent: emailPoll กันซ้ำด้วย Message-ID + S10 dedup
+# ส่วน recurring กันซ้ำด้วย unique (recurring_rule_id, recurring_run_date)
 
 on:
   schedule:
     - cron: '*/5 * * * *'
+    - cron: '0 23 * * *'
   workflow_dispatch:
 
 jobs:
   email-poll:
+    # รอบ 23:00 UTC เป็นของ recurring อย่างเดียว ไม่ต้องยิง emailPoll ซ้ำ
+    # (รอบ */5 ครอบคลุมเวลานั้นอยู่แล้ว)
+    if: github.event.schedule != '0 23 * * *'
     runs-on: ubuntu-latest
     steps:
       - name: เรียก emailPoll
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          JOB_NAME: emailPoll
         run: |
           if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
             echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
@@ -32,7 +43,7 @@ jobs:
           fi
 
           status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
-            -X POST "$BACKEND_URL/jobs/run?job=emailPoll" \
+            -X POST "$BACKEND_URL/jobs/run?job=$JOB_NAME" \
             -H "x-cron-secret: $CRON_SECRET" \
             --max-time 120)
 
@@ -43,6 +54,37 @@ jobs:
           # 200 เท่านั้นที่ถือว่าสำเร็จ — งานที่ไม่เจออีเมลเลยก็ยังตอบ 200
           # ส่วน 401/404/500 ต้องทำให้ workflow แดง ไม่ใช่ผ่านไปเงียบๆ
           if [ "$status" != "200" ]; then
-            echo "::error::เรียก emailPoll ไม่สำเร็จ (HTTP $status)"
+            echo "::error::เรียก $JOB_NAME ไม่สำเร็จ (HTTP $status)"
+            exit 1
+          fi
+
+  recurring:
+    # ยิงเฉพาะรอบ 23:00 UTC (06:00 ไทย) และตอนกดรันเอง
+    # ถ้าปล่อยให้ทำงานทุก 5 นาทีก็ไม่พัง (งานเป็น idempotent) แต่เปลืองโควตา Actions เปล่าๆ
+    if: github.event.schedule == '0 23 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: เรียก recurring
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          JOB_NAME: recurring
+        run: |
+          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
+            exit 0
+          fi
+
+          status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
+            -X POST "$BACKEND_URL/jobs/run?job=$JOB_NAME" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            --max-time 120)
+
+          echo "HTTP $status"
+          cat /tmp/jobs-response.json
+          echo
+
+          if [ "$status" != "200" ]; then
+            echo "::error::เรียก $JOB_NAME ไม่สำเร็จ (HTTP $status)"
             exit 1
           fi

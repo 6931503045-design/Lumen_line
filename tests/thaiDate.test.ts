@@ -6,9 +6,14 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  addDaysIso,
+  daysInMonth,
   formatThaiDate,
   getTodayIso,
+  isoDayOfWeek,
   normalizeMonthIso,
+  parseIsoDate,
+  shiftMonthClampDay,
   shiftMonthStartIso,
 } from '../src/utils/thaiDate';
 
@@ -85,5 +90,55 @@ describe('normalizeMonthIso', () => {
     expect(normalizeMonthIso('2026-13')).toBeNull();
     expect(normalizeMonthIso('26-09')).toBeNull();
     expect(normalizeMonthIso("2026-09'; drop table budgets; --")).toBeNull();
+  });
+});
+
+describe('เลขคณิตปฏิทินบนสตริง (ใช้กับคอลัมน์ date ที่ไม่มีเวลา)', () => {
+  it('parseIsoDate แยกเลขถูก และ throw เมื่อรูปแบบผิด', () => {
+    expect(parseIsoDate('2026-09-14')).toEqual({ year: 2026, month: 9, day: 14 });
+    expect(() => parseIsoDate('2026-9-14')).toThrow();
+    expect(() => parseIsoDate('14/09/2026')).toThrow();
+  });
+
+  it('daysInMonth รู้จักปีอธิกสุรทิน', () => {
+    expect(daysInMonth(2026, 2)).toBe(28);
+    expect(daysInMonth(2028, 2)).toBe(29);
+    expect(daysInMonth(2026, 4)).toBe(30);
+    expect(daysInMonth(2026, 12)).toBe(31);
+  });
+
+  it('addDaysIso ข้ามเดือนและปีได้ และลบวันได้', () => {
+    expect(addDaysIso('2026-09-30', 1)).toBe('2026-10-01');
+    expect(addDaysIso('2026-12-31', 1)).toBe('2027-01-01');
+    expect(addDaysIso('2026-01-01', -1)).toBe('2025-12-31');
+    expect(addDaysIso('2026-09-14', 90)).toBe('2026-12-13');
+  });
+
+  it('isoDayOfWeek ใช้ค่าเดียวกับคอลัมน์ day_of_week (0 = อาทิตย์)', () => {
+    expect(isoDayOfWeek('2026-09-13')).toBe(0); // อาทิตย์
+    expect(isoDayOfWeek('2026-09-14')).toBe(1); // จันทร์
+    expect(isoDayOfWeek('2026-09-19')).toBe(6); // เสาร์
+  });
+
+  it('shiftMonthClampDay หดวันลงเมื่อเดือนปลายทางสั้นกว่า', () => {
+    expect(shiftMonthClampDay('2026-01-31', 1, 31)).toBe('2026-02-28');
+    expect(shiftMonthClampDay('2028-01-31', 1, 31)).toBe('2028-02-29');
+    expect(shiftMonthClampDay('2026-03-31', 1, 31)).toBe('2026-04-30');
+  });
+
+  it('shiftMonthClampDay ยึด anchorDay ของกฎ ไม่ใช่วันที่ที่ถูกหดมาแล้ว', () => {
+    expect(shiftMonthClampDay('2026-02-28', 1, 31)).toBe('2026-03-31');
+  });
+
+  it('ผลลัพธ์ไม่ขึ้นกับ timezone ของเครื่อง (คำนวณด้วย UTC ล้วน)', () => {
+    const original = process.env.TZ;
+    try {
+      process.env.TZ = 'Pacific/Kiritimati'; // UTC+14 ขอบสุดของโลก
+      expect(addDaysIso('2026-09-14', 1)).toBe('2026-09-15');
+      process.env.TZ = 'Pacific/Niue'; // UTC-11 อีกขอบหนึ่ง
+      expect(addDaysIso('2026-09-14', 1)).toBe('2026-09-15');
+    } finally {
+      process.env.TZ = original;
+    }
   });
 });

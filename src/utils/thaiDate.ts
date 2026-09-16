@@ -114,3 +114,68 @@ export function normalizeMonthIso(value: string): string | null {
   if (month < 1 || month > 12) return null;
   return `${matched[1]}-${matched[2]}-01`;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// เลขคณิตปฏิทินบนสตริง `YYYY-MM-DD` — ใช้กับคอลัมน์ชนิด date ที่ไม่มีเวลาติดมาด้วย
+//
+// ทำไมไม่ใช้ Date ธรรมดา: คอลัมน์ next_run / end_date เป็น date เปล่าๆ ไม่มี timezone
+// ถ้าเอาไปสร้าง `new Date('2026-09-30')` จะได้เที่ยงคืน UTC ซึ่งคือ 07:00 ของวันเดียวกัน
+// ที่กรุงเทพ พอบวกลบวันแล้วแปลงกลับด้วยเวลาเครื่อง (ที่อาจไม่ใช่ไทย) วันจะเลื่อนไป 1 วัน
+// ฟังก์ชันชุดนี้จึงคำนวณด้วย Date.UTC ล้วน แล้วอ่านค่ากลับด้วย getUTC* เท่านั้น
+// = ผลลัพธ์เหมือนกันทุกเครื่องไม่ว่า TZ ของเซิร์ฟเวอร์จะเป็นอะไร
+// ────────────────────────────────────────────────────────────────────────────
+
+type IsoDateParts = { year: number; month: number; day: number };
+
+/** แยก `YYYY-MM-DD` เป็นตัวเลข — throw ถ้ารูปแบบผิด ไม่เดาให้ */
+export function parseIsoDate(isoDate: string): IsoDateParts {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!matched) {
+    throw new Error(`parseIsoDate: รูปแบบวันที่ไม่ถูกต้อง "${isoDate}" (ต้องเป็น YYYY-MM-DD)`);
+  }
+  return {
+    year: Number(matched[1]),
+    month: Number(matched[2]),
+    day: Number(matched[3]),
+  };
+}
+
+function toIsoDate(year: number, month: number, day: number): string {
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** จำนวนวันในเดือนนั้น (รองรับปีอธิกสุรทิน) — month นับ 1-12 */
+export function daysInMonth(year: number, month: number): number {
+  // วันที่ 0 ของเดือนถัดไป = วันสุดท้ายของเดือนนี้
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** บวก/ลบวันจากวันที่ ISO */
+export function addDaysIso(isoDate: string, days: number): string {
+  const { year, month, day } = parseIsoDate(isoDate);
+  const shifted = new Date(Date.UTC(year, month - 1, day + days));
+  return toIsoDate(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
+}
+
+/** วันในสัปดาห์ของวันที่ ISO — 0 = อาทิตย์ ถึง 6 = เสาร์ (ตรงกับคอลัมน์ day_of_week) */
+export function isoDayOfWeek(isoDate: string): number {
+  const { year, month, day } = parseIsoDate(isoDate);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+/**
+ * เลื่อนเดือนไป n เดือน แล้ว "ยึดวันที่" ตาม anchorDay
+ * ถ้าเดือนปลายทางสั้นกว่า anchorDay จะได้วันสุดท้ายของเดือนนั้นแทน
+ *
+ * ตรงตาม S5.9: "day_of_month = 31 ในเดือนที่สั้นกว่า → วันสุดท้ายของเดือน"
+ * สำคัญ: ต้องยึดจาก anchorDay ของกฎเสมอ ไม่ใช่จากวันที่ที่ถูกหดแล้ว
+ * ไม่งั้นรอบ 31 ม.ค. → 28 ก.พ. จะกลายเป็น 28 มี.ค. แทนที่จะกลับไปเป็น 31 มี.ค.
+ */
+export function shiftMonthClampDay(isoDate: string, months: number, anchorDay: number): string {
+  const { year, month } = parseIsoDate(isoDate);
+  const zeroBasedMonth = year * 12 + (month - 1) + months;
+  const shiftedYear = Math.floor(zeroBasedMonth / 12);
+  const shiftedMonth = (zeroBasedMonth % 12) + 1;
+  const day = Math.min(anchorDay, daysInMonth(shiftedYear, shiftedMonth));
+  return toIsoDate(shiftedYear, shiftedMonth, day);
+}

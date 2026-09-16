@@ -19,6 +19,13 @@ import {
   removeBudget,
   setBudget,
 } from '../services/budget.service';
+import {
+  createRecurringRule,
+  listRecurringRules,
+  RecurringError,
+  removeRecurringRule,
+  type CreateRecurringInput,
+} from '../services/recurring.service';
 import { listTransactionsByUser } from '../db/queries/transactions';
 import { listCategoriesByUser } from '../db/queries/categories';
 import { ensureEmailIngestToken, rotateEmailIngestToken } from '../db/queries/users';
@@ -183,6 +190,64 @@ apiRouter.delete(
   handle(async (req, res) => {
     const month = readMonthParam(req.query.month);
     const removed = await removeBudget(req.userId!, req.params.categoryId!, month);
+    res.json({ removed });
+  })
+);
+
+// ────────────────────────────────────────────────────────────────────────────
+// รายการประจำ (SPEC §S5.9) — เงินเดือน ค่าหอ ค่าเน็ต ที่เข้า/ออกตามรอบ
+//
+// งาน `recurring` (S7, 06:00 ไทย) เป็นตัวสร้าง transaction จริงจากกฎพวกนี้
+// route ชุดนี้ทำแค่ให้ผู้ใช้ตั้ง/ดู/ปิดกฎเท่านั้น ไม่สร้างรายการเอง
+// ────────────────────────────────────────────────────────────────────────────
+
+apiRouter.get(
+  '/recurring',
+  handle(async (req, res) => {
+    const items = await listRecurringRules(req.userId!);
+    res.json({ items, available: true });
+  })
+);
+
+apiRouter.post(
+  '/recurring',
+  handle(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    if (typeof body.label !== 'string') {
+      throw new RecurringError('ต้องส่ง label เป็นข้อความ', 400);
+    }
+    if (body.type !== 'income' && body.type !== 'expense') {
+      throw new RecurringError('type ต้องเป็น income หรือ expense', 400);
+    }
+    const amountSatang = Number(body.amountSatang);
+    if (!Number.isInteger(amountSatang)) {
+      throw new RecurringError('amountSatang ต้องเป็นจำนวนเต็มหน่วยสตางค์', 400);
+    }
+
+    const input: CreateRecurringInput = {
+      userId: req.userId!,
+      label: body.label,
+      type: body.type,
+      amountSatang,
+      frequency: body.frequency as CreateRecurringInput['frequency'],
+      dayOfMonth: body.dayOfMonth === undefined ? undefined : Number(body.dayOfMonth),
+      dayOfWeek: body.dayOfWeek === undefined ? undefined : Number(body.dayOfWeek),
+      startDate: typeof body.startDate === 'string' ? body.startDate : undefined,
+      endDate: typeof body.endDate === 'string' ? body.endDate : null,
+    };
+
+    res.status(201).json(await createRecurringRule(input));
+  })
+);
+
+apiRouter.delete(
+  '/recurring/:ruleId',
+  handle(async (req, res) => {
+    const removed = await removeRecurringRule(req.userId!, req.params.ruleId!);
+    if (!removed) {
+      throw new RecurringError('ไม่พบรายการประจำนี้ในบัญชีของคุณ', 404);
+    }
     res.json({ removed });
   })
 );
