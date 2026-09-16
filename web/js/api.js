@@ -55,6 +55,27 @@
       }),
     deleteBudget: (categoryId) =>
       request(`/budgets/${encodeURIComponent(categoryId)}`, { method: 'DELETE' }),
+    fetchPlans: () => request('/plans'),
+    fetchPlanCapacity: () => request('/plans/capacity'),
+    // targetSatang เป็นสตางค์เหมือนทุกค่าเงินในหน้าเว็บ / months ไม่ส่งก็ได้
+    createPlan: (title, targetSatang, months) =>
+      request('/plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, targetSatang, months }),
+      }),
+    confirmPlan: (planId) =>
+      request(`/plans/${encodeURIComponent(planId)}/confirm`, { method: 'POST' }),
+    cancelPlan: (planId) => request(`/plans/${encodeURIComponent(planId)}`, { method: 'DELETE' }),
+    fetchRecurring: () => request('/recurring'),
+    createRecurring: (payload) =>
+      request('/recurring', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+    deleteRecurring: (ruleId) =>
+      request(`/recurring/${encodeURIComponent(ruleId)}`, { method: 'DELETE' }),
     rotateEmailToken: () => request('/settings/email-token/rotate', { method: 'POST' }),
     logout: () =>
       fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }).then(() => {

@@ -17,6 +17,7 @@ import { jobsRouter } from './routes/jobs';
 import { authRouter } from './routes/auth';
 import { BudgetError } from './services/budget.service';
 import { RecurringError } from './services/recurring.service';
+import { PlanError } from './services/plan.service';
 
 const app = express();
 
@@ -64,7 +65,7 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
 
   // คำขอที่ผู้ใช้ส่งมาไม่ถูกต้อง (งบติดลบ, หมวดไม่ใช่ของเขา, เดือนผิดรูปแบบ)
   // ต้องตอบ 4xx พร้อมเหตุผลภาษาไทย ไม่ใช่ 500 ที่หน้าเว็บแปลว่า "เซิร์ฟเวอร์พัง"
-  if (err instanceof BudgetError || err instanceof RecurringError) {
+  if (err instanceof BudgetError || err instanceof RecurringError || err instanceof PlanError) {
     res.status(err.status).json({ ok: false, error: err.message });
     return;
   }

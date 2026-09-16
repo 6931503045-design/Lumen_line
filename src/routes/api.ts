@@ -20,6 +20,15 @@ import {
   setBudget,
 } from '../services/budget.service';
 import {
+  cancelPlan,
+  completeReachedPlans,
+  confirmPlan,
+  createSavingPlan,
+  getPlanCapacity,
+  listPlansWithProgress,
+  PlanError,
+} from '../services/plan.service';
+import {
   createRecurringRule,
   listRecurringRules,
   RecurringError,
@@ -76,7 +85,7 @@ apiRouter.get(
     res.json({
       ...summary,
       // ตัวเลขที่ SPEC ออกแบบไว้แต่ยังไม่มี service คำนวณให้ — ห้ามเดา ห้ามส่ง 0 มาแทน
-      unavailable: ['safeToSpend', 'confidence', 'savingProgress'],
+      unavailable: ['safeToSpend', 'confidence'],
     });
   })
 );
@@ -124,18 +133,70 @@ apiRouter.get(
   })
 );
 
+// ────────────────────────────────────────────────────────────────────────────
+// แผนออม (SPEC §S5.3–§S5.6) — 🔴 Money Engine ห้ามมี AI ทุกตัวเลขมาจากสูตรตรงๆ
+// ────────────────────────────────────────────────────────────────────────────
+
+apiRouter.get(
+  '/plans',
+  handle(async (req, res) => {
+    // เช็คแผนที่ออมครบเป้าก่อนอ่าน เพื่อให้ผู้ใช้เห็นสถานะ completed ทันทีที่เปิดหน้า
+    // ไม่ต้องรอ job รอบถัดไป (S5.6) — ฟังก์ชันนี้ไม่ทำอะไรเลยถ้าไม่มีแผนไหนครบเป้า
+    await completeReachedPlans(req.userId!);
+
+    const [items, capacity] = await Promise.all([
+      listPlansWithProgress(req.userId!),
+      getPlanCapacity(req.userId!),
+    ]);
+    res.json({ items, capacity, available: true });
+  })
+);
+
+/** กำลังออมอย่างเดียว (ไม่ต้องโหลดแผน) — หน้าเว็บใช้ตอนจะขึ้นฟอร์มสร้างแผน */
+apiRouter.get(
+  '/plans/capacity',
+  handle(async (req, res) => {
+    res.json(await getPlanCapacity(req.userId!));
+  })
+);
+
 /**
- * แผนออมยังไม่เปิดใช้งาน: ตาราง plans มีแล้วแต่ services/plan.service.ts ยังว่าง
- * และไม่มีโค้ดไหนเขียนแถวลง plans เลย จึงตอบ [] พร้อมบอกเหตุผลตรงๆ
- * แทนที่จะส่งแผนปลอมมาให้หน้าเว็บวาด
+ * สร้างชุด 3 ทางเลือก — body: { title, targetSatang, months? }
+ * ทุกทางเลือกถูกบันทึกเป็น draft ผู้ใช้ต้องกดยืนยันอีกทีถึงจะ active (S5.4)
  */
-apiRouter.get('/plans', (_req, res) => {
-  res.json({
-    items: [],
-    available: false,
-    reason: 'ยังไม่ได้ทำ plan.service — ตาราง plans ยังไม่มีข้อมูลจากที่ไหนเลย',
-  });
-});
+apiRouter.post(
+  '/plans',
+  handle(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    if (typeof body.title !== 'string') {
+      throw new PlanError('ต้องส่ง title เป็นข้อความ', 400);
+    }
+    const targetSatang = Number(body.targetSatang);
+    if (!Number.isInteger(targetSatang)) {
+      throw new PlanError('targetSatang ต้องเป็นจำนวนเต็มหน่วยสตางค์', 400);
+    }
+    const months = body.months === undefined ? undefined : Number(body.months);
+
+    res.status(201).json(await createSavingPlan(req.userId!, body.title, targetSatang, months));
+  })
+);
+
+apiRouter.post(
+  '/plans/:planId/confirm',
+  handle(async (req, res) => {
+    const plan = await confirmPlan(req.userId!, req.params.planId!);
+    res.json({ planId: plan.id, status: plan.status, confirmedAt: plan.confirmed_at });
+  })
+);
+
+apiRouter.delete(
+  '/plans/:planId',
+  handle(async (req, res) => {
+    const plan = await cancelPlan(req.userId!, req.params.planId!);
+    res.json({ planId: plan.id, status: plan.status });
+  })
+);
 
 // ────────────────────────────────────────────────────────────────────────────
 // งบรายหมวด (SPEC §S5.8) — ยอดใช้คำนวณสดจาก transactions ทุกครั้ง ไม่มีการเก็บยอดสะสม

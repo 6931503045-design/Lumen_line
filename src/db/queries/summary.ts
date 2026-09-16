@@ -67,3 +67,58 @@ export async function listAllTransactionRows(userId: string): Promise<SummaryRow
   }
   return (data ?? []) as SummaryRow[];
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// query สำหรับสูตรแผนออม (S5.3 / S5.5) — ต้องรู้ source และ is_essential ของหมวดด้วย
+// จึงแยกจาก SummaryRow ที่ใช้กับหน้าสรุป ไม่ยัดคอลัมน์เพิ่มให้ query ที่เรียกบ่อยกว่า
+// ────────────────────────────────────────────────────────────────────────────
+
+export type PlanningRow = {
+  type: 'income' | 'expense' | 'transfer';
+  amount: string;
+  occurred_at: string;
+  /** รายการที่ source='recurring' ต้องถูกตัดออกจาก avgEssential กันนับซ้ำกับ recurringTotal */
+  source: string;
+  categories: { is_essential: boolean } | null;
+};
+
+/** รายการในช่วง [fromIsoDate, toIsoDateExclusive) พร้อม source และ is_essential ของหมวด */
+export async function listPlanningRowsInRange(
+  userId: string,
+  fromIsoDate: string,
+  toIsoDateExclusive: string
+): Promise<PlanningRow[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('type, amount, occurred_at, source, categories(is_essential)')
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .gte('occurred_at', toBangkokDayStart(fromIsoDate))
+    .lt('occurred_at', toBangkokDayStart(toIsoDateExclusive))
+    .limit(MAX_ROWS);
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? []) as unknown as PlanningRow[];
+}
+
+/**
+ * วันที่ของรายการแรกสุดของผู้ใช้ (เวลาไทย) — ใช้หา "ข้อมูลย้อนหลังกี่วัน" ตาม S5.5
+ * คืน null ถ้าผู้ใช้ยังไม่มีรายการเลย
+ */
+export async function findFirstTransactionDate(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('occurred_at')
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .order('occurred_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data?.occurred_at ?? null;
+}

@@ -57,6 +57,16 @@
     return dateKey;
   }
 
+  const bangkokMonthYear = new Intl.DateTimeFormat('th-TH', {
+    timeZone: 'Asia/Bangkok', month: 'short', year: 'numeric',
+  });
+
+  /** "2027-06-14" -> "มิ.ย. 2570" — ใช้กับป้ายกำหนดถึงเป้าบนการ์ดแผน */
+  function formatThaiMonthYear(isoDate) {
+    // เติมเวลาเที่ยงวัน UTC กันวันเลื่อนตอนแปลงเป็นเวลาไทย
+    return bangkokMonthYear.format(new Date(`${isoDate}T12:00:00Z`));
+  }
+
   const DONUT_COLORS = ['#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#f3e8ff'];
 
   /** รวมหมวดที่เหลือเป็น "อื่น ๆ" ให้โดนัทไม่มีชิ้นเล็กจนอ่านไม่ออก */
@@ -102,7 +112,7 @@
     }
   }
 
-  function applyLiveData(summary, transactions, categories, budgets) {
+  function applyLiveData(summary, transactions, categories, budgets, plans) {
     const data = window.mockData;
     const todayKey = bangkokDate.format(new Date());
 
@@ -112,9 +122,11 @@
     data.summary.expense = summary.monthExpenseSatang;
 
     // ยอดที่ยังไม่มี service คำนวณ — ตั้ง null ให้หน้าเว็บแสดง "ยังไม่มีข้อมูล"
+    // safeToSpend (S5.2) ยังไม่มี service คำนวณ — คง null ไว้ให้หน้าเว็บบอกว่ายังไม่มีข้อมูล
     data.summary.safeToSpend = null;
-    data.summary.confidence = null;
     data.summary.safeToSpendConfidence = null;
+    // สามค่านี้เติมจริงด้านล่างหลังโหลดแผนแล้ว ตั้ง null ไว้ก่อนเผื่อไม่มีแผนเลย
+    data.summary.confidence = null;
     data.summary.progress = null;
     data.summary.daysOfData = null;
 
@@ -165,7 +177,34 @@
       };
     });
 
-    data.plans = []; // plan.service ยังไม่มี — ไม่มีแผนจริงให้แสดง
+    // แผนออมจริงจาก plan.service — แปลงเป็นรูปที่ app.js ใช้
+    // draft ไม่เอามาแสดงในรายการแผน เพราะยังไม่ได้ยืนยัน (S5.4) ปนกันแล้วผู้ใช้จะนับผิด
+    data.plans = ((plans && plans.items) || [])
+      .filter((plan) => plan.status !== 'draft')
+      .map((plan) => ({
+        id: plan.planId,
+        name: plan.title,
+        target: plan.targetSatang,
+        saved: plan.savedSatang,
+        progress: Math.round(plan.percentComplete),
+        confidence: plan.confidence,
+        status: plan.status === 'completed' ? 'completed' : plan.offTrack ? 'off_track' : 'normal',
+        dueMonth: formatThaiMonthYear(plan.targetDate),
+        monthly_save: plan.monthlySaveSatang,
+        active: plan.status === 'active',
+      }));
+
+    // ความคืบหน้ารวมของแผนที่กำลังออมอยู่ — การ์ดบนแดชบอร์ดใช้ค่านี้
+    const activePlans = data.plans.filter((plan) => plan.active);
+    const totalTarget = activePlans.reduce((sum, plan) => sum + plan.target, 0);
+    const totalSaved = activePlans.reduce((sum, plan) => sum + plan.saved, 0);
+    data.summary.progress = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : null;
+
+    // ระดับความมั่นใจของการประเมิน (S5.5) — ต้องแสดงบนทุกการ์ดแผนและหน้า "เหลือ"
+    if (plans && plans.capacity) {
+      data.summary.confidence = plans.capacity.confidence;
+      data.summary.daysOfData = plans.capacity.daysOfData;
+    }
 
     data.donutData = buildDonut(summary.expenseByCategory);
     data.lineData = {
@@ -342,15 +381,16 @@
     }
 
     try {
-      const [summary, transactions, categories, budgets] = await Promise.all([
+      const [summary, transactions, categories, budgets, plans] = await Promise.all([
         window.moneyBotApi.fetchSummary(),
         window.moneyBotApi.fetchTransactions(),
         window.moneyBotApi.fetchCategories(),
         window.moneyBotApi.fetchBudgets(),
+        window.moneyBotApi.fetchPlans(),
       ]);
 
       applyProfile(me);
-      applyLiveData(summary, transactions, categories, budgets);
+      applyLiveData(summary, transactions, categories, budgets, plans);
       installBudgetWriteHandlers();
       initializePage();
       await setupSettingsPage();
