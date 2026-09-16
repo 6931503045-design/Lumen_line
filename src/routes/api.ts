@@ -13,12 +13,19 @@
 import express from 'express';
 import { requireSession, type AuthedRequest } from '../middleware/auth';
 import { getUserSummary } from '../services/summary.service';
+import {
+  BudgetError,
+  getBudgetOverview,
+  removeBudget,
+  setBudget,
+} from '../services/budget.service';
 import { listTransactionsByUser } from '../db/queries/transactions';
 import { listCategoriesByUser } from '../db/queries/categories';
 import { ensureEmailIngestToken, rotateEmailIngestToken } from '../db/queries/users';
 import { countUnparsedEmails } from '../db/queries/emails';
 import { env } from '../config/env';
 import { toSatang } from '../utils/money';
+import { normalizeMonthIso } from '../utils/thaiDate';
 
 export const apiRouter = express.Router();
 
@@ -62,7 +69,7 @@ apiRouter.get(
     res.json({
       ...summary,
       // ตัวเลขที่ SPEC ออกแบบไว้แต่ยังไม่มี service คำนวณให้ — ห้ามเดา ห้ามส่ง 0 มาแทน
-      unavailable: ['safeToSpend', 'confidence', 'monthlyBudget', 'savingProgress'],
+      unavailable: ['safeToSpend', 'confidence', 'savingProgress'],
     });
   })
 );
@@ -123,16 +130,62 @@ apiRouter.get('/plans', (_req, res) => {
   });
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// งบรายหมวด (SPEC §S5.8) — ยอดใช้คำนวณสดจาก transactions ทุกครั้ง ไม่มีการเก็บยอดสะสม
+// ────────────────────────────────────────────────────────────────────────────
+
 /**
- * งบประมาณรายเดือนยังไม่เปิดใช้งานด้วยเหตุผลเดียวกัน (budget.service.ts ยังว่าง)
+ * อ่านพารามิเตอร์เดือนจาก query string (`?month=2026-09`) ถ้าไม่ส่งมา = เดือนปัจจุบัน
+ * ค่าที่ผิดรูปแบบต้องปฏิเสธ ไม่ใช่เงียบๆ แล้วตอบข้อมูลของเดือนอื่น
  */
-apiRouter.get('/budgets', (_req, res) => {
-  res.json({
-    items: [],
-    available: false,
-    reason: 'ยังไม่ได้ทำ budget.service — ตาราง budgets ยังไม่มีข้อมูลจากที่ไหนเลย',
-  });
-});
+function readMonthParam(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string') {
+    throw new BudgetError('พารามิเตอร์ month ต้องเป็นข้อความรูปแบบ YYYY-MM', 400);
+  }
+  const month = normalizeMonthIso(value);
+  if (!month) {
+    throw new BudgetError(`เดือนไม่ถูกต้อง: "${value}" (ต้องเป็น YYYY-MM)`, 400);
+  }
+  return month;
+}
+
+apiRouter.get(
+  '/budgets',
+  handle(async (req, res) => {
+    const month = readMonthParam(req.query.month);
+    const overview = await getBudgetOverview(req.userId!, month);
+    res.json({ ...overview, available: true });
+  })
+);
+
+/**
+ * ตั้ง/แก้งบของหมวดหนึ่ง — body: { limitSatang: number, month?: "YYYY-MM" }
+ * รับเป็น "สตางค์" เท่านั้นตาม G3 หน้าเว็บมีค่าเป็นสตางค์อยู่แล้ว (keypad ทำงานหน่วยสตางค์)
+ */
+apiRouter.put(
+  '/budgets/:categoryId',
+  handle(async (req, res) => {
+    const body = (req.body ?? {}) as { limitSatang?: unknown; month?: unknown };
+    const limitSatang = Number(body.limitSatang);
+    if (!Number.isInteger(limitSatang)) {
+      throw new BudgetError('limitSatang ต้องเป็นจำนวนเต็มหน่วยสตางค์', 400);
+    }
+
+    const month = readMonthParam(body.month);
+    const status = await setBudget(req.userId!, req.params.categoryId!, limitSatang, month);
+    res.json(status);
+  })
+);
+
+apiRouter.delete(
+  '/budgets/:categoryId',
+  handle(async (req, res) => {
+    const month = readMonthParam(req.query.month);
+    const removed = await removeBudget(req.userId!, req.params.categoryId!, month);
+    res.json({ removed });
+  })
+);
 
 /**
  * ที่อยู่อีเมลสำหรับ forward ของผู้ใช้คนนี้ (SPEC §S8 ขั้นตอนตั้งค่าของผู้ใช้)

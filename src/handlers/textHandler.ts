@@ -12,6 +12,7 @@
 import { getUserIdByLineUserId } from '../db/queries/users';
 import { parseQuickExpenseText } from '../utils/regexParser';
 import { createTransaction } from '../services/transaction.service';
+import { formatBudgetAlert } from '../services/budget.service';
 import { formatBaht } from '../utils/money';
 import { replyFlex, replyText } from '../line/reply';
 import { buildConfirmCard } from '../line/flex/confirmCard';
@@ -66,7 +67,11 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
       categoryName: parsed.category,
       formattedAmount: formatBaht(tx.amountSatang),
     });
-    await replyFlex(replyToken, confirmCard);
+
+    // S5.8: รายการนี้ทำให้ข้ามเกณฑ์งบพอดี — แนบไปกับ reply เดียวกัน
+    // reply มี quota แยกจาก push และไม่จำกัดจำนวน จึงเตือนตรงนี้ได้ฟรี
+    // ถ้าปล่อยไปเตือนทีหลังต้องใช้ push ซึ่งมีแค่ 280 ครั้งต่อเดือนทั้งระบบ
+    await replyFlex(replyToken, confirmCard, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
   } catch (err) {
     console.error('[textHandler] createTransaction error:', err);
     await replyText(replyToken, 'บันทึกไม่สำเร็จ ลองพิมพ์ใหม่อีกครั้งนะครับ 🙏');

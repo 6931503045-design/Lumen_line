@@ -95,3 +95,26 @@ export async function listCategoriesByUser(userId: string): Promise<UserCategory
   }
   return (data ?? []) as UserCategory[];
 }
+
+/**
+ * อ่านหมวดตาม id "ของผู้ใช้คนนี้เท่านั้น" คืน null ถ้าไม่ใช่ของเขาหรือไม่มีจริง
+ *
+ * ⚖️ G6: จำเป็นเพราะ foreign key ของตาราง budgets ชี้ไป categories(id) เฉยๆ
+ * DB จึงยอมให้ผูกงบของเรากับหมวดของคนอื่นได้ถ้าเดา uuid ถูก — ต้องกันที่ชั้นนี้
+ */
+export async function findCategoryOwnedByUser(
+  userId: string,
+  categoryId: string
+): Promise<UserCategory | null> {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id, name, type, emoji, is_essential, is_default')
+    .eq('user_id', userId)
+    .eq('id', categoryId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? null) as UserCategory | null;
+}

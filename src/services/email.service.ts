@@ -167,6 +167,9 @@ async function processMessage(
     return 'duplicate';
   }
 
+  // ยังไม่ส่ง categoryName เพราะอีเมลธนาคารไม่ได้บอกว่าเป็นค่าอะไร (บอกแค่จำนวนกับปลายทาง)
+  // ผลข้างเคียงที่ต้องรู้: รายการจากอีเมลจึงไม่มีหมวด และจะไม่ไปกระตุ้นการเตือนงบรายหมวด (S5.8)
+  // จนกว่าจะมีตัวเดาหมวดจากชื่อปลายทาง (S4 keyword/learned) มาเสียบตรงนี้
   const transaction = await createTransaction({
     userId: owner.id,
     type: parsed.type,

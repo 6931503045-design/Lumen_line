@@ -1,6 +1,7 @@
 import { assertValidTransactionAmount } from '../utils/money';
 import { insertTransaction, type TransactionType, type TransactionSource, type TransactionParsedBy } from '../db/queries/transactions';
 import { findOrCreateCategory } from '../db/queries/categories';
+import { evaluateBudgetAlert, type BudgetAlert } from './budget.service';
 
 export type CreateTransactionInput = {
   userId: string;
@@ -29,6 +30,12 @@ export type CreatedTransaction = {
   amountSatang: number;
   type: TransactionType;
   occurredAt: string;
+  /**
+   * S5.8 — ถ้ารายการนี้ทำให้ยอดใช้ของหมวดข้ามเกณฑ์ 80%/100% ของงบ จะมีค่าติดมาด้วย
+   * ผู้เรียกฝั่งแชทเอาไปแนบท้าย reply เดียวกันได้เลย (ฟรี ไม่กิน push quota)
+   * ผู้เรียกฝั่งอีเมล/recurring ต้องส่งเป็น push เอง
+   */
+  budgetAlert: BudgetAlert | null;
 };
 
 export async function createTransaction(
@@ -65,5 +72,29 @@ export async function createTransaction(
     amountSatang: input.amountSatang,
     type: row.type,
     occurredAt: row.occurred_at,
+    budgetAlert: await safeEvaluateBudgetAlert(input.userId, input.type, categoryId, occurredAt),
   };
+}
+
+/**
+ * เช็คงบแล้วห้ามพังการบันทึก — รายการถูกเขียนลง DB ไปแล้วตอนที่ฟังก์ชันนี้ถูกเรียก
+ * ถ้าปล่อยให้ error หลุดขึ้นไป ผู้ใช้จะเห็น "บันทึกไม่สำเร็จ" ทั้งที่เงินถูกจดเรียบร้อยแล้ว
+ * แล้วจะพิมพ์ซ้ำจนกลายเป็นรายการซ้ำ — การเตือนงบสำคัญน้อยกว่าความถูกต้องของยอดเสมอ
+ *
+ * ⚖️ G7: เช็คเฉพาะรายจ่าย — รายรับกับ transfer ไม่กินงบหมวด
+ */
+async function safeEvaluateBudgetAlert(
+  userId: string,
+  type: TransactionType,
+  categoryId: string | null,
+  occurredAtIso: string
+): Promise<BudgetAlert | null> {
+  if (type !== 'expense' || !categoryId) return null;
+
+  try {
+    return await evaluateBudgetAlert(userId, categoryId, new Date(occurredAtIso));
+  } catch (err) {
+    console.error('[transaction.service] เช็คงบรายหมวดไม่สำเร็จ (รายการถูกบันทึกแล้ว):', err);
+    return null;
+  }
 }

@@ -45,6 +45,16 @@
     fetchTransactions: () => request('/transactions?limit=100'),
     fetchCategories: () => request('/categories'),
     fetchSettings: () => request('/settings'),
+    fetchBudgets: () => request('/budgets'),
+    // limitSatang เป็น "สตางค์" ให้ตรงกับหน่วยที่ทั้งหน้าเว็บใช้ (keypad คืนค่าเป็นสตางค์อยู่แล้ว)
+    saveBudget: (categoryId, limitSatang) =>
+      request(`/budgets/${encodeURIComponent(categoryId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limitSatang }),
+      }),
+    deleteBudget: (categoryId) =>
+      request(`/budgets/${encodeURIComponent(categoryId)}`, { method: 'DELETE' }),
     rotateEmailToken: () => request('/settings/email-token/rotate', { method: 'POST' }),
     logout: () =>
       fetch('/auth/logout', { method: 'POST', credentials: 'same-origin' }).then(() => {

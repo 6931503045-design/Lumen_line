@@ -14,8 +14,11 @@
 // ไฟล์นี้จึงต้องแก้ค่าข้างใน object เดิม (mutate) ห้าม reassign window.mockData เป็นก้อนใหม่
 //
 // ⚠️ ความซื่อสัตย์ของตัวเลข: ค่าที่ backend ยังคำนวณไม่ได้ (safeToSpend, ความมั่นใจ,
-// แผนออม, งบรายเดือน) ถูกตั้งเป็น null ไม่ใช่ปล่อยเลขจำลองค้างไว้ เพราะหน้าจอที่ผสม
+// แผนออม) ถูกตั้งเป็น null ไม่ใช่ปล่อยเลขจำลองค้างไว้ เพราะหน้าจอที่ผสม
 // เลขจริงกับเลขปลอมอันตรายกว่าหน้าจอที่บอกว่า "ยังไม่มีข้อมูล"
+//
+// งบรายหมวดใช้ข้อมูลจริงแล้ว (budget.service ฝั่ง backend) — แต่ยังคง null ไว้เหมือนเดิม
+// ในกรณีที่ผู้ใช้ยังไม่เคยตั้งงบสักหมวด เพราะ "ยังไม่ได้ตั้งงบ" กับ "งบ ฿0" คนละเรื่องกัน
 
 (function () {
   // ── แถบบอกสถานะ ────────────────────────────────────────────────────────────
@@ -99,7 +102,7 @@
     }
   }
 
-  function applyLiveData(summary, transactions, categories) {
+  function applyLiveData(summary, transactions, categories, budgets) {
     const data = window.mockData;
     const todayKey = bangkokDate.format(new Date());
 
@@ -114,8 +117,12 @@
     data.summary.safeToSpendConfidence = null;
     data.summary.progress = null;
     data.summary.daysOfData = null;
-    data.summary.monthlyBudgetLimit = null;
-    data.summary.monthlyBudgetUsed = null;
+
+    // งบรายเดือน: มีจริงแล้วตั้งแต่ budget.service — แต่ถ้าผู้ใช้ยังไม่เคยตั้งงบสักหมวด
+    // ต้องคง null ไว้ให้การ์ดขึ้นว่า "ยังไม่ได้ตั้งงบประมาณ" ไม่ใช่ ฿0.00 ซึ่งอ่านว่า "งบเป็นศูนย์"
+    const hasBudget = budgets && budgets.items && budgets.items.length > 0;
+    data.summary.monthlyBudgetLimit = hasBudget ? budgets.totalLimitSatang : null;
+    data.summary.monthlyBudgetUsed = hasBudget ? budgets.totalSpentSatang : null;
 
     data.transactions = transactions.map((item) => {
       const occurred = new Date(item.occurredAt);
@@ -135,17 +142,28 @@
     });
 
     const spentByName = new Map(summary.expenseByCategory.map((item) => [item.name, item.amountSatang]));
-    data.categories = categories.map((category, index) => ({
-      id: category.id,
-      name: category.name,
-      icon: category.emoji || '📦',
-      used: spentByName.get(category.name) || 0,
-      limit: null,        // ต้องมี budgets ก่อน
-      percentage: null,   // คำนวณไม่ได้ถ้าไม่มี limit
-      type: category.type,
-      isEssential: category.isEssential,
-      sortOrder: index + 1,
-    }));
+    // งบของหมวดไหนบ้าง — ผูกด้วย categoryId ไม่ใช่ชื่อ เพราะชื่อหมวดซ้ำกันข้ามประเภทได้
+    const budgetByCategoryId = new Map(
+      ((budgets && budgets.items) || []).map((item) => [item.categoryId, item])
+    );
+
+    data.categories = categories.map((category, index) => {
+      const budget = budgetByCategoryId.get(category.id);
+      return {
+        id: category.id,
+        name: category.name,
+        icon: category.emoji || '📦',
+        // ยอดใช้เอาจาก budgets ก่อนถ้ามี เพราะ backend คิดจาก category_id ตรงๆ
+        // ส่วน expenseByCategory จับคู่ด้วยชื่อซึ่งพลาดได้ถ้ามีหมวดชื่อซ้ำ
+        used: budget ? budget.spentSatang : (spentByName.get(category.name) || 0),
+        limit: budget ? budget.limitSatang : null,
+        percentage: budget ? budget.percentUsed : null,
+        budgetLevel: budget ? budget.level : null,
+        type: category.type,
+        isEssential: category.isEssential,
+        sortOrder: index + 1,
+      };
+    });
 
     data.plans = []; // plan.service ยังไม่มี — ไม่มีแผนจริงให้แสดง
 
@@ -210,6 +228,80 @@
     }
   }
 
+  // ── เขียนงบจริง แทนพฤติกรรมเดโมของ app.js ───────────────────────────────────
+  //
+  // app.js เขียน setCategoryLimit() ไว้สำหรับข้อมูลจำลอง: หา category ด้วย Number(id)
+  // แล้วแก้ค่าใน memory เฉยๆ พอต่อของจริง id เป็น uuid ทำให้ Number(id) = NaN หาไม่เจอ
+  // และต่อให้หาเจอ ค่าที่ตั้งก็หายทันทีที่รีเฟรช เพราะไม่เคยถูกส่งไป backend
+  //
+  // จึงทับฟังก์ชันนี้ทั้งตัว (app.js ประกาศเป็น function declaration ระดับ global
+  // การ assign ทับที่ window จึงเปลี่ยน binding ที่ตัว handler เรียกใช้จริง)
+  function installBudgetWriteHandlers() {
+    window.setCategoryLimit = async function setCategoryLimitLive(categoryId) {
+      const category = window.mockData.categories.find((item) => String(item.id) === String(categoryId));
+      if (!category) return;
+
+      if (category.type !== 'expense') {
+        showSuccessModal('ตั้งงบได้เฉพาะหมวดรายจ่ายเท่านั้น');
+        return;
+      }
+
+      // keypad ทำงานหน่วยสตางค์ (แสดงผลหารร้อย) ค่าที่ได้จึงส่งเข้า API ได้ตรงๆ
+      buildKeypadInput(category.limit || 0, async (limitSatang) => {
+        if (!limitSatang) {
+          // กด 0 = ยกเลิกงบหมวดนี้ ตีความแบบนี้เพราะ backend ไม่รับงบ 0 บาทอยู่แล้ว
+          await removeBudgetLive(category);
+          return;
+        }
+
+        try {
+          const status = await window.moneyBotApi.saveBudget(category.id, limitSatang);
+          category.limit = status.limitSatang;
+          category.used = status.spentSatang;
+          category.percentage = status.percentUsed;
+          category.budgetLevel = status.level;
+          await refreshBudgetTotals();
+          showSuccessModal('ตั้งงบรายหมวดสำเร็จ');
+        } catch (err) {
+          console.error('[boot] ตั้งงบไม่สำเร็จ', err);
+          showSuccessModal(`ตั้งงบไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
+        }
+      });
+    };
+  }
+
+  async function removeBudgetLive(category) {
+    try {
+      await window.moneyBotApi.deleteBudget(category.id);
+      category.limit = null;
+      category.percentage = null;
+      category.budgetLevel = null;
+      await refreshBudgetTotals();
+      showSuccessModal('ยกเลิกงบหมวดนี้แล้ว');
+    } catch (err) {
+      console.error('[boot] ยกเลิกงบไม่สำเร็จ', err);
+      showSuccessModal(`ยกเลิกงบไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
+    }
+  }
+
+  /**
+   * อ่านยอดรวมงบใหม่จาก backend แล้ววาดหน้าใหม่
+   * ตั้งใจไม่บวกลบยอดรวมเองฝั่งหน้าเว็บ เพราะยอดใช้จริงคำนวณจาก transactions ที่ backend
+   * ถ้าหน้าเว็บเดายอดเอง จะเพี้ยนทันทีที่มีรายการเข้ามาทางแชทหรืออีเมลระหว่างนั้น
+   */
+  async function refreshBudgetTotals() {
+    try {
+      const budgets = await window.moneyBotApi.fetchBudgets();
+      const hasBudget = budgets.items.length > 0;
+      window.mockData.summary.monthlyBudgetLimit = hasBudget ? budgets.totalLimitSatang : null;
+      window.mockData.summary.monthlyBudgetUsed = hasBudget ? budgets.totalSpentSatang : null;
+    } catch (err) {
+      console.error('[boot] อ่านยอดงบใหม่ไม่สำเร็จ', err);
+    }
+    renderDashboard();
+    renderCategoriesPage();
+  }
+
   // ── ข้อความจากหน้า callback ของ /auth ───────────────────────────────────────
   function bannerFromLoginResult() {
     const reason = new URLSearchParams(window.location.search).get('login');
@@ -250,14 +342,16 @@
     }
 
     try {
-      const [summary, transactions, categories] = await Promise.all([
+      const [summary, transactions, categories, budgets] = await Promise.all([
         window.moneyBotApi.fetchSummary(),
         window.moneyBotApi.fetchTransactions(),
         window.moneyBotApi.fetchCategories(),
+        window.moneyBotApi.fetchBudgets(),
       ]);
 
       applyProfile(me);
-      applyLiveData(summary, transactions, categories);
+      applyLiveData(summary, transactions, categories, budgets);
+      installBudgetWriteHandlers();
       initializePage();
       await setupSettingsPage();
 

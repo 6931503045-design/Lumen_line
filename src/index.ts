@@ -15,6 +15,7 @@ import { webhookRouter } from './routes/webhook';
 import { apiRouter } from './routes/api';
 import { jobsRouter } from './routes/jobs';
 import { authRouter } from './routes/auth';
+import { BudgetError } from './services/budget.service';
 
 const app = express();
 
@@ -57,6 +58,13 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
   if (err instanceof JSONParseError) {
     console.warn('[index] webhook body ไม่ใช่ JSON ที่อ่านได้:', err.message);
     res.status(400).json({ ok: false, error: 'invalid body' });
+    return;
+  }
+
+  // คำขอที่ผู้ใช้ส่งมาไม่ถูกต้อง (งบติดลบ, หมวดไม่ใช่ของเขา, เดือนผิดรูปแบบ)
+  // ต้องตอบ 4xx พร้อมเหตุผลภาษาไทย ไม่ใช่ 500 ที่หน้าเว็บแปลว่า "เซิร์ฟเวอร์พัง"
+  if (err instanceof BudgetError) {
+    res.status(err.status).json({ ok: false, error: err.message });
     return;
   }
 

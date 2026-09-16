@@ -53,14 +53,21 @@ export async function replyTextWithQuickReply(
  */
 export async function replyFlex(
   replyToken: string,
-  flexMessage: { type: 'flex'; altText: string; contents: unknown }
+  flexMessage: { type: 'flex'; altText: string; contents: unknown },
+  /**
+   * ข้อความเสริมที่ส่งต่อท้ายการ์ดใน reply เดียวกัน (ใช้กับคำเตือนงบรายหมวด S5.8)
+   * LINE ให้ส่งได้สูงสุด 5 ข้อความต่อ 1 reply token และคิดเป็น "ครั้งเดียว" — ไม่กินโควตาเพิ่ม
+   */
+  extraText?: string
 ): Promise<void> {
   try {
-    await lineClient.replyMessage({
-      replyToken,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      messages: [flexMessage as any],
-    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const messages: any[] = [flexMessage as any];
+    if (extraText) {
+      messages.push({ type: 'text', text: extraText });
+    }
+
+    await lineClient.replyMessage({ replyToken, messages });
   } catch (err) {
     console.error('[line/reply] replyFlex error:', err);
   }

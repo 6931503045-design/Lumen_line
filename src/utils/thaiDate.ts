@@ -85,3 +85,32 @@ export function formatThaiMonthLabel(isoMonth: string): string {
 export function toBangkokDayStart(isoDate: string): string {
   return `${isoDate}T00:00:00+07:00`;
 }
+
+/**
+ * เลื่อนเดือนจาก "วันแรกของเดือน" ที่ให้มา ไปข้างหน้า/ข้างหลัง n เดือน
+ * รับ `YYYY-MM-DD` หรือ `YYYY-MM` ก็ได้ คืน `YYYY-MM-01` เสมอ
+ *
+ * ต่างจาก getMonthStartIsoAgo ตรงที่อันนั้นนับจาก "วันนี้" ส่วนอันนี้นับจากเดือนที่ระบุ
+ * ใช้หาขอบบนของช่วง query รายเดือน (เดือนถัดไป) โดยไม่ต้องสร้าง Date ให้เสี่ยง timezone
+ */
+export function shiftMonthStartIso(monthIso: string, months: number): string {
+  const [yearText, monthText] = monthIso.split('-') as [string, string];
+  const year = Number(yearText);
+  const month = Number(monthText);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    throw new Error(`shiftMonthStartIso: รูปแบบเดือนไม่ถูกต้อง "${monthIso}"`);
+  }
+  const zeroBasedMonth = year * 12 + (month - 1) + months;
+  const shiftedYear = Math.floor(zeroBasedMonth / 12);
+  const shiftedMonth = (zeroBasedMonth % 12) + 1;
+  return `${shiftedYear}-${String(shiftedMonth).padStart(2, '0')}-01`;
+}
+
+/** ทำให้ค่าที่รับมาจากภายนอกเป็น `YYYY-MM-01` ที่เชื่อถือได้ คืน null ถ้าไม่ใช่เดือนที่ถูกต้อง */
+export function normalizeMonthIso(value: string): string | null {
+  const matched = /^(\d{4})-(\d{2})(?:-\d{2})?$/.exec(value.trim());
+  if (!matched) return null;
+  const month = Number(matched[2]);
+  if (month < 1 || month > 12) return null;
+  return `${matched[1]}-${matched[2]}-01`;
+}

@@ -463,6 +463,35 @@ function renderTransactionsPage() {
   }
 }
 
+/**
+ * สัดส่วนงบของหมวด — คืน null ถ้ายังไม่ได้ตั้งงบ
+ *
+ * 🔴 แก้บั๊ก: เดิมคำนวณ `(used / (limit || 1)) * 100` ซึ่งตอนยังไม่ได้ตั้งงบ (limit = null)
+ * จะกลายเป็น "ใช้ไปแล้วกี่เท่าของ 1 สตางค์" เช่น ใช้ ฿500 แสดงเป็น 5000000%
+ * ตอนใช้ข้อมูลจำลองไม่เห็นบั๊กนี้เพราะทุกหมวดมี limit ติดมาด้วยเสมอ
+ */
+function categoryBudgetPercent(item) {
+  const limit = safeNumber(item.limit);
+  if (item.limit == null || limit <= 0) return null;
+  // backend ส่ง percentUsed มาให้แล้ว (คิดจาก category_id ตรงๆ) ใช้ค่านั้นก่อนถ้ามี
+  return item.percentage == null ? (safeNumber(item.used) / limit) * 100 : safeNumber(item.percentage);
+}
+
+function categoryBudgetPill(item) {
+  const percent = categoryBudgetPercent(item);
+  if (percent == null) {
+    return '<span class="pill">ยังไม่ได้ตั้งงบ</span>';
+  }
+  const tone = getProgressTone(percent);
+  return `<span class="pill ${tone === 'danger' ? 'warning' : tone}">${formatPercent(percent)}%</span>`;
+}
+
+function categoryBudgetBar(item) {
+  const percent = categoryBudgetPercent(item);
+  if (percent == null) return '';
+  return `<div class="progress-bar ${getProgressTone(percent)}"><span style="width: ${clamp(percent)}%"></span></div>`;
+}
+
 function renderCategoriesPage() {
   const categoryList = document.getElementById('categoryList');
   if (!categoryList) return;
@@ -481,13 +510,14 @@ function renderCategoriesPage() {
             <span class="category-badge">${item.icon}</span>
             <span>${item.name}</span>
           </div>
-          <span class="pill ${item.type === 'income' ? 'success' : 'warning'}">${Math.round(((item.used || 0) / (item.limit || 1)) * 100)}%</span>
+          ${categoryBudgetPill(item)}
         </div>
-        <div class="progress-bar"><span style="width: ${clamp(((item.used || 0) / (item.limit || 1)) * 100)}%"></span></div>
+        ${categoryBudgetBar(item)}
         <div class="card-row">
           <span>ใช้ไปแล้ว</span>
           <strong>${formatMoney(item.used)}</strong>
         </div>
+        ${item.limit == null ? '' : `<div class="card-row"><span>งบเดือนนี้</span><strong>${formatMoney(item.limit)}</strong></div>`}
         <div class="category-actions-row">
           <button type="button" class="secondary-btn small" data-category-set-limit="${item.id}">ตั้งงบ</button>
           <label class="essential-toggle">
@@ -1184,7 +1214,8 @@ function setCategoryLimit(categoryId) {
 }
 
 function openCategoryDetail(categoryId) {
-  const category = mock.categories.find((item) => item.id === Number(categoryId));
+  // เทียบเป็นข้อความ: id ของหมวดจริงเป็น uuid ไม่ใช่ตัวเลข Number(uuid) = NaN หาไม่เจอ
+  const category = mock.categories.find((item) => String(item.id) === String(categoryId));
   if (!category) return;
 
   const html = `
@@ -1198,9 +1229,9 @@ function openCategoryDetail(categoryId) {
         <button type="button" class="segmented" data-category-tab="history">ประวัติ</button>
       </div>
       <div class="category-detail-card">
-        <div class="summary-row"><span>งบที่ตั้ง</span><strong>${formatMoney(category.limit || 0)}</strong></div>
+        <div class="summary-row"><span>งบที่ตั้ง</span><strong>${category.limit == null ? 'ยังไม่ได้ตั้ง' : formatMoney(category.limit)}</strong></div>
         <div class="summary-row"><span>ใช้ไปแล้ว</span><strong>${formatMoney(category.used || 0)}</strong></div>
-        <div class="summary-row"><span>สัดส่วน</span><strong>${Math.round(((category.used || 0) / (category.limit || 1)) * 100 || 0)}%</strong></div>
+        <div class="summary-row"><span>สัดส่วน</span><strong>${categoryBudgetPercent(category) == null ? '—' : `${formatPercent(categoryBudgetPercent(category))}%`}</strong></div>
       </div>
       <div class="chart-wrap small-donut">
         <canvas id="categoryDetailChart"></canvas>
