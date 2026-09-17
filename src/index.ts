@@ -18,6 +18,8 @@ import { authRouter } from './routes/auth';
 import { BudgetError } from './services/budget.service';
 import { RecurringError } from './services/recurring.service';
 import { PlanError } from './services/plan.service';
+import { TransactionError } from './services/transaction.service';
+import { MoneyError } from './utils/money';
 
 const app = express();
 
@@ -65,8 +67,19 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
 
   // คำขอที่ผู้ใช้ส่งมาไม่ถูกต้อง (งบติดลบ, หมวดไม่ใช่ของเขา, เดือนผิดรูปแบบ)
   // ต้องตอบ 4xx พร้อมเหตุผลภาษาไทย ไม่ใช่ 500 ที่หน้าเว็บแปลว่า "เซิร์ฟเวอร์พัง"
-  if (err instanceof BudgetError || err instanceof RecurringError || err instanceof PlanError) {
+  if (
+    err instanceof BudgetError ||
+    err instanceof RecurringError ||
+    err instanceof PlanError ||
+    err instanceof TransactionError
+  ) {
     res.status(err.status).json({ ok: false, error: err.message });
+    return;
+  }
+
+  // MoneyError เกิดจากค่าเงินที่ส่งเข้ามาไม่ถูกต้องเสมอ ไม่ใช่เซิร์ฟเวอร์พัง
+  if (err instanceof MoneyError) {
+    res.status(400).json({ ok: false, error: err.message });
     return;
   }
 

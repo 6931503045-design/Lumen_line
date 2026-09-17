@@ -100,16 +100,19 @@ export async function getTransactionOwnedByUser(
 export async function softDeleteTransaction(
   transactionId: string,
   userId: string
-): Promise<void> {
-  const { error } = await supabase
+): Promise<boolean> {
+  const { data, error } = await supabase
     .from('transactions')
     .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', transactionId)
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .is('deleted_at', null) // ลบซ้ำไม่ต้องขยับ deleted_at ให้เพี้ยนไปจากเวลาที่ลบจริง
+    .select('id');
 
   if (error) {
     throw error;
   }
+  return (data ?? []).length > 0;
 }
 
 /**
@@ -119,16 +122,18 @@ export async function softDeleteTransaction(
 export async function restoreTransaction(
   transactionId: string,
   userId: string
-): Promise<void> {
-  const { error } = await supabase
+): Promise<boolean> {
+  const { data, error } = await supabase
     .from('transactions')
     .update({ deleted_at: null, updated_at: new Date().toISOString() })
     .eq('id', transactionId)
-    .eq('user_id', userId);
+    .eq('user_id', userId)
+    .select('id');
 
   if (error) {
     throw error;
   }
+  return (data ?? []).length > 0;
 }
 
 export type TransactionListRow = {
@@ -251,4 +256,68 @@ export async function backfillRefNumber(
   if (error) {
     throw error;
   }
+}
+
+export type UpdateTransactionPatch = {
+  categoryId?: string | null;
+  type?: TransactionType;
+  amountSatang?: number;
+  note?: string | null;
+  occurredAt?: string;
+};
+
+/**
+ * แก้รายการที่มีอยู่ — ส่งเฉพาะฟิลด์ที่ต้องการเปลี่ยน
+ * คืน null ถ้าไม่เจอ ไม่ใช่ของผู้ใช้คนนี้ หรือถูกลบไปแล้ว
+ *
+ * ⚖️ G6: กรอง user_id ใน UPDATE เอง ไม่พึ่งการเช็คของผู้เรียก
+ * ⚖️ G3: รับเป็นสตางค์ แปลงเป็น numeric ตอนเขียนที่นี่ที่เดียวเหมือน insert
+ *
+ * ตัด deleted_at ที่ถูกลบแล้วออกด้วย: รายการที่ผู้ใช้กดลบไปแล้วไม่ควรถูกแก้ยอดเงินเงียบๆ
+ * ถ้าอยากแก้ต้องกู้คืนก่อน
+ */
+export async function updateTransaction(
+  transactionId: string,
+  userId: string,
+  patch: UpdateTransactionPatch
+): Promise<InsertedTransaction | null> {
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.categoryId !== undefined) row.category_id = patch.categoryId;
+  if (patch.type !== undefined) row.type = patch.type;
+  if (patch.amountSatang !== undefined) row.amount = fromSatang(patch.amountSatang);
+  if (patch.note !== undefined) row.note = patch.note;
+  if (patch.occurredAt !== undefined) row.occurred_at = patch.occurredAt;
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .update(row)
+    .eq('id', transactionId)
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .select('id, amount, type, occurred_at')
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? null) as InsertedTransaction | null;
+}
+
+/** อ่านรายการเต็มของผู้ใช้ ใช้ตอนต้องรู้ค่าเดิมก่อนแก้ (เช่น หมวดเดิมเพื่อเช็คงบ) */
+export async function getTransactionDetail(
+  transactionId: string,
+  userId: string
+): Promise<{ id: string; type: TransactionType; category_id: string | null; occurred_at: string } | null> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, type, category_id, occurred_at')
+    .eq('id', transactionId)
+    .eq('user_id', userId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? null) as { id: string; type: TransactionType; category_id: string | null; occurred_at: string } | null;
 }

@@ -88,6 +88,10 @@ UI ชุดเดิมเคยคิด `target * 0.18` เองเพื่
 | GET | `/api/me` | ผู้ใช้ที่ล็อกอินอยู่ |
 | GET | `/api/summary` | ยอดรวม + กราฟ |
 | GET | `/api/transactions?limit=` | รายการเงิน (สูงสุด 200) |
+| POST | `/api/transactions` | บันทึกรายการใหม่ |
+| PATCH | `/api/transactions/:id` | แก้รายการ |
+| DELETE | `/api/transactions/:id` | ลบ (soft delete) |
+| POST | `/api/transactions/:id/restore` | กู้คืนที่ลบไป |
 | GET | `/api/categories` | หมวดของผู้ใช้ |
 | GET | `/api/budgets?month=` | งบรายหมวด + ยอดใช้ |
 | PUT | `/api/budgets/:categoryId` | ตั้ง/แก้งบ |
@@ -174,6 +178,54 @@ UI ชุดเดิมเคยคิด `target * 0.18` เองเพื่
   new Intl.DateTimeFormat('th-TH', { timeZone: 'Asia/Bangkok', … })
   ```
 - ⚖️ G7: `transfer` ไม่นับเป็นทั้งรายรับและรายจ่าย — ถ้าทำหน้าสรุปเองต้องกรองออก
+
+---
+
+### `POST /api/transactions`
+```json
+{ "type": "expense", "amountSatang": 8000,
+  "categoryName": "กาแฟ", "note": "ลาเต้", "occurredAt": "2026-09-17T10:00:00+07:00" }
+```
+`categoryName` · `note` · `occurredAt` ไม่ส่งก็ได้ (ไม่ส่งวันเวลา = ตอนนี้)
+หมวดที่ยังไม่มีจะถูกสร้างให้อัตโนมัติ / คืน **201**:
+
+```json
+{ "id": "…", "amountSatang": 8000, "type": "expense",
+  "occurredAt": "…", "budgetAlert": null }
+```
+
+**`budgetAlert`** มีค่าเมื่อรายการนี้ทำให้ข้ามเกณฑ์งบพอดี — ควรแสดงให้ผู้ใช้เห็นทันที:
+```json
+{ "categoryId": "…", "categoryName": "อาหาร", "emoji": "🍜",
+  "limitSatang": 300000, "spentSatang": 250000,
+  "percentUsed": 83.3, "threshold": 80 }
+```
+`threshold` เป็น `80` หรือ `100` / **เตือนระดับละครั้งเดียวต่อเดือน** ถ้าเป็น `null` คือยังไม่ถึงเกณฑ์หรือเตือนไปแล้ว
+
+### `PATCH /api/transactions/:id`
+ส่งเฉพาะฟิลด์ที่ต้องการเปลี่ยน — ฟิลด์ที่ไม่ส่งจะไม่ถูกแตะ
+
+```json
+{ "amountSatang": 12000 }
+{ "categoryName": null }          // ล้างหมวดออก
+{ "type": "income", "categoryName": "เงินเดือน" }
+```
+คืนรูปแบบเดียวกับ POST (มี `budgetAlert` ด้วย)
+
+- ไม่ส่งฟิลด์ไหนมาเลย → **400**
+- ย้ายประเภทเป็น `income`/`expense` ได้ แต่ **`transfer` ยังไม่รองรับ** → 400
+- แก้รายการที่ถูกลบไปแล้วไม่ได้ → 404 (ต้อง `/restore` ก่อน)
+
+### `DELETE /api/transactions/:id`
+→ `{ "removed": true }`
+
+เป็น **soft delete** — ข้อมูลยังอยู่ กู้คืนได้ และหายจากทุกยอดรวมทันที
+ลบซ้ำ → 404
+
+### `POST /api/transactions/:id/restore`
+→ `{ "restored": true }`
+
+ควรทำปุ่ม **"เลิกทำ"** ค้างไว้สักครู่หลังผู้ใช้กดลบ แทนการถามยืนยันก่อนลบทุกครั้ง
 
 ---
 
@@ -400,7 +452,6 @@ UI ชุดเดิมเคยคิด `target * 0.18` เองเพื่
 
 | ปุ่มที่อยากได้ | ต้องมี | สถานะ |
 |---|---|---|
-| เพิ่ม / แก้ / ลบ รายการเงิน | `POST · PATCH · DELETE /api/transactions` | ยังไม่มี |
 | โอนเข้าแผนออม | `POST /api/plans/:id/transfer` | ยังไม่มี (`type=transfer` ยังถูกปิดอยู่) |
 | จำลองผลกระทบก่อนซื้อ | `POST /api/simulate` (§S5.7) | ยังไม่มี |
 | "ใช้ได้วันละเท่าไหร่" | §S5.2 safeToSpend | ยังไม่มี — อยู่ใน `unavailable` |
@@ -408,6 +459,8 @@ UI ชุดเดิมเคยคิด `target * 0.18` เองเพื่
 | สลับ "หมวดจำเป็น" | `PATCH /api/categories/:id` | ยังไม่มี |
 
 UI ชุดปัจจุบันมีปุ่มพวกนี้อยู่ แต่แก้แค่ค่าในหน่วยความจำ — **หายทันทีที่รีเฟรช**
+
+> ✅ เพิ่ม/แก้/ลบ รายการเงิน ทำเสร็จแล้ว (17 ก.ย. 2026) ดูหัวข้อ `POST /api/transactions` ด้านบน
 
 ---
 

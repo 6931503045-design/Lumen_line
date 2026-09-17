@@ -36,6 +36,15 @@ import {
   type CreateRecurringInput,
 } from '../services/recurring.service';
 import { listTransactionsByUser } from '../db/queries/transactions';
+import {
+  assertTransactionAmount,
+  createTransaction,
+  deleteTransactionForUser,
+  restoreTransactionForUser,
+  TransactionError,
+  updateTransactionForUser,
+  type UpdateTransactionInput,
+} from '../services/transaction.service';
 import { listCategoriesByUser } from '../db/queries/categories';
 import { ensureEmailIngestToken, rotateEmailIngestToken } from '../db/queries/users';
 import { countUnparsedEmails } from '../db/queries/emails';
@@ -113,6 +122,125 @@ apiRouter.get(
         source: row.source,
       }))
     );
+  })
+);
+
+/** อ่านวันเวลาที่ผู้ใช้ส่งมา — รูปแบบผิดต้องปฏิเสธ ไม่ใช่เงียบๆ แล้วใช้เวลาปัจจุบันแทน */
+function readOccurredAt(value: unknown): Date | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string') {
+    throw new TransactionError('occurredAt ต้องเป็นข้อความรูปแบบวันเวลา', 400);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new TransactionError(`วันเวลาไม่ถูกต้อง: "${value}"`, 400);
+  }
+  return date;
+}
+
+function readType(value: unknown): 'income' | 'expense' {
+  if (value !== 'income' && value !== 'expense') {
+    throw new TransactionError('type ต้องเป็น income หรือ expense', 400);
+  }
+  return value;
+}
+
+/**
+ * ข้อความสั้นๆ ที่ผู้ใช้พิมพ์ — ตัดช่องว่างหัวท้าย ว่างเปล่านับเป็นไม่ได้ส่ง
+ *
+ * 🔴 แก้บั๊ก: เดิมโยน error เมื่อค่าเป็น undefined ทำให้ POST /api/transactions
+ * ที่ไม่ส่ง categoryName มา (ซึ่งเป็นเรื่องปกติ) ตอบ 400 ทุกครั้ง = สร้างรายการไม่ได้เลย
+ * undefined แปลว่า "ไม่ได้ส่งฟิลด์นี้มา" ต่างจาก null ที่แปลว่า "ส่งมาเพื่อล้างค่า"
+ */
+function readText(value: unknown, field: string, maxLength = 200): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== 'string') {
+    throw new TransactionError(`${field} ต้องเป็นข้อความ`, 400);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > maxLength) {
+    throw new TransactionError(`${field} ยาวเกิน ${maxLength} ตัวอักษร`, 400);
+  }
+  return trimmed;
+}
+
+/**
+ * บันทึกรายการใหม่จากหน้าเว็บ
+ * body: { type, amountSatang, categoryName?, note?, occurredAt? }
+ *
+ * ⚖️ G2 ไม่บังคับให้ผ่าน pending_actions ที่นี่ เพราะผู้ใช้กดปุ่มเอง = ยืนยันแล้ว
+ * (pending มีไว้กันกรณี AI ตีความผิดแล้วเขียนข้อมูลโดยผู้ใช้ไม่รู้ตัว)
+ */
+apiRouter.post(
+  '/transactions',
+  handle(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    const amountSatang = Number(body.amountSatang);
+    if (!Number.isInteger(amountSatang)) {
+      throw new TransactionError('amountSatang ต้องเป็นจำนวนเต็มหน่วยสตางค์', 400);
+    }
+    // ตรวจช่วงของยอดที่นี่ด้วย ไม่งั้น MoneyError จาก createTransaction จะหลุดไปเป็น 500
+    assertTransactionAmount(amountSatang);
+
+    const created = await createTransaction({
+      userId: req.userId!,
+      type: readType(body.type),
+      amountSatang,
+      categoryName: readText(body.categoryName, 'categoryName', 50) ?? undefined,
+      note: readText(body.note, 'note', 500) ?? undefined,
+      occurredAt: readOccurredAt(body.occurredAt),
+      source: 'liff',
+      parsedBy: 'manual',
+    });
+
+    res.status(201).json(created);
+  })
+);
+
+/** แก้รายการ — ส่งเฉพาะฟิลด์ที่ต้องการเปลี่ยน / categoryName: null = ล้างหมวด */
+apiRouter.patch(
+  '/transactions/:transactionId',
+  handle(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const patch: UpdateTransactionInput = {};
+
+    if (body.type !== undefined) patch.type = readType(body.type);
+    if (body.amountSatang !== undefined) {
+      const amountSatang = Number(body.amountSatang);
+      if (!Number.isInteger(amountSatang)) {
+        throw new TransactionError('amountSatang ต้องเป็นจำนวนเต็มหน่วยสตางค์', 400);
+      }
+      patch.amountSatang = amountSatang;
+    }
+    if (body.categoryName !== undefined) patch.categoryName = readText(body.categoryName, 'categoryName', 50);
+    if (body.note !== undefined) patch.note = readText(body.note, 'note', 500);
+    if (body.occurredAt !== undefined) patch.occurredAt = readOccurredAt(body.occurredAt);
+
+    if (Object.keys(patch).length === 0) {
+      throw new TransactionError('ไม่มีฟิลด์ไหนให้แก้', 400);
+    }
+
+    res.json(await updateTransactionForUser(req.userId!, req.params.transactionId!, patch));
+  })
+);
+
+/** ลบแบบ soft delete — กู้คืนได้ด้วย /restore */
+apiRouter.delete(
+  '/transactions/:transactionId',
+  handle(async (req, res) => {
+    await deleteTransactionForUser(req.userId!, req.params.transactionId!);
+    res.json({ removed: true });
+  })
+);
+
+apiRouter.post(
+  '/transactions/:transactionId/restore',
+  handle(async (req, res) => {
+    await restoreTransactionForUser(req.userId!, req.params.transactionId!);
+    res.json({ restored: true });
   })
 );
 
