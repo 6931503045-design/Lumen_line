@@ -25,6 +25,8 @@ import { getUserByEmailToken } from '../db/queries/users';
 import { insertUserEmail, markEmailParsed } from '../db/queries/emails';
 import { backfillRefNumber } from '../db/queries/transactions';
 import { createTransaction } from './transaction.service';
+import { formatBudgetAlert } from './budget.service';
+import { sendPush } from '../line/push';
 import { checkDuplicate } from './dedup.service';
 import { ALL_BANK_DKIM_DOMAINS, findBankParser } from './email/banks';
 import { checkBankDkim } from './email/dkim';
@@ -175,6 +177,23 @@ async function processMessage(
     parsedBy: 'regex',
     refNumber: parsed.refNumber,
   });
+
+  // S5.8: รายการจากอีเมลไม่มี reply ให้แนบคำเตือนงบไปด้วย ต้อง push แทน
+  // dedup_key ผูกกับหมวด+เดือน+ระดับ เพื่อให้เตือนระดับละครั้งเดียวต่อเดือนตาม SPEC
+  // (ธงใน budgets กันไว้ชั้นหนึ่งแล้ว อันนี้กันซ้ำอีกชั้นเผื่อ job รันพร้อมกัน)
+  if (transaction.budgetAlert) {
+    const alert = transaction.budgetAlert;
+    const month = occurredAt.toISOString().slice(0, 7);
+    await sendPush(
+      owner.id,
+      alert.threshold === 100 ? 'budgetOver' : 'budgetWarning',
+      `budget${alert.threshold}:${month}:${alert.categoryId}`,
+      formatBudgetAlert(alert)
+    ).catch((err) => {
+      // ส่งเตือนไม่ได้ ต้องไม่ทำให้รายการที่บันทึกสำเร็จแล้วกลายเป็นล้มเหลว
+      logger.error('[email] ส่งคำเตือนงบไม่สำเร็จ (รายการถูกบันทึกแล้ว):', err);
+    });
+  }
 
   await markEmailParsed(stored.id, transaction.id);
   return 'created';

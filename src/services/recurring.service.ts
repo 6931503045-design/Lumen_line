@@ -314,6 +314,9 @@ async function runRule(rule: RecurringRuleRow, todayIso: string, result: Recurri
       break;
     }
 
+    // หมายเหตุ: เส้นทางนี้เขียน transaction ตรงผ่าน insertRecurringTransaction
+    // ไม่ได้ผ่าน createTransaction จึงยังไม่มีการเช็คงบรายหมวด (S5.8)
+    // ถ้าจะทำ ต้องเช็คหลัง insert แล้ว push ผ่าน S13 เหมือนฝั่งอีเมล
     const inserted = await insertRecurringTransaction({
       userId: rule.user_id,
       categoryId: rule.category_id,

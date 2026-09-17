@@ -101,3 +101,22 @@ export async function ensureEmailIngestToken(userId: string): Promise<string> {
   const existing = await getEmailIngestToken(userId);
   return existing ?? rotateEmailIngestToken(userId);
 }
+
+/**
+ * หา line_user_id จาก users.id ภายในระบบ — ใช้ตอนจะ push หาผู้ใช้
+ * คืน null ถ้าไม่เจอหรือผู้ใช้ถูกปิดใช้งาน (บล็อกบอทไปแล้ว) ซึ่งไม่ควร push หาอีก
+ * ⚖️ G6: ผู้เรียกส่ง user_id ภายในมาเท่านั้น ไม่ต้องรู้จัก line_user_id เอง
+ */
+export async function getLineUserId(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('line_user_id, is_active')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  if (!data || !data.is_active) return null;
+  return data.line_user_id ?? null;
+}

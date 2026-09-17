@@ -25,8 +25,8 @@
 | # | งาน | ไฟล์ | ถ้าไม่ทำ |
 |---|---|---|---|
 | 1 | **เปลี่ยนรหัสผ่าน Supabase** | — | รหัสอยู่ใน git history ใครโคลน repo ได้ = เข้า DB ได้ |
-| 2 | **S13 Push** | `line/push.ts`, `services/quota.service.ts` | ส่ง push ไม่ได้เลย เตือนงบจากอีเมล/recurring ส่งไม่ถึงผู้ใช้ — และเป็นเงื่อนไขของข้อ 4-5 |
-| 3 | **job `cleanup`** | `jobs/cleanup.ts` | `webhook_events` โตไม่หยุด ทุก event จาก LINE สะสมตลอดกาลจน DB เต็มโควตา free tier |
+| ~~2~~ | ~~**S13 Push**~~ | `line/push.ts`, `services/quota.service.ts` | ✅ เสร็จ 17 ก.ย. |
+| ~~3~~ | ~~**job `cleanup`**~~ | `jobs/cleanup.ts` | ✅ เสร็จ 17 ก.ย. |
 | 4 | **job `planCheck`** | `jobs/planCheck.ts` | ไม่มีใครเตือนว่าหลุดเป้า/ครบเป้า แผนออมกลายเป็นของประดับ |
 | 5 | **โอนเข้าแผน** | `POST /api/plans/:id/transfer` | สร้างแผนได้แต่โอนเงินเข้าไม่ได้ ความคืบหน้าเป็น 0% ตลอดไป |
 
@@ -70,15 +70,16 @@
 | S4 Text Parser | 🟡 | มีแต่ regex L1 |
 | S5 Money Engine | 🟡 | summary·budget·plan·recurring ✅ / ขาด S5.2, S5.7 |
 | S6 Database | ✅ | |
-| S7 Scheduler | 🟡 | **2 จาก 5 job** (emailPoll, recurring) |
+| S7 Scheduler | 🟡 | **3 จาก 5 job** (emailPoll, recurring, cleanup) |
 | S8 Email Ingestion | ✅ | ทดสอบกับเงินจริงแล้ว |
 | S9 Slip Reader | ❌ | |
 | S10 Dedup | ✅ | |
 | S11 AI Service | ❌ | 6 ไฟล์ยังว่าง |
 | S12 Pending Actions | ❌ | ตาราง `pending_actions` ยังไม่มีโค้ดแตะ |
-| S13 Push & Quota | ❌ | ตาราง `push_log` ยังไม่มีโค้ดแตะ |
+| S13 Push & Quota | ✅ | |
 
-ตารางที่ยังไม่มีโค้ดแตะเลย: `pending_actions` · `user_keyword_map` · `push_log` · `ai_usage_log`
+ตารางที่ยังไม่มีโค้ดแตะเลย: `user_keyword_map`
+(`pending_actions` · `push_log` · `ai_usage_log` มีโค้ดแตะแล้วจาก cleanup/push)
 
 ---
 
@@ -86,8 +87,8 @@
 
 ```
 1. เปลี่ยนรหัส Supabase        ← ไม่ต้องรอใคร ทำได้เลย
-2. S13 Push + job cleanup      ← ปลดล็อกข้อ 3-5 พร้อมกัน
-3. job planCheck               ← แผนออมเริ่มมีชีวิต
+2. S13 Push + job cleanup      ← ✅ เสร็จแล้ว
+3. job planCheck               ← ถัดไป: แผนออมเริ่มมีชีวิต
 4. โอนเข้าแผน                  ← ปิดวงจรแผนออม
 5. คำสั่งแชท สรุป/เหลือ/งบ      ← บอทเริ่มคุยรู้เรื่อง
 6. S5.2 safeToSpend
