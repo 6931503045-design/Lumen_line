@@ -100,28 +100,30 @@ function renderMonthlyBudgetSummary() {
   `;
 }
 
+/**
+ * หน้าสรุป (index.html) — เวอร์ชัน v2: เน้นเฉพาะข้อมูลที่ต้องรู้ทันที
+ * กราฟ (donut/แนวโน้ม) และ goal cards เต็มรูปแบบ ย้ายไปอยู่ที่ analyze.html แล้ว
+ * ไม่ซ้ำซ้อนกันอีกต่อไปตามที่ตกลงกันไว้ตอนวางแผนดีไซน์
+ */
 function renderDashboard() {
   const summary = mock.summary;
-  const confidenceBadgeWrap = document.getElementById('confidenceBadgeWrap');
+  const heroConfidenceBadge = document.getElementById('heroConfidenceBadge');
+  const heroSafeToSpend = document.getElementById('heroSafeToSpend');
   const netBalance = document.getElementById('netBalance');
   const incomeAmount = document.getElementById('incomeAmount');
   const expenseAmount = document.getElementById('expenseAmount');
-  const safeToSpend = document.getElementById('safeToSpend');
-  const confidenceScore = document.getElementById('confidenceScore');
-  const goalCards = document.getElementById('goalCards');
   const transactionList = document.getElementById('transactionList');
 
   renderMonthlyBudgetSummary();
 
-  if (confidenceBadgeWrap) {
-    confidenceBadgeWrap.innerHTML = renderConfidenceBadge(summary.confidence || 'high');
+  if (heroConfidenceBadge) {
+    heroConfidenceBadge.innerHTML = renderConfidenceBadge(summary.safeToSpendConfidence || 'high');
   }
+  if (heroSafeToSpend) heroSafeToSpend.textContent = formatMoney(summary.safeToSpend);
 
   if (netBalance) netBalance.textContent = formatMoney(summary.balance);
   if (incomeAmount) incomeAmount.textContent = formatMoney(summary.income);
   if (expenseAmount) expenseAmount.textContent = formatMoney(summary.expense);
-  if (safeToSpend) safeToSpend.textContent = formatMoney(summary.safeToSpend);
-  if (confidenceScore) confidenceScore.textContent = `${clamp(summary.progress)}%`;
 
   if (transactionList) {
     transactionList.innerHTML = mock.transactions
@@ -147,122 +149,6 @@ function renderDashboard() {
         `;
       })
       .join('');
-  }
-
-  if (goalCards) {
-    goalCards.innerHTML = mock.plans
-      .map((plan) => {
-        const statusText = plan.status === 'off_track' ? '⚠️ หลุดเป้า' : plan.status === 'completed' ? '🎉 ครบเป้าแล้ว' : 'ปกติ';
-
-        return `
-          <div class="goal-card">
-            <div class="goal-header">
-              <strong>${plan.name}</strong>
-              <span class="confidence-badge ${getConfidenceMeta(plan.confidence || 'high').className}">${getConfidenceMeta(plan.confidence || 'high').icon} ${getConfidenceMeta(plan.confidence || 'high').label}</span>
-            </div>
-            <div class="progress-bar"><span style="width: ${clamp(plan.progress)}%"></span></div>
-            <div class="card-row">
-              <span>${statusText}</span>
-              <strong>${formatMoney(plan.saved)} / ${formatMoney(plan.target)}</strong>
-            </div>
-          </div>
-        `;
-      })
-      .join('');
-  }
-
-  if (document.getElementById('spendingDonut')) {
-    createChart('spendingDonut', {
-      type: 'doughnut',
-      data: {
-        labels: mock.donutData.labels,
-        datasets: [{
-          data: mock.donutData.values,
-          backgroundColor: mock.donutData.colors,
-          borderWidth: 0,
-          cutout: '62%',
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              color: getComputedStyle(document.body).getPropertyValue('--text').trim(),
-              boxWidth: 10,
-              boxHeight: 10,
-              usePointStyle: true,
-              pointStyle: 'circle',
-            },
-          },
-          tooltip: {
-            callbacks: {
-              label(context) {
-                return `${context.label}: ${context.parsed}%`;
-              },
-            },
-          },
-        },
-      },
-    });
-  }
-
-  if (document.getElementById('cashTrend')) {
-    createChart('cashTrend', {
-      type: 'line',
-      data: {
-        labels: mock.lineData.labels,
-        datasets: [
-          {
-            label: 'รายรับ',
-            data: mock.lineData.income,
-            borderColor: '#34d399',
-            backgroundColor: 'rgba(52, 211, 153, 0.18)',
-            tension: 0.35,
-            fill: false,
-            borderWidth: 3,
-          },
-          {
-            label: 'รายจ่าย',
-            data: mock.lineData.expense,
-            borderColor: '#f472b6',
-            backgroundColor: 'rgba(244, 114, 182, 0.18)',
-            tension: 0.35,
-            fill: false,
-            borderWidth: 3,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            display: true,
-            labels: {
-              color: getComputedStyle(document.body).getPropertyValue('--text').trim(),
-            },
-          },
-        },
-        scales: {
-          x: {
-            ticks: { color: getComputedStyle(document.body).getPropertyValue('--muted').trim() },
-            grid: { color: 'rgba(255,255,255,0.05)' },
-          },
-          y: {
-            ticks: {
-              color: getComputedStyle(document.body).getPropertyValue('--muted').trim(),
-              callback(value) {
-                return `฿${Number(value) / 1000}k`;
-              },
-            },
-            grid: { color: 'rgba(255,255,255,0.05)' },
-          },
-        },
-      },
-    });
   }
 }
 
@@ -577,21 +463,21 @@ function renderAnalyzePage() {
           {
             label: 'รายรับ',
             data: mock.lineData.income,
-            backgroundColor: 'rgba(52, 211, 153, 0.8)',
+            backgroundColor: 'rgba(76, 175, 80, 0.85)',
             borderRadius: 8,
           },
           {
             label: 'รายจ่าย',
             data: mock.lineData.expense,
-            backgroundColor: 'rgba(244, 114, 182, 0.8)',
+            backgroundColor: 'rgba(20, 23, 15, 0.75)',
             borderRadius: 8,
           },
           {
             type: 'line',
             label: 'งบประมาณ',
             data: budgetLine,
-            borderColor: '#a78bfa',
-            backgroundColor: 'rgba(167, 139, 250, 0.3)',
+            borderColor: '#a86400',
+            backgroundColor: 'rgba(245, 165, 36, 0.15)',
             borderDash: [6, 6],
             tension: 0.1,
             borderWidth: 2,
@@ -621,7 +507,7 @@ function renderAnalyzePage() {
                 return `฿${Number(value) / 1000}k`;
               },
             },
-            grid: { color: 'rgba(255,255,255,0.05)' },
+            grid: { color: 'rgba(16,20,11,0.06)' },
           },
         },
       },
@@ -780,39 +666,6 @@ function addPlanFromWizard() {
   closeModal();
   renderAnalyzePage();
   showSuccessModal('สร้างแผนสำเร็จ');
-}
-
-function setupThemeToggle() {
-  const toggleButton = document.querySelector('.theme-toggle');
-  const darkModeToggle = document.getElementById('darkModeToggle');
-  const root = document.body;
-
-  const setTheme = (nextTheme) => {
-    root.dataset.theme = nextTheme;
-    localStorage.setItem('moneybot-theme', nextTheme);
-    if (toggleButton) {
-      toggleButton.textContent = nextTheme === 'dark' ? '☀️' : '🌙';
-    }
-    if (darkModeToggle) {
-      darkModeToggle.checked = nextTheme === 'dark';
-    }
-  };
-
-  const savedTheme = localStorage.getItem('moneybot-theme') || root.dataset.theme || 'dark';
-  setTheme(savedTheme);
-
-  if (toggleButton) {
-    toggleButton.addEventListener('click', () => {
-      const nextTheme = root.dataset.theme === 'dark' ? 'light' : 'dark';
-      setTheme(nextTheme);
-    });
-  }
-
-  if (darkModeToggle) {
-    darkModeToggle.addEventListener('change', (event) => {
-      setTheme(event.target.checked ? 'dark' : 'light');
-    });
-  }
 }
 
 function openModal(html) {
@@ -1192,7 +1045,7 @@ function openCategoryDetail(categoryId) {
       labels: ['ใช้ไป', 'คงเหลือ'],
       datasets: [{
         data: [Math.max(1, category.used || 0), Math.max(1, (category.limit || 0) - (category.used || 0))],
-        backgroundColor: ['#8b5cf6', '#e9d5ff'],
+        backgroundColor: ['#14170f', '#eaf5df'],
         borderWidth: 0,
       }],
     },
@@ -1204,20 +1057,23 @@ function openCategoryDetail(categoryId) {
     data: {
       labels: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.'],
       datasets: [{
+        // เส้น "ยอดใช้" ต้องเป็นเส้นทึบ (ข้อมูลจริง) — แก้จากเดิมที่ใส่ borderDash ผิดเส้น
         label: 'ยอดใช้',
         data: [120000, 140000, 110000, 170000, 150000, category.used || 90000],
-        borderColor: '#8b5cf6',
-        borderDash: [6, 6],
-        backgroundColor: 'rgba(139, 92, 246, 0.15)',
+        borderColor: '#4caf50',
+        backgroundColor: 'rgba(76, 175, 80, 0.12)',
         fill: false,
         borderWidth: 2,
       }, {
+        // เส้น "งบประมาณ" เป็นเส้นประ (เส้นอ้างอิงเป้าหมาย) ตามธรรมเนียมกราฟงบ
         label: 'งบประมาณ',
         data: [150000, 150000, 150000, 150000, 150000, category.limit || 90000],
-        borderColor: '#c4b5fd',
-        backgroundColor: 'rgba(196, 181, 253, 0.15)',
+        borderColor: '#a86400',
+        backgroundColor: 'transparent',
+        borderDash: [6, 6],
         fill: false,
         borderWidth: 2,
+        pointRadius: 0,
       }],
     },
     options: {
@@ -1226,7 +1082,7 @@ function openCategoryDetail(categoryId) {
       plugins: { legend: { labels: { color: getComputedStyle(document.body).getPropertyValue('--text').trim() } } },
       scales: {
         x: { ticks: { color: getComputedStyle(document.body).getPropertyValue('--muted').trim() }, grid: { display: false } },
-        y: { ticks: { color: getComputedStyle(document.body).getPropertyValue('--muted').trim() }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { ticks: { color: getComputedStyle(document.body).getPropertyValue('--muted').trim() }, grid: { color: 'rgba(16,20,11,0.06)' } },
       },
     },
   });
@@ -1519,7 +1375,6 @@ function bindSettingsActions() {
 }
 
 function initializePage() {
-  setupThemeToggle();
   bindTransactionControls();
   bindSettingsActions();
 
