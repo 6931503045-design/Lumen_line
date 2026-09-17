@@ -40,6 +40,7 @@ describe('kbankParser.parse — ชำระค่าสินค้าและ
       type: 'expense',
       occurredAt: new Date('2026-09-14T09:36:15+07:00'),
       refNumber: '019900000000CPM00000',
+      label: 'ชำระค่าสินค้าและบริการ',
     });
   });
 });
@@ -51,6 +52,7 @@ describe('kbankParser.parse — โอนเงินพร้อมเพย์
       type: 'expense',
       occurredAt: new Date('2026-09-13T16:36:11+07:00'),
       refNumber: '019900000000CPP00000',
+      label: 'โอนเงินพร้อมเพย์',
     });
   });
 
@@ -60,6 +62,7 @@ describe('kbankParser.parse — โอนเงินพร้อมเพย์
       type: 'expense',
       occurredAt: new Date('2026-09-07T11:57:40+07:00'),
       refNumber: '019900000000DPP00000',
+      label: 'โอนเงินพร้อมเพย์',
     });
   });
 });
@@ -151,6 +154,7 @@ describe('kbankParser.parse — อ่านจากภาษาอังกฤ
       type: 'expense',
       occurredAt: new Date('2026-09-14T09:36:15+07:00'),
       refNumber: '019900000000CPM00000',
+      label: 'Payment',
     });
   });
 });
@@ -178,3 +182,77 @@ describe('kbankParser.parse — เงินเข้า: K PLUS ไม่ส่
   });
 });
 
+
+// ────────────────────────────────────────────────────────────────────────────
+// label — ชื่อประเภทรายการที่เอาไปใช้เป็น note ของ transaction
+//
+// เพิ่มหลังทดสอบกับอีเมลจริง: รายการจากอีเมลเคยขึ้นหน้าเว็บว่า "ไม่ระบุ" ทุกอัน
+// เพราะไม่มีใครส่ง note ให้ ทั้งที่ธนาคารเขียนชื่อประเภทรายการมาให้ในหัวเรื่องอยู่แล้ว
+// ⚖️ G1: คัดลอกจากอีเมลตรงๆ อ่านไม่เจอ = null ห้ามแต่งเอง
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('kbankParser — label ชื่อประเภทรายการ', () => {
+  it('อ่านชื่อจากหัวเรื่องภาษาไทยของอีเมลโอนพร้อมเพย์', () => {
+    const parsed = kbankParser.parse(promptPay);
+    expect(parsed?.label).toBe('โอนเงินพร้อมเพย์');
+  });
+
+  it('อ่านชื่อจากอีเมลชำระค่าสินค้า', () => {
+    const parsed = kbankParser.parse(billPayment);
+    expect(parsed?.label).toBe('ชำระค่าสินค้าและบริการ');
+  });
+
+  it('ไม่กินคำว่า (สำเร็จ) หรือคำว่า "เรื่อง" ติดมาด้วย', () => {
+    const parsed = kbankParser.parse(wallet);
+    expect(parsed?.label).not.toContain('สำเร็จ');
+    expect(parsed?.label).not.toContain('เรื่อง');
+    expect(parsed?.label).not.toContain('(');
+  });
+
+  it('รองรับหัวเรื่องภาษาอังกฤษถ้าไม่มีภาษาไทย', () => {
+    const text = [
+      'Subject: Result of PromptPay Funds Transfer (Success)',
+      'Transaction Date: 14/09/2026  09:36:15',
+      'Debit from account: xxx-x-x0000-x',
+      'Amount (THB): 125.50',
+    ].join('\n');
+    expect(kbankParser.parse(text)?.label).toBe('PromptPay Funds Transfer');
+  });
+
+  it('⚖️ G1: อ่านหัวเรื่องไม่เจอ → label = null ไม่ใช่เดาชื่อให้', () => {
+    const text = [
+      'วันที่ทำรายการ: 14/09/2026  09:36:15',
+      'ชำระเงินจากบัญชี: xxx-x-x0000-x',
+      'จำนวนเงิน (บาท): 125.50',
+      'รายการสำเร็จ',
+    ].join('\n');
+    const parsed = kbankParser.parse(text);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.label).toBeNull();
+  });
+
+  it('หัวเรื่องยาวผิดปกติถูกตัดไม่ให้เกินความยาวที่ยอมรับ', () => {
+    const long = 'ก'.repeat(500);
+    const text = [
+      `เรื่อง แจ้งผลการทำรายการ${long} (สำเร็จ)`,
+      'วันที่ทำรายการ: 14/09/2026  09:36:15',
+      'ชำระเงินจากบัญชี: xxx-x-x0000-x',
+      'จำนวนเงิน (บาท): 125.50',
+    ].join('\n');
+    const label = kbankParser.parse(text)?.label ?? '';
+    expect(label.length).toBeLessThanOrEqual(120);
+    expect(label.length).toBeGreaterThan(0);
+  });
+
+  it('label ไม่ข้ามบรรทัดไปคว้า (สำเร็จ) ของย่อหน้าอื่น', () => {
+    const text = [
+      'เรื่อง แจ้งผลการทำรายการโอนเงินพร้อมเพย์ (สำเร็จ)',
+      '',
+      'ตามที่คุณได้ทำรายการ ธนาคารได้ดำเนินการเรียบร้อย (สำเร็จ)',
+      'วันที่ทำรายการ: 14/09/2026  09:36:15',
+      'โอนเงินจากบัญชี: xxx-x-x0000-x',
+      'จำนวนเงิน (บาท): 125.50',
+    ].join('\n');
+    expect(kbankParser.parse(text)?.label).toBe('โอนเงินพร้อมเพย์');
+  });
+});

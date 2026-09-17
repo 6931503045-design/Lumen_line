@@ -59,6 +59,18 @@ const REF_EN = /Transaction\s+Number\s*[:：]\s*([A-Za-z0-9]{6,40})/i;
 const DATETIME_TH = /วันที่ทำรายการ\s*[:：]\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/;
 const DATETIME_EN = /Transaction\s+Date\s*[:：]\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/i;
 
+/**
+ * ชื่อประเภทรายการจากบรรทัดหัวเรื่องในตัวอีเมล
+ *   "เรื่อง แจ้งผลการทำรายการโอนเงินพร้อมเพย์ (สำเร็จ)"  ->  "โอนเงินพร้อมเพย์"
+ *   "Subject: Result of Payment (Success)"              ->  "Payment"
+ * ใช้ [^\n]+? เพื่อไม่ให้ข้ามบรรทัดไปคว้าคำว่า (สำเร็จ) ของย่อหน้าอื่น
+ */
+const LABEL_TH = /เรื่อง\s*แจ้งผลการทำรายการ\s*([^\n]+?)\s*\(\s*(?:ไม่)?สำเร็จ\s*\)/;
+const LABEL_EN = /Subject\s*[:：]\s*Result of\s+([^\n]+?)\s*\(\s*(?:Un)?Success(?:ful)?\s*\)/i;
+
+/** ความยาวสูงสุดของ note ที่ยอมให้เก็บ กันหัวเรื่องยาวผิดปกติไปกินคอลัมน์ (limit จริง 500) */
+const MAX_LABEL_LENGTH = 120;
+
 /** คำที่บอกว่ารายการ "ล้มเหลว" — ต้องเช็คก่อนคำว่าสำเร็จเสมอ เพราะ "ไม่สำเร็จ" มี "สำเร็จ" อยู่ข้างใน */
 const FAILURE_WORDS = ['ไม่สำเร็จ', 'ยกเลิก', 'unsuccessful', 'failed', 'failure'];
 
@@ -117,6 +129,15 @@ function readMoney(text: string, thai: RegExp, english: RegExp): number | null {
 }
 
 /** วันเวลาในอีเมลเป็นเวลาไทยเสมอ จึงต่อ +07:00 ตอนแปลง */
+/** ชื่อประเภทรายการตามที่ธนาคารเขียน — null ถ้าอ่านไม่เจอ (⚖️ G1 ห้ามเดา) */
+function readLabel(text: string): string | null {
+  const matched = LABEL_TH.exec(text)?.[1] ?? LABEL_EN.exec(text)?.[1] ?? null;
+  if (!matched) return null;
+  const trimmed = matched.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, MAX_LABEL_LENGTH);
+}
+
 function readDateTime(text: string): Date | null {
   const match = DATETIME_TH.exec(text) ?? DATETIME_EN.exec(text);
   if (!match) return null;
@@ -163,6 +184,7 @@ export const kbankParser: BankEmailParser = {
       type: 'expense',
       occurredAt: readDateTime(text),
       refNumber: ref,
+      label: readLabel(text),
     };
   },
 };

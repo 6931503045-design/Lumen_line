@@ -159,13 +159,17 @@ async function processMessage(
     return 'duplicate';
   }
 
-  // ยังไม่ส่ง categoryName เพราะอีเมลธนาคารไม่ได้บอกว่าเป็นค่าอะไร (บอกแค่จำนวนกับปลายทาง)
+  // note = ชื่อประเภทรายการที่ธนาคารเขียนมาเอง เช่น "โอนเงินพร้อมเพย์"
+  // ไม่ใช่การเดา (G1) — ถ้าอ่านไม่เจอจะเป็น null แล้วรายการขึ้นว่า "ไม่ระบุ" ตามเดิม
+  //
+  // ยังไม่ส่ง categoryName เพราะอีเมลธนาคารไม่ได้บอกว่าเงินไปเป็นค่าอะไร
   // ผลข้างเคียงที่ต้องรู้: รายการจากอีเมลจึงไม่มีหมวด และจะไม่ไปกระตุ้นการเตือนงบรายหมวด (S5.8)
   // จนกว่าจะมีตัวเดาหมวดจากชื่อปลายทาง (S4 keyword/learned) มาเสียบตรงนี้
   const transaction = await createTransaction({
     userId: owner.id,
     type: parsed.type,
     amountSatang: parsed.amountSatang,
+    note: parsed.label ?? undefined,
     occurredAt,
     source: 'email',
     parsedBy: 'regex',
