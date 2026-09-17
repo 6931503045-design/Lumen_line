@@ -341,6 +341,458 @@
     renderCategoriesPage();
   }
 
+  // ── แผนออมของจริง (S5.3–S5.6) ───────────────────────────────────────────────
+  //
+  // app.js มี wizard สำหรับข้อมูลจำลองอยู่แล้ว แต่มัน "คิดเลขเอง" ในหน้าเว็บ
+  // (target * 0.18 ฯลฯ) ซึ่งขัดกับ §S5 ที่กำหนดว่าทุกตัวเลขของแผนต้องมาจาก
+  // plan.service ฝั่ง backend เท่านั้น ที่นี่จึงทับ openPlanWizard และ renderPlanCards
+  // ทั้งตัว แล้วให้ทุกตัวเลขมาจาก /api/plans
+  //
+  // ทับได้เพราะ app.js ประกาศทั้งสองเป็น function declaration ระดับ global
+  // ตัวที่เรียก (ปุ่ม + renderAnalyzePage) จึงวิ่งมาที่ตัวใหม่นี้
+
+  /** บาทที่ผู้ใช้พิมพ์ -> สตางค์ (integer) — backend รับเฉพาะสตางค์ตามกฎ G3 */
+  function bahtToSatang(value) {
+    const baht = Number(String(value ?? '').replace(/,/g, '').trim());
+    if (!Number.isFinite(baht)) return null;
+    return Math.round(baht * 100);
+  }
+
+  const CONFIDENCE_LABEL = {
+    low: '🔴 ประมาณการเบื้องต้น',
+    medium: '🟡 ความมั่นใจปานกลาง',
+    high: '🟢 ความมั่นใจสูง',
+  };
+
+  function escapeHtml(text) {
+    return String(text ?? '').replace(/[&<>"']/g, (ch) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+    ));
+  }
+
+  /** แถบสรุปกำลังออม — แสดงที่มาของตัวเลขด้วย เพื่อให้ผู้ใช้ตรวจสอบได้ว่ามาจากไหน */
+  function renderPlanCapacity(capacity) {
+    const box = document.getElementById('planCapacity');
+    if (!box) return;
+    if (!capacity) {
+      box.innerHTML = '';
+      return;
+    }
+
+    const b = capacity.breakdown;
+    const note = capacity.canCreatePlan
+      ? ''
+      : `<p class="empty-note">${escapeHtml(capacity.reason || 'ยังสร้างแผนใหม่ไม่ได้')}</p>`;
+
+    box.innerHTML = `
+      <div class="plan-summary-card">
+        <div class="summary-row">
+          <span>ออมเพิ่มได้เดือนละ</span>
+          <strong>${formatMoney(Math.max(0, capacity.capacitySatang))}</strong>
+        </div>
+        <div class="summary-row">
+          <span>ความมั่นใจของการประเมิน</span>
+          <strong>${CONFIDENCE_LABEL[capacity.confidence] || '—'}</strong>
+        </div>
+        <div class="summary-row"><span>รายรับเฉลี่ยต่อเดือน</span><strong>${formatMoney(b.avgIncomeSatang)}</strong></div>
+        <div class="summary-row"><span>− รายจ่ายประจำ</span><strong>${formatMoney(b.recurringTotalSatang)}</strong></div>
+        <div class="summary-row"><span>− รายจ่ายจำเป็น</span><strong>${formatMoney(b.avgEssentialSatang)}</strong></div>
+        <div class="summary-row"><span>− กันเงินฉุกเฉิน</span><strong>${formatMoney(b.emergencyBufferSatang)}</strong></div>
+        ${capacity.committedSatang > 0
+          ? `<div class="summary-row"><span>− แผนที่ออมอยู่แล้ว ${capacity.activePlanCount} แผน</span><strong>${formatMoney(capacity.committedSatang)}</strong></div>`
+          : ''}
+        <p class="ai-disclaimer">ใช้ข้อมูลย้อนหลัง ${capacity.daysOfData} วัน</p>
+      </div>
+      ${note}
+    `;
+  }
+
+  /** การ์ดแผน — draft ต้องกดยืนยันก่อนถึงจะเริ่มนับ (S5.4) จึงแยกหน้าตาออกจาก active */
+  function renderLivePlanCards(plans) {
+    const box = document.getElementById('planCards');
+    if (!box) return;
+
+    if (!plans.length) {
+      box.innerHTML = '<p class="empty-note">ยังไม่มีแผนออม — กด "สร้างแผนใหม่" เพื่อเริ่ม</p>';
+      return;
+    }
+
+    box.innerHTML = plans.map((plan) => {
+      const isDraft = plan.status === 'draft';
+      const statusBadge = plan.status === 'completed'
+        ? '<span class="pill success">🎉 ครบเป้าแล้ว</span>'
+        : isDraft
+          ? '<span class="pill">ยังไม่ยืนยัน</span>'
+          : plan.offTrack
+            ? '<span class="pill warning">⚠️ หลุดเป้า</span>'
+            : '<span class="pill success">ปกติ</span>';
+
+      const actions = isDraft
+        ? `<button class="primary-btn small" type="button" data-plan-confirm-id="${plan.planId}">ยืนยันแผนนี้</button>
+           <button class="secondary-btn small" type="button" data-plan-cancel-id="${plan.planId}">ทิ้ง</button>`
+        : plan.status === 'active'
+          ? `<button class="secondary-btn small" type="button" data-plan-cancel-id="${plan.planId}">ยกเลิกแผน</button>`
+          : '';
+
+      return `
+        <div class="goal-card">
+          <div class="goal-header">
+            <strong>${escapeHtml(plan.title)}</strong>
+            <span class="confidence-badge ${plan.confidence}">${CONFIDENCE_LABEL[plan.confidence] || ''}</span>
+          </div>
+          <div class="progress-bar ${plan.offTrack ? 'warning' : ''}">
+            <span style="width: ${clamp(plan.percentComplete)}%"></span>
+          </div>
+          <div class="card-row">
+            <span>${formatMoney(plan.savedSatang)} / ${formatMoney(plan.targetSatang)}</span>
+            <strong>${formatMoney(plan.monthlySaveSatang)}/เดือน</strong>
+          </div>
+          <div class="card-row">
+            <span>ถึงเป้า ${escapeHtml(plan.targetDate)}</span>
+            <span>${formatPercent(plan.percentComplete)}%</span>
+          </div>
+          <div class="plan-actions-row">${statusBadge}${actions}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  /** โหลดแผน + กำลังออมใหม่จาก backend แล้ววาดใหม่ทั้งส่วน */
+  async function refreshPlans() {
+    try {
+      const plans = await window.moneyBotApi.fetchPlans();
+      window.__livePlans = plans;
+      renderPlanCapacity(plans.capacity);
+      renderLivePlanCards(plans.items || []);
+    } catch (err) {
+      console.error('[boot] โหลดแผนไม่สำเร็จ', err);
+      const box = document.getElementById('planCards');
+      if (box) box.innerHTML = `<p class="empty-note">โหลดแผนไม่สำเร็จ: ${escapeHtml((err && err.message) || '')}</p>`;
+    }
+  }
+
+  /** ขั้นที่ 2 ของ wizard: เลือก 1 ใน 3 ทางเลือกที่ backend คำนวณมาให้ (S5.4) */
+  function renderPlanOptions(result) {
+    const body = document.getElementById('planWizardBody');
+    if (!body) return;
+
+    const note = result.requestedMonthsNote
+      ? `<p class="empty-note">⚠️ ${escapeHtml(result.requestedMonthsNote)}</p>`
+      : '';
+
+    body.innerHTML = `
+      ${note}
+      <div class="goal-stack">
+        ${result.options.map((option) => `
+          <div class="goal-card">
+            <div class="goal-header">
+              <strong>${escapeHtml(option.title)}</strong>
+            </div>
+            <div class="summary-row"><span>ออมเดือนละ</span><strong>${formatMoney(option.monthlySaveSatang)}</strong></div>
+            <div class="summary-row"><span>ใช้เวลา</span><strong>${option.months} เดือน</strong></div>
+            <div class="summary-row"><span>ถึงเป้า</span><strong>${escapeHtml(option.targetDate)}</strong></div>
+            <button class="primary-btn full" type="button" data-plan-pick="${option.planId}">เลือกแผนนี้</button>
+          </div>
+        `).join('')}
+      </div>
+      <p class="ai-disclaimer">ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
+    `;
+
+    body.querySelectorAll('[data-plan-pick]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          await window.moneyBotApi.confirmPlan(button.dataset.planPick);
+          closeModal();
+          await refreshPlans();
+          showSuccessModal('เริ่มแผนออมแล้ว');
+        } catch (err) {
+          button.disabled = false;
+          showSuccessModal(`ยืนยันแผนไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
+        }
+      });
+    });
+  }
+
+  function planWizardForm(capacity) {
+    return `
+      <p class="empty-note">ออมเพิ่มได้เดือนละ ${formatMoney(Math.max(0, capacity.capacitySatang))} · ${CONFIDENCE_LABEL[capacity.confidence] || ''}</p>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>อยากได้อะไร</span>
+          <input id="livePlanTitle" placeholder="เช่น iPhone, ตั๋วเครื่องบิน" />
+        </label>
+        <label class="form-field">
+          <span>ราคา (บาท)</span>
+          <input id="livePlanTarget" type="number" min="1" step="0.01" placeholder="30000" />
+        </label>
+        <label class="form-field">
+          <span>อยากได้ภายในกี่เดือน (ไม่ใส่ก็ได้)</span>
+          <input id="livePlanMonths" type="number" min="1" step="1" placeholder="เว้นว่างให้ระบบเสนอให้" />
+        </label>
+      </div>
+      <p id="livePlanError" class="empty-note" hidden></p>
+      <div class="modal-actions">
+        <button class="primary-btn full" type="button" id="livePlanSubmit">ดูทางเลือก</button>
+      </div>
+    `;
+  }
+
+  /** ทับ wizard ของ app.js — ทุกตัวเลขมาจาก /api/plans ไม่ใช่คำนวณในหน้าเว็บ */
+  function installLivePlanHandlers() {
+    window.openPlanWizard = async function openLivePlanWizard() {
+      openModal(`
+        <div class="modal-card wide">
+          <div class="modal-head">
+            <h3>สร้างแผนออม</h3>
+            <button class="close-btn" type="button" data-close-modal="true">✕</button>
+          </div>
+          <div id="planWizardBody"><p class="empty-note">กำลังคำนวณกำลังออม…</p></div>
+        </div>
+      `);
+
+      let capacity;
+      try {
+        capacity = await window.moneyBotApi.fetchPlanCapacity();
+      } catch (err) {
+        const body = document.getElementById('planWizardBody');
+        if (body) body.innerHTML = `<p class="empty-note">คำนวณกำลังออมไม่สำเร็จ: ${escapeHtml((err && err.message) || '')}</p>`;
+        return;
+      }
+
+      const body = document.getElementById('planWizardBody');
+      if (!body) return;
+
+      // ออมไม่ไหวตั้งแต่ต้น — บอกเหตุผลเป็นตัวเลขตาม S5.3 ไม่ใช่ให้กรอกฟอร์มไปเปล่าๆ
+      if (!capacity.canCreatePlan) {
+        body.innerHTML = `
+          <p class="empty-note">${escapeHtml(capacity.reason || 'ยังสร้างแผนใหม่ไม่ได้')}</p>
+          <div class="modal-actions">
+            <button class="secondary-btn full" type="button" data-close-modal="true">เข้าใจแล้ว</button>
+          </div>
+        `;
+        return;
+      }
+
+      body.innerHTML = planWizardForm(capacity);
+
+      document.getElementById('livePlanSubmit')?.addEventListener('click', async (event) => {
+        const button = event.currentTarget;
+        const errorBox = document.getElementById('livePlanError');
+        const showError = (message) => {
+          if (!errorBox) return;
+          errorBox.textContent = message;
+          errorBox.hidden = false;
+        };
+
+        const title = (document.getElementById('livePlanTitle')?.value || '').trim();
+        const targetSatang = bahtToSatang(document.getElementById('livePlanTarget')?.value);
+        const monthsRaw = (document.getElementById('livePlanMonths')?.value || '').trim();
+
+        if (!title) return showError('ใส่ชื่อสิ่งที่อยากได้ก่อนนะครับ');
+        if (targetSatang === null || targetSatang <= 0) return showError('ใส่ราคาเป็นตัวเลขมากกว่า 0');
+        const months = monthsRaw === '' ? undefined : Number(monthsRaw);
+        if (months !== undefined && (!Number.isInteger(months) || months <= 0)) {
+          return showError('จำนวนเดือนต้องเป็นจำนวนเต็มบวก');
+        }
+
+        button.disabled = true;
+        if (errorBox) errorBox.hidden = true;
+        try {
+          const result = await window.moneyBotApi.createPlan(title, targetSatang, months);
+          renderPlanOptions(result);
+        } catch (err) {
+          button.disabled = false;
+          showError((err && err.message) || 'สร้างแผนไม่สำเร็จ');
+        }
+      });
+    };
+
+    // renderAnalyzePage ของ app.js เรียกตัวนี้ — ให้วาดจากข้อมูลจริงที่โหลดไว้แล้ว
+    window.renderPlanCards = function renderLivePlanCardsEntry() {
+      const plans = window.__livePlans;
+      if (!plans) return;
+      renderPlanCapacity(plans.capacity);
+      renderLivePlanCards(plans.items || []);
+    };
+
+    // ปุ่มยืนยัน/ยกเลิกในการ์ดแผนถูกสร้างใหม่ทุกครั้งที่วาด จึงดักที่ระดับ document ครั้งเดียว
+    document.addEventListener('click', async (event) => {
+      const confirmBtn = event.target.closest('[data-plan-confirm-id]');
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        try {
+          await window.moneyBotApi.confirmPlan(confirmBtn.dataset.planConfirmId);
+          await refreshPlans();
+          showSuccessModal('เริ่มแผนออมแล้ว');
+        } catch (err) {
+          confirmBtn.disabled = false;
+          showSuccessModal(`ยืนยันไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
+        }
+        return;
+      }
+
+      const cancelBtn = event.target.closest('[data-plan-cancel-id]');
+      if (cancelBtn) {
+        cancelBtn.disabled = true;
+        try {
+          await window.moneyBotApi.cancelPlan(cancelBtn.dataset.planCancelId);
+          await refreshPlans();
+        } catch (err) {
+          cancelBtn.disabled = false;
+          showSuccessModal(`ยกเลิกไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
+        }
+      }
+    });
+  }
+
+  // ── รายการประจำ (S5.9) ──────────────────────────────────────────────────────
+
+  const FREQUENCY_LABEL = {
+    daily: 'ทุกวัน',
+    weekly: 'ทุกสัปดาห์',
+    monthly: 'ทุกเดือน',
+    yearly: 'ทุกปี',
+  };
+
+  function renderRecurringList(items) {
+    const box = document.getElementById('recurringList');
+    if (!box) return;
+
+    if (!items.length) {
+      box.innerHTML = '<p class="empty-note">ยังไม่มีรายการประจำ — เพิ่มเงินเดือนกับค่าหอไว้ ระบบจะบันทึกให้เองทุกเดือน</p>';
+      return;
+    }
+
+    box.innerHTML = items.map((rule) => `
+      <div class="setting-item">
+        <div>
+          <strong>${rule.type === 'income' ? '💰' : '🧾'} ${escapeHtml(rule.label)}</strong>
+          <span>${FREQUENCY_LABEL[rule.frequency] || rule.frequency} · ${formatMoney(rule.amountSatang)}
+            · รอบถัดไป ${escapeHtml(rule.nextRun)}</span>
+        </div>
+        <button class="secondary-btn small" type="button" data-recurring-delete="${rule.id}">ลบ</button>
+      </div>
+    `).join('');
+  }
+
+  async function refreshRecurring() {
+    const box = document.getElementById('recurringList');
+    if (!box) return;
+    try {
+      const data = await window.moneyBotApi.fetchRecurring();
+      renderRecurringList(data.items || []);
+    } catch (err) {
+      console.error('[boot] โหลดรายการประจำไม่สำเร็จ', err);
+      box.innerHTML = `<p class="empty-note">โหลดไม่สำเร็จ: ${escapeHtml((err && err.message) || '')}</p>`;
+    }
+  }
+
+  function openRecurringModal() {
+    openModal(`
+      <div class="modal-card small">
+        <div class="modal-head">
+          <h3>เพิ่มรายการประจำ</h3>
+          <button class="close-btn" type="button" data-close-modal="true">✕</button>
+        </div>
+        <div class="form-grid">
+          <label class="form-field">
+            <span>ชื่อรายการ</span>
+            <input id="recurringLabel" placeholder="เช่น เงินเดือน, ค่าหอ" />
+          </label>
+          <label class="form-field">
+            <span>จำนวนเงิน (บาท)</span>
+            <input id="recurringAmount" type="number" min="1" step="0.01" placeholder="3500" />
+          </label>
+          <div class="segmented-control">
+            <button type="button" class="segmented active" data-recurring-type="expense">รายจ่าย</button>
+            <button type="button" class="segmented" data-recurring-type="income">รายรับ</button>
+          </div>
+          <label class="form-field">
+            <span>ความถี่</span>
+            <select id="recurringFrequency">
+              <option value="monthly">ทุกเดือน</option>
+              <option value="weekly">ทุกสัปดาห์</option>
+              <option value="daily">ทุกวัน</option>
+              <option value="yearly">ทุกปี</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>เริ่มรอบแรกวันไหน</span>
+            <input id="recurringStart" type="date" />
+          </label>
+        </div>
+        <p id="recurringError" class="empty-note" hidden></p>
+        <div class="modal-actions">
+          <button class="primary-btn full" type="button" id="recurringSubmit">บันทึก</button>
+        </div>
+      </div>
+    `);
+
+    // ค่าเริ่มต้นของวันคือวันนี้ตามเวลาไทย ไม่ใช่เวลาเครื่องผู้ใช้
+    const startInput = document.getElementById('recurringStart');
+    if (startInput) startInput.value = bangkokDate.format(new Date());
+
+    let selectedType = 'expense';
+    document.querySelectorAll('[data-recurring-type]').forEach((button) => {
+      button.addEventListener('click', () => {
+        selectedType = button.dataset.recurringType;
+        document.querySelectorAll('[data-recurring-type]').forEach((other) => {
+          other.classList.toggle('active', other === button);
+        });
+      });
+    });
+
+    document.getElementById('recurringSubmit')?.addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      const errorBox = document.getElementById('recurringError');
+      const showError = (message) => {
+        if (!errorBox) return;
+        errorBox.textContent = message;
+        errorBox.hidden = false;
+      };
+
+      const label = (document.getElementById('recurringLabel')?.value || '').trim();
+      const amountSatang = bahtToSatang(document.getElementById('recurringAmount')?.value);
+      const frequency = document.getElementById('recurringFrequency')?.value || 'monthly';
+      const startDate = document.getElementById('recurringStart')?.value || undefined;
+
+      if (!label) return showError('ใส่ชื่อรายการก่อนนะครับ');
+      if (amountSatang === null || amountSatang <= 0) return showError('ใส่จำนวนเงินเป็นตัวเลขมากกว่า 0');
+
+      button.disabled = true;
+      if (errorBox) errorBox.hidden = true;
+      try {
+        await window.moneyBotApi.createRecurring({
+          label, type: selectedType, amountSatang, frequency, startDate,
+        });
+        closeModal();
+        await refreshRecurring();
+        showSuccessModal('เพิ่มรายการประจำแล้ว');
+      } catch (err) {
+        button.disabled = false;
+        showError((err && err.message) || 'บันทึกไม่สำเร็จ');
+      }
+    });
+  }
+
+  function installRecurringHandlers() {
+    document.getElementById('createRecurringBtn')?.addEventListener('click', openRecurringModal);
+
+    document.addEventListener('click', async (event) => {
+      const deleteBtn = event.target.closest('[data-recurring-delete]');
+      if (!deleteBtn) return;
+      deleteBtn.disabled = true;
+      try {
+        await window.moneyBotApi.deleteRecurring(deleteBtn.dataset.recurringDelete);
+        await refreshRecurring();
+      } catch (err) {
+        deleteBtn.disabled = false;
+        showSuccessModal(`ลบไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
+      }
+    });
+  }
+
   // ── ข้อความจากหน้า callback ของ /auth ───────────────────────────────────────
   function bannerFromLoginResult() {
     const reason = new URLSearchParams(window.location.search).get('login');
@@ -391,9 +843,18 @@
 
       applyProfile(me);
       applyLiveData(summary, transactions, categories, budgets, plans);
+
+      // เก็บก้อนแผนไว้ให้ renderPlanCards ที่ถูกทับใช้ ต้องตั้งก่อน initializePage()
+      // เพราะ renderAnalyzePage จะเรียก renderPlanCards ทันทีที่หน้าถูกวาด
+      window.__livePlans = plans;
+
       installBudgetWriteHandlers();
+      installLivePlanHandlers();
+      installRecurringHandlers();
+
       initializePage();
       await setupSettingsPage();
+      await refreshRecurring();
 
       if (window.mockData.transactions.length === 0) {
         showBanner('ยังไม่มีรายการ — ลองพิมพ์ "กาแฟ 80" คุยกับบอทใน LINE ดูก่อน', 'empty');
