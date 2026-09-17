@@ -41,7 +41,17 @@ const IMAP_PORT = 993;
 const MAX_MESSAGES_PER_RUN = 50;
 
 export type EmailPollResult = {
-  /** อ่านมากี่ฉบับ */
+  /**
+   * จำนวนอีเมลทั้งหมดใน INBOX ของกล่องกลาง (ไม่ใช่ของผู้ใช้คนใดคนหนึ่ง)
+   *
+   * มีไว้ไล่ปัญหาอย่างเดียว: แยกให้ออกระหว่าง "อีเมลไม่เคยมาถึงกล่อง" (inboxTotal ไม่เพิ่ม)
+   * กับ "มาถึงแล้วแต่ถูกอ่านไปแล้ว" (inboxTotal เพิ่ม แต่ unseen = 0) — สองอย่างนี้
+   * เดิมหน้าตาเหมือนกันหมดคือ fetched: 0 ทำให้ต้องเดาว่าปัญหาอยู่ฝั่งไหน
+   */
+  inboxTotal: number;
+  /** จำนวนอีเมลที่ยังไม่ถูกอ่านใน INBOX — job หยิบเฉพาะกลุ่มนี้ */
+  unseen: number;
+  /** อ่านมากี่ฉบับ (เท่ากับ unseen เว้นแต่ชน MAX_MESSAGES_PER_RUN) */
   fetched: number;
   /** สร้างรายการใหม่สำเร็จกี่ฉบับ */
   created: number;
@@ -54,6 +64,8 @@ export type EmailPollResult = {
 };
 
 const EMPTY_RESULT: EmailPollResult = {
+  inboxTotal: 0,
+  unseen: 0,
   fetched: 0,
   created: 0,
   duplicates: 0,
@@ -188,7 +200,14 @@ export async function pollBankEmails(): Promise<EmailPollResult> {
   const lock = await client.getMailboxLock('INBOX');
 
   try {
+    // นับจำนวนทั้งกล่องไว้ก่อน เพื่อให้ผลลัพธ์บอกได้ว่า "ไม่มีอีเมลเข้ามาเลย" ต่างจาก
+    // "เข้ามาแล้วแต่ถูกอ่านไปแล้ว" — mailbox.exists มาจาก SELECT ตอน getMailboxLock
+    // จึงไม่เสีย round-trip เพิ่ม
+    result.inboxTotal =
+      typeof client.mailbox === 'object' ? (client.mailbox.exists ?? 0) : 0;
+
     const unseenUids = await client.search({ seen: false }, { uid: true });
+    result.unseen = (unseenUids || []).length;
     const uids = (unseenUids || []).slice(0, MAX_MESSAGES_PER_RUN);
 
     for (const uid of uids) {
