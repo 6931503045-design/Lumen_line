@@ -8,7 +8,8 @@
 // ใครที่รู้ที่อยู่ +token ก็ยิงรายการเงินปลอมเข้าบัญชีคนอื่นได้ทันที
 
 import { describe, expect, it } from 'vitest';
-import { checkBankDkim, extractIngestToken } from '../src/services/email/dkim';
+import { checkBankDkim } from '../src/services/email/dkim';
+import { extractIngestToken } from '../src/services/email/recipient';
 
 const BANKS = ['kasikornbank.com', 'kbank.co.th'];
 

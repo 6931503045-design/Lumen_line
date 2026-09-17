@@ -54,13 +54,3 @@ export function checkBankDkim(
 
   return { passed, signedBy };
 }
-
-/**
- * ดึง token จากที่อยู่ปลายทางแบบ plus-addressing
- * "jodtang+a1b2c3@gmail.com" -> "a1b2c3" / ไม่มี + ก็คืน null
- */
-export function extractIngestToken(address: string | undefined): string | null {
-  if (!address) return null;
-  const match = /\+([A-Za-z0-9]+)@/.exec(address);
-  return match?.[1] ?? null;
-}

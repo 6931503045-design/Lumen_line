@@ -27,7 +27,12 @@ import { backfillRefNumber } from '../db/queries/transactions';
 import { createTransaction } from './transaction.service';
 import { checkDuplicate } from './dedup.service';
 import { ALL_BANK_DKIM_DOMAINS, findBankParser } from './email/banks';
-import { checkBankDkim, extractIngestToken } from './email/dkim';
+import { checkBankDkim } from './email/dkim';
+import {
+  describeTokenHeaders,
+  findTokenFromHeaders,
+  headerValue,
+} from './email/recipient';
 
 const IMAP_HOST = 'imap.gmail.com';
 const IMAP_PORT = 993;
@@ -56,33 +61,6 @@ const EMPTY_RESULT: EmailPollResult = {
   skipped: 0,
 };
 
-/** ดึงค่า header ตัวเดียวออกมาเป็น string (mailparser คืน array ได้ถ้ามีซ้ำ) */
-function headerValue(mail: ParsedMail, name: string): string | undefined {
-  const raw = mail.headers.get(name);
-  if (!raw) return undefined;
-  if (Array.isArray(raw)) return raw.map(String).join(' ');
-  return String(raw);
-}
-
-/**
- * ที่อยู่ปลายทางที่มี +token อยู่
- * หลัง Gmail forward ต่อ ที่อยู่เดิมจะอยู่ใน Delivered-To หรือ X-Original-To
- * ส่วน To: มักกลายเป็นที่อยู่ปลายทางสุดท้ายไปแล้ว จึงต้องดูทั้งสามที่เรียงตามความน่าเชื่อถือ
- */
-function findTokenFromHeaders(mail: ParsedMail): string | null {
-  const candidates = [
-    headerValue(mail, 'delivered-to'),
-    headerValue(mail, 'x-original-to'),
-    mail.to && !Array.isArray(mail.to) ? mail.to.text : undefined,
-  ];
-
-  for (const candidate of candidates) {
-    const token = extractIngestToken(candidate);
-    if (token) return token;
-  }
-  return null;
-}
-
 /** ประมวลผลอีเมลหนึ่งฉบับ คืนผลว่าจัดอยู่ในหมวดไหนของ EmailPollResult */
 async function processMessage(
   mail: ParsedMail
@@ -90,7 +68,9 @@ async function processMessage(
   // ── 1. หาเจ้าของจาก token ────────────────────────────────────────────────
   const token = findTokenFromHeaders(mail);
   if (!token) {
-    logger.warn('[email] ข้าม: ไม่พบ +token ในที่อยู่ปลายทาง');
+    logger.warn(
+      `[email] ข้าม: ไม่พบ +token ในที่อยู่ปลายทาง (${describeTokenHeaders(mail)})`
+    );
     return 'skipped';
   }
 
