@@ -939,10 +939,16 @@ function buildKeypadInput(amountValue = 0, onComplete) {
   `;
 
   openModal(html);
-  const display = document.getElementById(inputId);
-  const confirmBtn = document.querySelector('[data-keypad-confirm]');
 
-  document.querySelectorAll('.keypad-key').forEach((button) => {
+  // ค้นเฉพาะภายใน modal ที่เพิ่งเปิด ไม่ใช่ทั้งเอกสาร — ถ้ามี modal อื่นค้างอยู่
+  // querySelector ระดับ document จะคว้าปุ่มของใบเก่ามาผูก แล้วกดปุ่มจริงไม่ทำงาน
+  const modal = document.querySelector('.global-modal');
+  if (!modal) return;
+
+  const display = modal.querySelector(`#${inputId}`);
+  const confirmBtn = modal.querySelector('[data-keypad-confirm]');
+
+  modal.querySelectorAll('.keypad-key').forEach((button) => {
     button.addEventListener('click', () => {
       const value = button.dataset.keypadValue;
       if (value === '⌫') {
@@ -1203,7 +1209,10 @@ function reorderCategories(draggedId, targetId) {
 }
 
 function setCategoryLimit(categoryId) {
-  const category = mock.categories.find((item) => item.id === Number(categoryId));
+  // เทียบเป็นข้อความ: id ของหมวดจริงเป็น uuid ไม่ใช่ตัวเลข Number(uuid) = NaN หาไม่เจอ
+  // แล้ว return เงียบๆ ทำให้กดปุ่ม "ตั้งงบ" แล้วไม่มีอะไรเกิดขึ้นเลย
+  // (ปกติ boot.js จะทับฟังก์ชันนี้ด้วยตัวที่เขียนลง backend จริง อันนี้คือทางสำรอง)
+  const category = mock.categories.find((item) => String(item.id) === String(categoryId));
   if (!category) return;
   buildKeypadInput(category.limit || 30000, (amount) => {
     category.limit = amount;
@@ -1289,7 +1298,16 @@ function openCategoryDetail(categoryId) {
   });
 }
 
+// 🔴 แก้บั๊ก: initializePage() ถูกเรียกสองรอบ (DOMContentLoaded ของไฟล์นี้ + boot.js เรียกซ้ำ
+// หลังโหลดข้อมูลจริง) ฟังก์ชันนี้ผูก listener ระดับ document ไว้ข้างใน จึงถูกผูกสองชุด
+// ผลคือคลิกปุ่มหนึ่งครั้ง handler ทำงานสองครั้ง: เปิด modal ซ้อนสองใบ, ยืนยันแผนสองรอบ,
+// ลบรายการสองครั้ง ผูกครั้งเดียวพอเพราะ element ที่ผูกอยู่ใน HTML ไม่ได้ถูกสร้างใหม่ตอน re-render
+let transactionControlsBound = false;
+
 function bindTransactionControls() {
+  if (transactionControlsBound) return;
+  transactionControlsBound = true;
+
   const toggleMultiSelectBtn = document.getElementById('toggleMultiSelectBtn');
   if (toggleMultiSelectBtn) {
     toggleMultiSelectBtn.addEventListener('click', () => {
