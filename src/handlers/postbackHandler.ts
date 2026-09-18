@@ -9,6 +9,8 @@
 // quick reply รายการหมวดของ user ก่อน ซึ่งยังไม่ได้ทำ query สำหรับ list categories) — ยกเป็นงานถัดไป
 
 import { getUserIdByLineUserId } from '../db/queries/users';
+import { PlanError, transferToPlan } from '../services/plan.service';
+import { formatBaht } from '../utils/money';
 import {
   getTransactionOwnedByUser,
   softDeleteTransaction,
@@ -54,6 +56,9 @@ export async function handlePostback(event: LinePostbackEvent): Promise<void> {
       break;
     case 'restore':
       await handleRestore(replyToken, userId, id);
+      break;
+    case 'save_to_plan':
+      await handleSaveToPlan(replyToken, userId, id, params.get('amt'));
       break;
     case 'edit_category':
       // TODO W2: ต้องมี db/queries/categories.ts::listCategoriesByUser() ก่อน แล้วส่ง quick reply
@@ -118,5 +123,43 @@ async function handleRestore(replyToken: string, userId: string, transactionId: 
   } catch (err) {
     console.error('[postbackHandler] restoreTransaction error:', err);
     await replyText(replyToken, 'เอากลับคืนไม่สำเร็จ ลองใหม่อีกครั้งนะครับ 🙏');
+  }
+}
+/**
+ * ผู้ใช้เลือกแผนจาก quick reply ของคำสั่ง `ออม <จำนวน>` (SPEC §S1 postback save_to_plan)
+ *
+ * จำนวนเงินมาจาก postback data ที่เราสร้างเอง ไม่ใช่จากผู้ใช้พิมพ์ — แต่ยังต้องตรวจ
+ * เพราะ data ของ postback ถูกส่งกลับมาจากเครื่องผู้ใช้ ปลอมได้
+ * ⚖️ G6: transferToPlan เช็คเองอยู่แล้วว่าแผนเป็นของ userId คนนี้จริง
+ */
+async function handleSaveToPlan(
+  replyToken: string,
+  userId: string,
+  planId: string,
+  rawAmount: string | null
+): Promise<void> {
+  const amountSatang = Number(rawAmount);
+  if (!Number.isInteger(amountSatang) || amountSatang <= 0) {
+    console.error('[postbackHandler] save_to_plan จำนวนเงินไม่ถูกต้อง:', rawAmount);
+    await replyText(replyToken, 'จำนวนเงินไม่ถูกต้องครับ ลองพิมพ์ "ออม 2000" ใหม่อีกครั้ง');
+    return;
+  }
+
+  try {
+    const result = await transferToPlan(userId, planId, amountSatang);
+    await replyText(
+      replyToken,
+      result.justCompleted
+        ? `🎉 ครบเป้าแล้ว! "${result.progress.title}"`
+        : [
+            `โอนเข้าแผน "${result.progress.title}" ${formatBaht(amountSatang)} แล้วครับ`,
+            `ตอนนี้ออมได้ ${formatBaht(result.progress.savedSatang)} / ${formatBaht(result.progress.targetSatang)} (${result.progress.percentComplete}%)`,
+          ].join('\n')
+    );
+  } catch (err) {
+    console.error('[postbackHandler] save_to_plan error:', err);
+    // PlanError มีข้อความไทยที่ผู้ใช้อ่านรู้เรื่องอยู่แล้ว ส่งต่อได้เลย
+    const message = err instanceof PlanError ? err.message : 'โอนเข้าแผนไม่สำเร็จ ลองใหม่อีกครั้งนะครับ 🙏';
+    await replyText(replyToken, message);
   }
 }

@@ -8,14 +8,24 @@
 //      จึงต้องผ่าน money.toSatang() ก่อนบวกทุกครั้ง ห้ามใช้ Number() ตรงๆ
 // G7 — type='transfer' ไม่นับเป็นทั้งรายรับและรายจ่าย ตัดออกจากทุกยอดรวม
 
-import { add, toSatang } from '../utils/money';
-import { formatThaiMonthLabel, getMonthStartIso, getMonthStartIsoAgo } from '../utils/thaiDate';
+import { add, roundDownToSatang, toSatang } from '../utils/money';
+import {
+  daysInMonth,
+  formatThaiMonthLabel,
+  getMonthStartIso,
+  getMonthStartIsoAgo,
+  getTodayIso,
+  parseIsoDate,
+  shiftMonthStartIso,
+} from '../utils/thaiDate';
 import {
   listAllTransactionRows,
   listTransactionRowsInRange,
   type SummaryRow,
 } from '../db/queries/summary';
 import { listCategoriesByUser } from '../db/queries/categories';
+import { listPlansByUser } from '../db/queries/plans';
+import { sumUpcomingRecurringInMonth } from './recurring.service';
 
 /** จำนวนเดือนที่แสดงในกราฟกระแสเงินสด */
 const TREND_MONTHS = 6;
@@ -123,5 +133,85 @@ export async function getUserSummary(userId: string): Promise<UserSummary> {
     transactionCount: allRows.length,
     expenseByCategory,
     monthlyTrend: [...trendByMonth.values()],
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// S5.2 — ใช้ได้วันละเท่าไหร่ (Safe-to-spend)
+//
+//   คงเหลือเดือนนี้ = รายรับเดือนนี้
+//                   + recurring รายรับที่ยังไม่ถึงรอบ (วันนี้ถึงสิ้นเดือน)
+//                   − รายจ่ายเดือนนี้
+//                   − recurring รายจ่ายที่ยังไม่ถึงรอบ
+//                   − Σ monthly_save ของแผน active
+//   ใช้ได้ต่อวัน = คงเหลือเดือนนี้ ÷ วันที่เหลือในเดือน (ปัดลง)
+//
+// 🔴 ห้ามมี AI — ทุกตัวเลขมาจากสูตรตรงๆ
+// ⚖️ G7: หัก monthly_save ได้ตรงๆ โดยไม่นับซ้ำ เพราะการโอนเข้าแผนเป็น transfer
+//        ซึ่งไม่ถูกนับเป็นรายจ่ายอยู่แล้ว
+// ────────────────────────────────────────────────────────────────────────────
+
+export type SafeToSpend = {
+  /** เงินที่เหลือใช้ได้ทั้งเดือนหลังหักทุกอย่างแล้ว (สตางค์ ติดลบได้) */
+  monthRemainingSatang: number;
+  /** ใช้ได้วันละเท่าไหร่ (สตางค์ ปัดลง) — 0 ถ้าคงเหลือติดลบ */
+  perDaySatang: number;
+  /** จำนวนวันที่เหลือในเดือน นับวันนี้ด้วย */
+  daysLeft: number;
+  /** ใช้เกินไปแล้วเท่าไหร่ (สตางค์ บวกเสมอ) — 0 ถ้ายังไม่เกิน */
+  overspentSatang: number;
+  breakdown: {
+    monthIncomeSatang: number;
+    upcomingIncomeSatang: number;
+    monthExpenseSatang: number;
+    upcomingExpenseSatang: number;
+    planCommitmentSatang: number;
+  };
+};
+
+export async function getSafeToSpend(
+  userId: string,
+  todayIso: string = getTodayIso()
+): Promise<SafeToSpend> {
+  const monthStart = `${todayIso.slice(0, 7)}-01`;
+  const nextMonthStart = shiftMonthStartIso(todayIso.slice(0, 7), 1);
+
+  const [monthRows, upcoming, activePlans] = await Promise.all([
+    listTransactionRowsInRange(userId, monthStart, nextMonthStart),
+    sumUpcomingRecurringInMonth(userId, todayIso),
+    listPlansByUser(userId, ['active']),
+  ]);
+
+  const monthIncomeSatang = sumByType(monthRows, 'income');
+  const monthExpenseSatang = sumByType(monthRows, 'expense');
+  const planCommitmentSatang = activePlans.reduce(
+    (sum, plan) => sum + toSatang(plan.monthly_save),
+    0
+  );
+
+  const monthRemainingSatang =
+    monthIncomeSatang +
+    upcoming.incomeSatang -
+    monthExpenseSatang -
+    upcoming.expenseSatang -
+    planCommitmentSatang;
+
+  // วันที่เหลือรวมวันนี้: วันที่ 17 ของเดือน 30 วัน = เหลือ 14 วัน
+  const { day } = parseIsoDate(todayIso);
+  const daysLeft = daysInMonth(Number(todayIso.slice(0, 4)), Number(todayIso.slice(5, 7))) - day + 1;
+
+  return {
+    monthRemainingSatang,
+    // S5.2 ระบุให้ "ปัดลง" ไม่ใช่ปัดครึ่งขึ้น — ปัดขึ้นแล้วผู้ใช้จะใช้เกินทีละนิดทุกวัน
+    perDaySatang: monthRemainingSatang > 0 ? roundDownToSatang(monthRemainingSatang / daysLeft) : 0,
+    daysLeft,
+    overspentSatang: monthRemainingSatang < 0 ? -monthRemainingSatang : 0,
+    breakdown: {
+      monthIncomeSatang,
+      upcomingIncomeSatang: upcoming.incomeSatang,
+      monthExpenseSatang,
+      upcomingExpenseSatang: upcoming.expenseSatang,
+      planCommitmentSatang,
+    },
   };
 }

@@ -328,3 +328,36 @@ export async function getTransactionDetail(
   }
   return (data ?? null) as { id: string; type: TransactionType; category_id: string | null; occurred_at: string } | null;
 }
+
+/**
+ * รายการล่าสุดที่ผู้ใช้สร้างผ่านแชทภายในช่วงเวลาที่กำหนด — ใช้กับคำสั่ง `ยกเลิก` (S1)
+ *
+ * จำกัดเฉพาะ source='chat' โดยตั้งใจ: คำสั่งนี้มีไว้ให้ผู้ใช้ถอนสิ่งที่ตัวเองเพิ่งพิมพ์ผิด
+ * ไม่ใช่ไปลบรายการที่ธนาคารส่งมาทางอีเมลหรือที่ระบบสร้างจากรายการประจำ
+ * ⚖️ G6: กรอง user_id เสมอ
+ */
+export async function findLatestChatTransaction(
+  userId: string,
+  sinceIso: string
+): Promise<{ id: string; amount: string; type: TransactionType; note: string | null } | null> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, amount, type, note')
+    .eq('user_id', userId)
+    .eq('source', 'chat')
+    .is('deleted_at', null)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? null) as {
+    id: string;
+    amount: string;
+    type: TransactionType;
+    note: string | null;
+  } | null;
+}

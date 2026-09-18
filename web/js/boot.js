@@ -122,8 +122,12 @@
     data.summary.expense = summary.monthExpenseSatang;
 
     // ยอดที่ยังไม่มี service คำนวณ — ตั้ง null ให้หน้าเว็บแสดง "ยังไม่มีข้อมูล"
-    // safeToSpend (S5.2) ยังไม่มี service คำนวณ — คง null ไว้ให้หน้าเว็บบอกว่ายังไม่มีข้อมูล
-    data.summary.safeToSpend = null;
+    // S5.2 ใช้ได้วันละเท่าไหร่ — คำนวณจาก backend แล้ว
+    // ติดลบ = ใช้เกินแล้ว ส่ง 0 ให้การ์ดไม่แสดงเลขติดลบ แต่ยังบอกได้ผ่าน overspent
+    data.summary.safeToSpend = summary.safeToSpend ? summary.safeToSpend.perDaySatang : null;
+    data.summary.safeToSpendOverspent = summary.safeToSpend
+      ? summary.safeToSpend.overspentSatang
+      : null;
     data.summary.safeToSpendConfidence = null;
     // สามค่านี้เติมจริงด้านล่างหลังโหลดแผนแล้ว ตั้ง null ไว้ก่อนเผื่อไม่มีแผนเลย
     data.summary.confidence = null;

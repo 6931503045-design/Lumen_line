@@ -135,15 +135,31 @@ UI ชุดเดิมเคยคิด `target * 0.18` เองเพื่
   "monthlyTrend": [
     { "month": "2026-04", "label": "เม.ย.", "incomeSatang": 0, "expenseSatang": 0 }
   ],
-  "unavailable": ["safeToSpend", "confidence"]
+  "safeToSpend": {
+    "monthRemainingSatang": 140000,
+    "perDaySatang": 10000,
+    "daysLeft": 14,
+    "overspentSatang": 0,
+    "breakdown": {
+      "monthIncomeSatang": 1500000, "upcomingIncomeSatang": 0,
+      "monthExpenseSatang": 13100, "upcomingExpenseSatang": 0,
+      "planCommitmentSatang": 300000
+    }
+  },
+  "unavailable": []
 }
 ```
 
 - `expenseByCategory` เรียงมากไปน้อยแล้ว `categoryId` เป็น `null` ได้ (รายการที่ไม่มีหมวด)
 - `monthlyTrend` มี **6 เดือนเสมอ** เรียงเก่า→ใหม่ เดือนที่ไม่มีรายการเป็น 0 (ไม่หายไปจากกราฟ)
 - `netBalanceSatang` **ติดลบได้**
+- **`safeToSpend`** (S5.2) — `perDaySatang` คือ "ใช้ได้วันละเท่าไหร่" ปัดลงแล้ว
+  ถ้า `overspentSatang > 0` แปลว่า**ใช้เกินแล้ว** `perDaySatang` จะเป็น 0
+  → ต้องแสดงคำเตือนว่าเกินไปเท่าไหร่ ไม่ใช่โชว์ ฿0 เฉยๆ
+  `breakdown.upcomingIncomeSatang` คือรายรับประจำที่ยังไม่ถึงรอบในเดือนนี้ (เช่น เงินเดือนวันที่ 25)
 - **`unavailable`** = ชื่อตัวเลขที่ยังไม่มี service คำนวณ → ต้องแสดงว่า "ยังไม่มีข้อมูล"
   **ห้ามแสดงเป็น ฿0** เพราะผู้ใช้จะอ่านว่า "ฉันมีเงินศูนย์บาท"
+  ตอนนี้เป็น `[]` แล้ว (ทุกตัวเลขบนแดชบอร์ดมีของจริงหมด)
 
 ---
 
@@ -477,7 +493,6 @@ UI ชุดเดิมเคยคิด `target * 0.18` เองเพื่
 | ปุ่มที่อยากได้ | ต้องมี | สถานะ |
 |---|---|---|
 | จำลองผลกระทบก่อนซื้อ | `POST /api/simulate` (§S5.7) | ยังไม่มี |
-| "ใช้ได้วันละเท่าไหร่" | §S5.2 safeToSpend | ยังไม่มี — อยู่ใน `unavailable` |
 | แก้ชื่อ/อีโมจิ/ลำดับ หมวด | `PATCH /api/categories/:id` | ยังไม่มี |
 | สลับ "หมวดจำเป็น" | `PATCH /api/categories/:id` | ยังไม่มี |
 

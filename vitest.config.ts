@@ -6,6 +6,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // ตั้ง env ปลอมก่อนโหลดโค้ดจริง ไม่งั้นไฟล์ที่ import ไปถึง config/env จะพังทั้งไฟล์
+    setupFiles: ['tests/setup.ts'],
     globals: false,
   },
 });

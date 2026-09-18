@@ -19,6 +19,7 @@ import {
   isoDayOfWeek,
   parseIsoDate,
   shiftMonthClampDay,
+  shiftMonthStartIso,
   toBangkokDayStart,
 } from '../utils/thaiDate';
 import { logger } from '../utils/logger';
@@ -365,4 +366,47 @@ export async function processDueRecurringRules(
   }
 
   return result;
+}
+
+/** เพดานจำนวนรอบที่นับล่วงหน้าต่อกฎหนึ่งข้อ — กันกฎรายวันวนยาวถ้ามีค่าผิดปกติ */
+const MAX_UPCOMING_RUNS = 62;
+
+/**
+ * ยอดรายการประจำที่ "ยังไม่ถึงรอบ" ตั้งแต่วันนี้ถึงสิ้นเดือน (S5.2)
+ *
+ * นับเฉพาะรอบที่ยังไม่ถูกสร้าง — `next_run` คือรอบถัดไปที่ job ยังไม่ได้ทำ
+ * ทุกรอบตั้งแต่ตรงนั้นไปจึงยังไม่มี transaction ในระบบ
+ *
+ * ใช้ในสูตร "คงเหลือเดือนนี้" เพื่อให้ผู้ใช้เห็นภาพรวมทั้งเดือน ไม่ใช่แค่ที่เกิดไปแล้ว
+ * เช่น เงินเดือนที่จะเข้าวันที่ 25 ต้องถูกนับด้วย ไม่งั้นต้นเดือนจะดูเหมือนเงินติดลบตลอด
+ */
+export async function sumUpcomingRecurringInMonth(
+  userId: string,
+  todayIso: string = getTodayIso()
+): Promise<RecurringTotals> {
+  const monthEndExclusive = shiftMonthStartIso(todayIso.slice(0, 7), 1);
+  const rules = await listActiveRulesByUser(userId);
+
+  let incomeSatang = 0;
+  let expenseSatang = 0;
+
+  for (const rule of rules) {
+    const amountSatang = toSatang(rule.amount);
+    let runDate = rule.next_run;
+
+    for (let index = 0; index < MAX_UPCOMING_RUNS; index += 1) {
+      if (runDate >= monthEndExclusive) break;
+      if (rule.end_date && runDate > rule.end_date) break;
+
+      // รอบที่เลยมาแล้วแต่ job ยังไม่ได้สร้าง ไม่นับ — S5.2 กำหนดช่วง "วันนี้ถึงสิ้นเดือน"
+      if (runDate >= todayIso) {
+        if (rule.type === 'income') incomeSatang += amountSatang;
+        else expenseSatang += amountSatang;
+      }
+
+      runDate = computeNextRun(rule, runDate);
+    }
+  }
+
+  return { incomeSatang, expenseSatang };
 }

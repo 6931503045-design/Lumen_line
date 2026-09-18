@@ -12,7 +12,7 @@
 
 import express from 'express';
 import { requireSession, type AuthedRequest } from '../middleware/auth';
-import { getUserSummary } from '../services/summary.service';
+import { getSafeToSpend, getUserSummary } from '../services/summary.service';
 import {
   BudgetError,
   getBudgetOverview,
@@ -92,11 +92,16 @@ apiRouter.get('/me', (req, res) => {
 apiRouter.get(
   '/summary',
   handle(async (req, res) => {
-    const summary = await getUserSummary(req.userId!);
+    const [summary, safeToSpend] = await Promise.all([
+      getUserSummary(req.userId!),
+      getSafeToSpend(req.userId!),
+    ]);
     res.json({
       ...summary,
+      safeToSpend,
       // ตัวเลขที่ SPEC ออกแบบไว้แต่ยังไม่มี service คำนวณให้ — ห้ามเดา ห้ามส่ง 0 มาแทน
-      unavailable: ['safeToSpend', 'confidence'],
+      // `confidence` มาจาก /api/plans (capacity.confidence) ไม่ได้อยู่ในนี้
+      unavailable: [],
     });
   })
 );
