@@ -40,6 +40,7 @@ import {
   type PlanningRow,
 } from '../db/queries/summary';
 import { getMonthlyRecurringTotals } from './recurring.service';
+import { createTransaction } from './transaction.service';
 
 /** ช่วงข้อมูลที่ S5.3 ใช้: 90 วันย้อนหลังนับจากเมื่อวาน */
 const LOOKBACK_DAYS = 90;
@@ -577,4 +578,86 @@ export async function completeReachedPlans(userId: string): Promise<string[]> {
   }
 
   return completed;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// โอนเงินเข้าแผน — ตัวที่ทำให้ความคืบหน้าของแผนขยับจริง (S5.6)
+// ────────────────────────────────────────────────────────────────────────────
+
+export type PlanTransferResult = {
+  transactionId: string;
+  progress: PlanProgress;
+  /** รายการนี้ทำให้แผนครบเป้าพอดี — ผู้เรียกควรแสดงความยินดี */
+  justCompleted: boolean;
+};
+
+/**
+ * โอนเงินเข้าแผนออม
+ *
+ * ⚖️ G7: บันทึกเป็น type='transfer' ผูก plan_id — ไม่ถูกนับเป็นรายรับหรือรายจ่าย
+ * ในทุกยอดสรุป ตาราง transactions มี CHECK บังคับไว้อีกชั้นว่า plan_id ใส่ได้
+ * เฉพาะ transfer เท่านั้น
+ *
+ * โอนได้เฉพาะแผนที่ active: แผน draft ยังไม่ได้ยืนยัน ส่วนแผนที่ completed/cancelled
+ * ปิดไปแล้ว การโอนเข้าจะทำให้ยอดเกินเป้าโดยไม่มีความหมาย
+ */
+export async function transferToPlan(
+  userId: string,
+  planId: string,
+  amountSatang: number,
+  occurredAt: Date = new Date()
+): Promise<PlanTransferResult> {
+  if (!Number.isInteger(amountSatang) || amountSatang <= 0) {
+    throw new PlanError('จำนวนเงินที่โอนต้องมากกว่า 0 บาท (กฎ G3)', 400);
+  }
+  if (amountSatang > MAX_AMOUNT_SATANG) {
+    throw new PlanError('จำนวนเงินเกินเพดานที่ระบบรองรับ', 400);
+  }
+
+  const plan = await findPlanOwnedByUser(userId, planId);
+  if (!plan) {
+    throw new PlanError('ไม่พบแผนนี้ในบัญชีของคุณ', 404);
+  }
+  if (plan.status !== 'active') {
+    throw new PlanError(
+      plan.status === 'draft'
+        ? 'ต้องกดยืนยันแผนนี้ก่อนจึงจะโอนเงินเข้าได้'
+        : `แผนนี้ปิดไปแล้ว (${plan.status}) โอนเงินเข้าไม่ได้`,
+      409
+    );
+  }
+
+  const created = await createTransaction({
+    userId,
+    type: 'transfer',
+    amountSatang,
+    occurredAt,
+    source: 'liff',
+    parsedBy: 'manual',
+    note: `โอนเข้าแผน ${plan.title}`,
+    planId,
+  });
+
+  // อ่านยอดสะสมใหม่จาก DB ไม่ใช่บวกเอาเองจากยอดเดิม — รายการอาจถูกโอนจากอีกหน้าต่าง
+  // พร้อมกัน หรือถูกลบไประหว่างนั้น ยอดที่บวกเองจะเพี้ยนทันที (กติการ่วม §S5)
+  const transfers = await listPlanTransferRows(userId);
+  const savedSatang = transfers
+    .filter((row) => row.plan_id === planId)
+    .reduce((sum, row) => sum + toSatang(row.amount), 0);
+
+  const progress = computePlanProgress(plan, savedSatang);
+
+  let justCompleted = false;
+  if (progress.reachedTarget) {
+    // ปิดแผนทันทีไม่ต้องรอ job รอบถัดไป — บังคับสถานะเดิมเป็น active อยู่แล้ว
+    // ถ้าแพ้การแข่งกับ job ที่ปิดไปก่อน จะได้ไม่นับว่าเพิ่งครบเป้าซ้ำ
+    const closed = await transitionPlanStatus(userId, planId, 'active', 'completed');
+    justCompleted = closed !== null;
+  }
+
+  return {
+    transactionId: created.id,
+    progress: { ...progress, status: justCompleted ? 'completed' : progress.status },
+    justCompleted,
+  };
 }

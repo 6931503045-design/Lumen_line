@@ -67,6 +67,12 @@
     confirmPlan: (planId) =>
       request(`/plans/${encodeURIComponent(planId)}/confirm`, { method: 'POST' }),
     cancelPlan: (planId) => request(`/plans/${encodeURIComponent(planId)}`, { method: 'DELETE' }),
+    transferToPlan: (planId, amountSatang) =>
+      request(`/plans/${encodeURIComponent(planId)}/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountSatang }),
+      }),
     fetchRecurring: () => request('/recurring'),
     createRecurring: (payload) =>
       request('/recurring', {

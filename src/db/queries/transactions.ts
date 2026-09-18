@@ -27,6 +27,12 @@ export type InsertTransactionInput = {
   parsedBy: TransactionParsedBy;
   /** เลขอ้างอิงจากธนาคาร/สลิป ใช้กันรายการซ้ำตาม S10 — มีเฉพาะรายการที่มาจากอีเมลหรือสลิป */
   refNumber?: string | null;
+  /**
+   * แผนออมที่รายการนี้โอนเข้า — ใส่ได้เฉพาะ type='transfer'
+   * ตาราง transactions มี CHECK บังคับไว้อีกชั้น: `type = 'transfer' or plan_id is null`
+   * ซึ่งเป็นตัวบังคับ G7 ระดับ DB: เงินที่ย้ายเข้าแผนไม่ถูกนับเป็นรายจ่าย
+   */
+  planId?: string | null;
 };
 
 export type InsertedTransaction = {
@@ -51,6 +57,7 @@ export async function insertTransaction(
       source: input.source,
       parsed_by: input.parsedBy,
       ref_number: input.refNumber ?? null,
+      plan_id: input.planId ?? null,
     })
     .select('id, amount, type, occurred_at')
     .single();

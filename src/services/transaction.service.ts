@@ -33,6 +33,11 @@ export type CreateTransactionInput = {
    * ผู้เรียกที่มาจากแชทไม่ต้องส่ง เพราะผู้ใช้พิมพ์เองไม่มีเลขอ้างอิง
    */
   refNumber?: string | null;
+  /**
+   * แผนออมที่รายการนี้โอนเข้า — จำเป็นเมื่อ type='transfer'
+   * ⚖️ G7: transfer คือการ "ย้ายเงิน" ไม่ใช่รายรับหรือรายจ่าย ทุกยอดสรุปตัดออกหมด
+   */
+  planId?: string | null;
 };
 
 export type CreatedTransaction = {
@@ -54,12 +59,18 @@ export async function createTransaction(
   // ไม่มีการแปลงหน่วยใดๆ ที่นี่แล้ว — แค่ตรวจว่าค่าที่ส่งเข้ามา (สตางค์) ถูกต้องตามกฎก่อนเขียน DB
   assertValidTransactionAmount(input.amountSatang);
 
-  if (input.type === 'transfer') {
-    throw new Error('createTransaction: ยังไม่รองรับ type=transfer ใน W1');
+  // transfer ใช้ได้เฉพาะการโอนเข้าแผนออมเท่านั้น (S5.6)
+  // ไม่เปิดให้ transfer ลอยๆ เพราะยังไม่มีความหมายในระบบ แล้วจะกลายเป็นเงินที่
+  // หายไปจากทุกยอดสรุปโดยไม่มีที่ไป — ผู้ใช้จะงงว่าเงินหายไปไหน
+  if (input.type === 'transfer' && !input.planId) {
+    throw new Error('createTransaction: type=transfer ต้องระบุ planId เสมอ');
+  }
+  if (input.type !== 'transfer' && input.planId) {
+    throw new Error('createTransaction: planId ใส่ได้เฉพาะ type=transfer');
   }
 
   let categoryId: string | null = null;
-  if (input.categoryName) {
+  if (input.categoryName && input.type !== 'transfer') {
     categoryId = await findOrCreateCategory(input.userId, input.categoryName, input.type);
   }
 
@@ -75,6 +86,7 @@ export async function createTransaction(
     source: input.source,
     parsedBy: input.parsedBy,
     refNumber: input.refNumber ?? null,
+    planId: input.planId ?? null,
   });
 
   return {

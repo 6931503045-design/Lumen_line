@@ -431,7 +431,8 @@
         ? `<button class="primary-btn small" type="button" data-plan-confirm-id="${plan.planId}">ยืนยันแผนนี้</button>
            <button class="secondary-btn small" type="button" data-plan-cancel-id="${plan.planId}">ทิ้ง</button>`
         : plan.status === 'active'
-          ? `<button class="secondary-btn small" type="button" data-plan-cancel-id="${plan.planId}">ยกเลิกแผน</button>`
+          ? `<button class="primary-btn small" type="button" data-plan-transfer-id="${plan.planId}">โอนเข้าแผนนี้</button>
+             <button class="secondary-btn small" type="button" data-plan-cancel-id="${plan.planId}">ยกเลิกแผน</button>`
           : '';
 
       return `
@@ -629,6 +630,30 @@
           confirmBtn.disabled = false;
           showSuccessModal(`ยืนยันไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
         }
+        return;
+      }
+
+      // โอนเข้าแผน — ใช้แป้นตัวเลขเดียวกับตอนตั้งงบ (ทำงานหน่วยสตางค์)
+      const transferBtn = event.target.closest('[data-plan-transfer-id]');
+      if (transferBtn) {
+        const planId = transferBtn.dataset.planTransferId;
+        const plan = ((window.__livePlans && window.__livePlans.items) || [])
+          .find((item) => item.planId === planId);
+        // ตั้งค่าเริ่มต้นเป็นยอดออมต่อเดือนของแผน ซึ่งเป็นจำนวนที่ผู้ใช้ตั้งใจโอนอยู่แล้ว
+        buildKeypadInput(plan ? plan.monthlySaveSatang : 0, async (amountSatang) => {
+          if (!amountSatang) return;
+          try {
+            const result = await window.moneyBotApi.transferToPlan(planId, amountSatang);
+            await refreshPlans();
+            showSuccessModal(
+              result.justCompleted
+                ? '🎉 ครบเป้าแล้ว! ยินดีด้วยครับ'
+                : `โอนเข้าแผนแล้ว — ออมไปทั้งหมด ${formatMoney(result.progress.savedSatang)}`
+            );
+          } catch (err) {
+            showSuccessModal(`โอนไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
+          }
+        });
         return;
       }
 

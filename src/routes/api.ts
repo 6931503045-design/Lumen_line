@@ -27,7 +27,9 @@ import {
   getPlanCapacity,
   listPlansWithProgress,
   PlanError,
+  transferToPlan,
 } from '../services/plan.service';
+import { notifyPlanCompleted } from '../services/planCheck.service';
 import {
   createRecurringRule,
   listRecurringRules,
@@ -315,6 +317,37 @@ apiRouter.post(
   handle(async (req, res) => {
     const plan = await confirmPlan(req.userId!, req.params.planId!);
     res.json({ planId: plan.id, status: plan.status, confirmedAt: plan.confirmed_at });
+  })
+);
+
+/**
+ * โอนเงินเข้าแผน — body: { amountSatang }
+ * ⚖️ G7: บันทึกเป็น transfer ไม่ถูกนับเป็นรายจ่าย จึงไม่ไปหักยอด "ใช้ได้ต่อวัน" ซ้ำ
+ * (S5.2 หัก monthly_save ของแผนออกไปแล้วรอบหนึ่ง)
+ */
+apiRouter.post(
+  '/plans/:planId/transfer',
+  handle(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const amountSatang = Number(body.amountSatang);
+    if (!Number.isInteger(amountSatang)) {
+      throw new PlanError('amountSatang ต้องเป็นจำนวนเต็มหน่วยสตางค์', 400);
+    }
+
+    const result = await transferToPlan(req.userId!, req.params.planId!, amountSatang);
+
+    // ครบเป้าพอดี — ส่งคำยินดีเลยไม่ต้องรอ job รอบเช้า
+    // ใช้ dedup_key เดียวกับ job จึงไม่มีทางส่งซ้ำ
+    if (result.justCompleted) {
+      await notifyPlanCompleted(
+        req.userId!,
+        req.params.planId!,
+        result.progress.title,
+        result.progress.targetSatang
+      ).catch(() => undefined); // ส่งไม่ได้ต้องไม่ทำให้การโอนที่สำเร็จแล้วกลายเป็นล้มเหลว
+    }
+
+    res.status(201).json(result);
   })
 );
 

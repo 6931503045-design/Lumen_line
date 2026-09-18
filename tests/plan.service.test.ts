@@ -6,6 +6,10 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// plan.service ดึง transaction.service เข้ามาตอนเพิ่ม transferToPlan ซึ่งลากไปถึง
+// db/supabase ที่ต้องการ env ครบ — mock ตัว client ทิ้งเลยจบทุกสาย
+vi.mock('../src/db/supabase', () => ({ supabase: {} }));
+
 vi.mock('../src/db/queries/plans', () => ({
   listPlansByUser: vi.fn(),
   findPlanOwnedByUser: vi.fn(),

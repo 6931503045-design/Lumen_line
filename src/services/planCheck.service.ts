@@ -42,6 +42,28 @@ const EMPTY_RESULT: PlanCheckResult = {
   failed: 0,
 };
 
+/**
+ * ส่งคำยินดีตอนแผนครบเป้า — ใช้ร่วมกันระหว่าง job planCheck กับตอนผู้ใช้โอนจนครบเอง
+ *
+ * dedup_key เป็น `plandone:<planId>` เหมือนกันทั้งสองทาง จึงส่งได้ครั้งเดียวตลอดกาล
+ * ไม่ว่าใครจะถึงก่อน — สำคัญเพราะถ้าผู้ใช้โอนจนครบผ่านหน้าเว็บ แล้ว job มาเจอทีหลัง
+ * ผู้ใช้จะได้ข้อความยินดีสองรอบ
+ */
+export async function notifyPlanCompleted(
+  userId: string,
+  planId: string,
+  title: string,
+  targetSatang: number
+): Promise<boolean> {
+  const sent = await sendPush(
+    userId,
+    'planStatus',
+    `plandone:${planId}`,
+    completedMessage(title, targetSatang)
+  );
+  return sent.sent;
+}
+
 function completedMessage(title: string, targetSatang: number): string {
   return [
     `🎉 ครบเป้าแล้ว! "${title}"`,
@@ -103,13 +125,13 @@ export async function checkActivePlans(
         if (!closed) continue;
 
         result.completed += 1;
-        const sent = await sendPush(
+        const sent = await notifyPlanCompleted(
           plan.user_id,
-          'planStatus',
-          `plandone:${plan.id}`,
-          completedMessage(plan.title, progress.targetSatang)
+          plan.id,
+          plan.title,
+          progress.targetSatang
         );
-        if (sent.sent) result.pushed += 1;
+        if (sent) result.pushed += 1;
         else result.pushSkipped += 1;
         continue;
       }
