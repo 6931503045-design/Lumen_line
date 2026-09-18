@@ -170,3 +170,55 @@ export async function listPlanTransferRows(
   }
   return (data ?? []) as { plan_id: string; amount: string }[];
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// query สำหรับงานตามเวลา planCheck (S5.6) — กวาดแผนของผู้ใช้ทุกคน
+//
+// ⚠️ ข้อยกเว้น G6 ที่ตั้งใจ: สองฟังก์ชันล่างนี้ไม่กรอง user_id เพราะเป็น query ของ
+// "งานตามเวลา" ที่ต้องดูแผนของทุกคน ไม่มีผู้ใช้คนไหนเป็นเจ้าของ request
+// เรียกได้จาก src/jobs/* เท่านั้น ซึ่งเข้าถึงผ่าน POST /jobs/run ที่ต้องมี CRON_SECRET
+// ห้ามเรียกจาก route ที่ผู้ใช้เข้าถึงได้เด็ดขาด
+// ────────────────────────────────────────────────────────────────────────────
+
+/** เพดานจำนวนแผนต่อหนึ่งรอบงาน กันงานเดียวรันยาวจนโดน timeout */
+const MAX_PLANS_PER_RUN = 500;
+
+export type PlanRowWithOwner = PlanRow & { user_id: string };
+
+/** แผนที่กำลังออมอยู่ของผู้ใช้ทุกคน — ใช้โดย jobs/planCheck.ts เท่านั้น */
+export async function listActivePlansAllUsers(): Promise<PlanRowWithOwner[]> {
+  const { data, error } = await supabase
+    .from('plans')
+    .select(`user_id, ${PLAN_COLUMNS}`)
+    .eq('status', 'active')
+    .order('confirmed_at', { ascending: true })
+    .limit(MAX_PLANS_PER_RUN);
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? []) as unknown as PlanRowWithOwner[];
+}
+
+/**
+ * ยอดโอนเข้าแผนตามรายชื่อ plan ที่ให้มา — ดึงทีเดียวแล้วจัดกลุ่มในโค้ด
+ * ไม่ยิงทีละแผนเพราะแผน 500 ใบจะกลายเป็น 500 query
+ * ⚖️ G7: นับเฉพาะ transfer ที่ยังไม่ถูกลบ
+ */
+export async function listTransferRowsForPlans(
+  planIds: string[]
+): Promise<{ plan_id: string; amount: string }[]> {
+  if (planIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('plan_id, amount')
+    .in('plan_id', planIds)
+    .eq('type', 'transfer')
+    .is('deleted_at', null);
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? []) as { plan_id: string; amount: string }[];
+}

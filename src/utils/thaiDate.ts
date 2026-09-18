@@ -179,3 +179,18 @@ export function shiftMonthClampDay(isoDate: string, months: number, anchorDay: n
   const day = Math.min(anchorDay, daysInMonth(shiftedYear, shiftedMonth));
   return toIsoDate(shiftedYear, shiftedMonth, day);
 }
+
+/**
+ * วันจันทร์ของสัปดาห์ที่วันที่นี้อยู่ (รูป `YYYY-MM-DD`)
+ *
+ * ใช้ทำกุญแจ "สัปดาห์ละครั้ง" ของการเตือนตาม S5.6 — ทุกวันในสัปดาห์เดียวกัน
+ * จะได้ค่าเดียวกัน ทำให้ dedup_key ของ push ซ้ำกันเองแล้วส่งแค่ครั้งเดียว
+ *
+ * ไม่ใช้เลขสัปดาห์แบบ ISO เพราะกฎการนับสัปดาห์แรกของปีต่างกันในแต่ละมาตรฐาน
+ * แล้วช่วงรอยต่อปีจะเตือนซ้ำหรือหายไปโดยไม่มีใครสังเกต
+ */
+export function getWeekStartIso(isoDate: string): string {
+  const dayOfWeek = isoDayOfWeek(isoDate); // 0 = อาทิตย์
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
+  return addDaysIso(isoDate, -daysSinceMonday);
+}

@@ -4,7 +4,8 @@ name: Cron
 #   emailPoll  ทุก 5 นาที  (*/5 * * * *)
 #   recurring  06:00 ไทย = 23:00 UTC ของวันก่อนหน้า (0 23 * * *)
 #   cleanup    03:00 ไทย = 20:00 UTC ของวันก่อนหน้า (0 20 * * *)
-# งานอื่น (dailySummary, planCheck) ยังไม่ได้เขียน
+#   planCheck  09:00 ไทย = 02:00 UTC (0 2 * * *)
+# งานอื่น (dailySummary) ยังไม่ได้เขียน
 # เพิ่ม schedule + job ที่นี่เมื่อเขียนเสร็จ — ตอนนี้เรียกไปก็ได้ 404 เปล่าๆ
 #
 # ต้องตั้ง 2 secrets ในหน้า Settings > Secrets and variables > Actions ของ repo:
@@ -24,13 +25,17 @@ on:
     - cron: '*/5 * * * *'
     - cron: '0 23 * * *'
     - cron: '0 20 * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
   email-poll:
     # รอบ 23:00 UTC เป็นของ recurring อย่างเดียว ไม่ต้องยิง emailPoll ซ้ำ
     # (รอบ */5 ครอบคลุมเวลานั้นอยู่แล้ว)
-    if: github.event.schedule != '0 23 * * *' && github.event.schedule != '0 20 * * *'
+    if: >-
+      github.event.schedule != '0 23 * * *' &&
+      github.event.schedule != '0 20 * * *' &&
+      github.event.schedule != '0 2 * * *'
     runs-on: ubuntu-latest
     steps:
       - name: เรียก emailPoll
@@ -101,6 +106,36 @@ jobs:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           JOB_NAME: cleanup
+        run: |
+          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
+            exit 0
+          fi
+
+          status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
+            -X POST "$BACKEND_URL/jobs/run?job=$JOB_NAME" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            --max-time 120)
+
+          echo "HTTP $status"
+          cat /tmp/jobs-response.json
+          echo
+
+          if [ "$status" != "200" ]; then
+            echo "::error::เรียก $JOB_NAME ไม่สำเร็จ (HTTP $status)"
+            exit 1
+          fi
+
+  plan-check:
+    # ยิงเฉพาะรอบ 02:00 UTC (09:00 ไทย) และตอนกดรันเอง
+    if: github.event.schedule == '0 2 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: เรียก planCheck
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          JOB_NAME: planCheck
         run: |
           if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
             echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"

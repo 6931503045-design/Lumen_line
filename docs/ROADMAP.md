@@ -27,7 +27,7 @@
 | 1 | **เปลี่ยนรหัสผ่าน Supabase** | — | รหัสอยู่ใน git history ใครโคลน repo ได้ = เข้า DB ได้ |
 | ~~2~~ | ~~**S13 Push**~~ | `line/push.ts`, `services/quota.service.ts` | ✅ เสร็จ 17 ก.ย. |
 | ~~3~~ | ~~**job `cleanup`**~~ | `jobs/cleanup.ts` | ✅ เสร็จ 17 ก.ย. |
-| 4 | **job `planCheck`** | `jobs/planCheck.ts` | ไม่มีใครเตือนว่าหลุดเป้า/ครบเป้า แผนออมกลายเป็นของประดับ |
+| ~~4~~ | ~~**job `planCheck`**~~ | `jobs/planCheck.ts` | ✅ เสร็จ 18 ก.ย. |
 | 5 | **โอนเข้าแผน** | `POST /api/plans/:id/transfer` | สร้างแผนได้แต่โอนเงินเข้าไม่ได้ ความคืบหน้าเป็น 0% ตลอดไป |
 
 ข้อ 2-5 เกี่ยวกันหมด ทำติดกันเร็วกว่าแยกทำ
@@ -68,9 +68,9 @@
 | S2 Frontend | ✅ | กำลังเปลี่ยนเป็น UI ใหม่ |
 | S3 Core API | ✅ | |
 | S4 Text Parser | 🟡 | มีแต่ regex L1 |
-| S5 Money Engine | 🟡 | summary·budget·plan·recurring ✅ / ขาด S5.2, S5.7 |
+| S5 Money Engine | 🟡 | summary·budget·plan·recurring·ติดตามแผน ✅ / ขาด S5.2, S5.7 |
 | S6 Database | ✅ | |
-| S7 Scheduler | 🟡 | **3 จาก 5 job** (emailPoll, recurring, cleanup) |
+| S7 Scheduler | 🟡 | **4 จาก 5 job** — เหลือ dailySummary |
 | S8 Email Ingestion | ✅ | ทดสอบกับเงินจริงแล้ว |
 | S9 Slip Reader | ❌ | |
 | S10 Dedup | ✅ | |
@@ -88,8 +88,8 @@
 ```
 1. เปลี่ยนรหัส Supabase        ← ไม่ต้องรอใคร ทำได้เลย
 2. S13 Push + job cleanup      ← ✅ เสร็จแล้ว
-3. job planCheck               ← ถัดไป: แผนออมเริ่มมีชีวิต
-4. โอนเข้าแผน                  ← ปิดวงจรแผนออม
+3. job planCheck               ← ✅ เสร็จแล้ว
+4. โอนเข้าแผน                  ← ถัดไป: ปิดวงจรแผนออม
 5. คำสั่งแชท สรุป/เหลือ/งบ      ← บอทเริ่มคุยรู้เรื่อง
 6. S5.2 safeToSpend
 ```
