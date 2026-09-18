@@ -140,6 +140,7 @@ h3 {
 .page-content {
   display: grid;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 /* ============================================================
@@ -221,6 +222,7 @@ h3 {
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
   padding: var(--space-4) var(--space-3) var(--space-3);
+  min-width: 0;
 }
 
 .panel-head {
@@ -249,11 +251,15 @@ h3 {
    ============================================================ */
 
 .hero-dark {
-  background: var(--surface-dark);
+  position: relative;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cg stroke='%23c6ff3d' stroke-width='2' stroke-linecap='round' opacity='0.12'%3E%3Cpath d='M12 4v8M8 8h8'/%3E%3Cpath d='M60 30v8M56 34h8'/%3E%3Cpath d='M30 55v8M26 59h8'/%3E%3Cpath d='M65 65v6M62 68h6'/%3E%3C/g%3E%3C/svg%3E"),
+    var(--surface-dark);
   color: var(--on-dark);
   border-radius: var(--radius-xl);
   padding: var(--space-4) var(--space-4) var(--space-3);
   box-shadow: var(--shadow-lg);
+  overflow: hidden;
 }
 
 .hero-dark .mini-label {
@@ -274,16 +280,86 @@ h3 {
   margin-bottom: var(--space-3);
 }
 
+.hero-top-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ปุ่มลูกศรสลับมุมมองตัวเลขใน hero card (safe-to-spend วันนี้ <-> เงินคงเหลือเดือนนี้) */
+.hero-toggle-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--surface-dark-soft);
+  color: var(--on-dark-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.hero-toggle-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.hero-toggle-btn:hover,
+.hero-toggle-btn:focus-visible {
+  background: var(--lime-soft);
+  color: var(--lime);
+}
+
 .hero-figure {
   text-align: center;
-  padding: var(--space-3) 0 var(--space-4);
+  padding: var(--space-3) 0 var(--space-1);
+}
+
+/* ตัวเลขหลักในการ์ด — ขยายให้เด่นกว่า h2 ทั่วไป เพราะเป็นข้อมูลสำคัญสุดของหน้า */
+.hero-figure h2 {
+  font-size: clamp(2.4rem, 8vw, 3.4rem);
+}
+
+/* Card brand mark (มุมบนซ้าย เหมือนโลโก้ธนาคาร/VISA บนบัตร) */
+.hero-card-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: var(--on-dark);
+}
+
+.hero-card-brand svg {
+  width: 18px;
+  height: 18px;
+  color: var(--lime);
+}
+
+/* ไอคอน contactless ลอยมุมขวา ล้อสไตล์บัตรเครดิต (ตกแต่งอย่างเดียว) */
+.hero-card-nfc {
+  position: absolute;
+  top: 64px;
+  right: var(--space-4);
+  color: var(--on-dark-muted);
+  opacity: 0.55;
+}
+
+.hero-card-nfc svg {
+  width: 22px;
+  height: 22px;
 }
 
 /* แถวปุ่มวงกลม 4 ปุ่มลัดใต้ hero card */
 .hero-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-2);
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-1);
 }
 
 .hero-action {
@@ -303,7 +379,11 @@ h3 {
   background: var(--surface-dark-soft);
   display: grid;
   place-items: center;
-  font-size: 1.25rem;
+}
+
+.hero-action-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 .hero-action span {
@@ -380,6 +460,133 @@ h3 {
 }
 
 /* ============================================================
+   Budget summary controls (สลับรายจ่าย/รายรับ + เลือกเดือน)
+   ============================================================ */
+
+.budget-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.budget-controls .tab-group {
+  margin-bottom: 0;
+}
+
+.budget-controls .chip-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Stacked summary bar — แบ่งสัดส่วนตามหมวดหมู่ (สีคงที่ต่อหมวด)
+   ============================================================ */
+
+.stacked-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  height: 14px;
+  margin: var(--space-2) 0;
+}
+
+.stacked-bar-seg {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  min-width: 4px;
+  cursor: pointer;
+}
+
+/* ============================================================
+   Budget legend list (จุดสี + ชื่อหมวด + ยอด, ขยายเห็นแถบต่อหมวดได้)
+   ============================================================ */
+
+.budget-legend-list {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.budget-legend-row {
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  margin: -4px;
+}
+
+.budget-legend-row:active {
+  background: var(--surface-soft);
+}
+
+.budget-legend-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: 0.84rem;
+  color: var(--text-strong);
+}
+
+.budget-legend-head span:nth-child(2) {
+  flex: 1;
+  color: var(--muted);
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.budget-legend-bar {
+  height: 6px;
+}
+
+.budget-legend-bar.hidden {
+  display: none;
+}
+
+.settings-row.active-row {
+  box-shadow: inset 0 0 0 2px var(--lime-strong);
+}
+
+.budget-toggle-btn {
+  width: 100%;
+  margin-top: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text-strong);
+  border-radius: var(--radius-pill);
+  padding: 10px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.chevron-icon {
+  transition: transform 0.2s ease;
+}
+
+.chevron-icon.is-open {
+  transform: rotate(180deg);
+}
+
+/* ============================================================
    Progress bar (ใช้ร่วมกันทุกจุด: งบ, แผนออม, หมวดหมู่)
    ============================================================ */
 
@@ -422,6 +629,12 @@ h3 {
 .pill.success { background: rgba(76, 175, 80, 0.14); color: var(--success); }
 .pill.warning { background: rgba(245, 165, 36, 0.16); color: #a86400; }
 
+.pill-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
 .confidence-badge {
   display: inline-flex;
   align-items: center;
@@ -430,6 +643,14 @@ h3 {
   padding: 5px 10px;
   font-size: 0.7rem;
   font-weight: 700;
+}
+
+.confidence-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .confidence-badge.low    { background: rgba(229, 72, 77, 0.12);  color: var(--danger); }
@@ -442,6 +663,9 @@ h3 {
 .hero-dark .confidence-badge.low    { background: rgba(229,72,77,0.22); color: #ff9a9d; }
 
 .ai-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 0.62rem;
   padding: 2px 7px;
   border-radius: var(--radius-pill);
@@ -449,6 +673,19 @@ h3 {
   color: var(--lime);
   font-weight: 700;
   margin-left: 6px;
+}
+
+.ai-tag svg {
+  width: 9px;
+  height: 9px;
+}
+
+/* ไอคอนเล็กที่แทรกในข้อความ (เช่น "✨ สรุปสถานะ", "ℹ️ ...") ใน analyze.html */
+.inline-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  flex-shrink: 0;
 }
 
 /* "สรุปสถานะ" badge แบบ gradient เบาๆ (เดิมคือ AI Insight — เปลี่ยนคำแล้ว) */
@@ -491,11 +728,21 @@ h3 {
 }
 
 .date-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-weight: 700;
   color: var(--muted);
   font-size: 0.76rem;
   margin-top: var(--space-1);
 }
+
+.date-group-total {
+  font-weight: 700;
+}
+
+.date-group-total.income { color: var(--success); }
+.date-group-total.expense { color: var(--text-strong); }
 
 .transaction-item,
 .transaction-row {
@@ -510,7 +757,13 @@ h3 {
 
 .transaction-row {
   display: grid;
-  grid-template-columns: 34px 1.4fr auto auto;
+  grid-template-columns: 34px 1.4fr auto;
+}
+
+/* โหมดเลือกหลายรายการ: เพิ่มคอลัมน์ checkbox ต่อหน้า ไม่งั้น column เดิมจะเลื่อนเพี้ยนหมด
+   (ไอคอนไปกินพื้นที่ของข้อความ ข้อความเลยถูกบีบไปชิดขวา) */
+.transaction-row.selectable {
+  grid-template-columns: 22px 34px 1.4fr auto;
 }
 
 .transaction-icon {
@@ -520,7 +773,12 @@ h3 {
   display: grid;
   place-items: center;
   background: var(--lime-soft);
-  font-size: 0.95rem;
+  color: var(--text-strong);
+}
+
+.transaction-icon svg {
+  width: 17px;
+  height: 17px;
 }
 
 .transaction-left {
@@ -585,9 +843,38 @@ h3 {
 }
 
 .row-check {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--lime-strong);
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.row-check:checked {
+  background: var(--surface-dark);
+  border-color: var(--surface-dark);
+}
+
+.row-check:checked::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--lime);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.row-check:focus-visible {
+  outline: 2px solid var(--lime-strong);
+  outline-offset: 2px;
 }
 
 .transaction-row.row-selected {
@@ -670,6 +957,12 @@ h3 {
   place-items: center;
   border-radius: var(--radius-sm);
   background: var(--lime-soft);
+  color: var(--text-strong);
+}
+
+.category-badge svg {
+  width: 17px;
+  height: 17px;
 }
 
 .essential-toggle {
@@ -689,8 +982,13 @@ h3 {
 
 .drag-handle {
   color: var(--muted);
-  font-size: 1.05rem;
   cursor: grab;
+  display: inline-flex;
+}
+
+.drag-handle svg {
+  width: 17px;
+  height: 17px;
 }
 
 .category-detail-card {
@@ -883,6 +1181,7 @@ h3 {
   display: flex;
   gap: var(--space-1);
   overflow-x: auto;
+  min-width: 0;
   margin-bottom: var(--space-3);
 }
 
@@ -922,6 +1221,171 @@ h3 {
 
 .search-input { margin-bottom: var(--space-2); }
 
+/* ============================================================
+   Custom dropdown / date picker — แทน native <select> / <input type="date">
+   ที่ browser render popup เองแบบไม่มีสไตล์ ให้คุมหน้าตาได้เองทั้งหมด
+   ============================================================ */
+
+.custom-select {
+  position: relative;
+}
+
+.custom-select-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-strong);
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trigger-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.popover-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+}
+
+.popover-panel.open-upward {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.select-popover {
+  max-height: 240px;
+  overflow-y: auto;
+  display: grid;
+  gap: 2px;
+}
+
+/* [hidden] มี specificity เท่ากับ class selector — ต้องกันไว้ไม่ให้ display ด้านบนทับ [hidden] จนซ่อนไม่ได้ */
+.popover-panel[hidden] {
+  display: none;
+}
+
+.select-option {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.select-option:hover {
+  background: var(--surface-soft);
+}
+
+.select-option.active {
+  background: var(--lime-soft);
+  color: var(--text-strong);
+  font-weight: 700;
+}
+
+.date-popover {
+  width: max(280px, 100%);
+  padding: var(--space-2);
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.calendar-nav strong {
+  font-size: 0.86rem;
+  color: var(--text-strong);
+}
+
+.calendar-nav-group {
+  display: flex;
+  gap: 2px;
+}
+
+.icon-btn.small {
+  width: 28px;
+  height: 28px;
+}
+
+.icon-btn.small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.calendar-weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.calendar-weekday-row span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.time-select-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-select-row .custom-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.time-sep {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.amount-input-wrap {
+  position: relative;
+}
+
+.amount-input-wrap input {
+  padding-right: 34px;
+}
+
+.amount-input-suffix {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-weight: 700;
+  pointer-events: none;
+}
+
 .form-grid {
   display: grid;
   gap: var(--space-2);
@@ -932,6 +1396,40 @@ h3 {
   gap: 6px;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+/* ============================================================
+   Icon picker (เลือกไอคอนตอนสร้าง/แก้หมวดหมู่)
+   ============================================================ */
+
+.icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: var(--space-1);
+}
+
+.icon-picker-btn {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.icon-picker-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-picker-btn.active {
+  border-color: var(--lime-strong);
+  background: var(--lime-soft);
+  color: var(--text-strong);
 }
 
 /* ============================================================
@@ -972,7 +1470,7 @@ h3 {
 }
 
 /* ============================================================
-   Floating pill nav — ไอคอนล้วน ลอยกลางล่างจอ
+   Floating pill nav — ไอคอนล้วนลอยกลางล่างจอ, แท็บ active ขยายเป็นแคปซูลขาว+label
    ============================================================ */
 
 .bottom-nav {
@@ -981,27 +1479,50 @@ h3 {
   transform: translateX(-50%);
   bottom: 18px;
   display: flex;
+  align-items: center;
   gap: 4px;
   background: var(--surface-dark);
   border-radius: var(--radius-pill);
-  padding: 8px;
+  padding: 6px;
   box-shadow: var(--shadow-lg);
   z-index: 30;
 }
 
 .nav-item {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+  height: 44px;
+  width: 44px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   color: var(--on-dark-muted);
-  font-size: 1.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.nav-label {
+  display: none;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .nav-item.active {
-  background: var(--lime);
-  color: var(--surface-dark);
+  width: auto;
+  padding: 0 16px 0 14px;
+  background: var(--surface);
+  color: var(--text-strong);
+}
+
+.nav-item.active .nav-label {
+  display: inline;
 }
 
 /* ============================================================
@@ -1038,6 +1559,12 @@ h3 {
   margin-bottom: var(--space-3);
 }
 
+.modal-subtitle {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
 .close-btn {
   border: none;
   background: var(--surface-soft);
@@ -1045,7 +1572,14 @@ h3 {
   border-radius: var(--radius-sm);
   width: 34px;
   height: 34px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
+}
+
+.close-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .modal-actions {
@@ -1128,8 +1662,12 @@ h3 {
   border-radius: 50%;
   background: var(--lime-soft);
   color: var(--success);
-  font-size: 1.9rem;
   margin: 0 auto var(--space-2);
+}
+
+.success-icon svg {
+  width: 30px;
+  height: 30px;
 }
 
 .success-modal { text-align: center; }
@@ -1245,6 +1783,12 @@ h3 {
   background: var(--lime-soft);
 }
 
+.strategy-icon {
+  width: 15px;
+  height: 15px;
+  vertical-align: -3px;
+}
+
 .wizard-step-indicator {
   display: flex;
   gap: var(--space-1);
@@ -1347,7 +1891,8 @@ h3 {
 @media (min-width: 768px) {
   .app-shell {
     max-width: 1160px;
-    padding: var(--space-4) var(--space-4) var(--space-5) 110px;
+    padding-top: var(--space-4);
+    padding-right: var(--space-4);
   }
 
   .page-content {
@@ -1363,14 +1908,45 @@ h3 {
   .content-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  /* pill nav หมุนเป็นแนวตั้ง ลอยชิดซ้าย แทนที่จะอยู่ล่าง */
+/* จอกว้าง "และ" สูงพอ (เดสก์ท็อป/แท็บเล็ตจริง) เท่านั้นที่สลับ nav เป็น sidebar —
+   ถ้าเช็คแค่ความกว้าง มือถือแนวนอน (กว้าง >=768px แต่จอเตี้ย) จะโดนจับเป็นเดสก์ท็อปไปด้วย
+   ทำให้ sidebar สูงเกินจอ ล้นออกนอกขอบล่างจนกดปุ่มท้ายๆ (เช่นตั้งค่า) ไม่ได้เลย */
+@media (min-width: 768px) and (min-height: 600px) {
+  .app-shell {
+    padding-left: 232px;
+    padding-bottom: var(--space-5);
+  }
+
   .bottom-nav {
     left: 24px;
-    top: 50%;
+    top: 96px;
     bottom: auto;
-    transform: translateY(-50%);
+    transform: none;
     flex-direction: column;
+    align-items: stretch;
+    width: 180px;
+    padding: 10px;
+    gap: 6px;
+    border-radius: var(--radius-xl);
+  }
+
+  .nav-item {
+    width: 100%;
+    height: auto;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    justify-content: flex-start;
+  }
+
+  .nav-item.active {
+    width: 100%;
+    padding: 12px 16px;
+  }
+
+  .nav-label {
+    display: inline;
   }
 
   .fab {

@@ -6,24 +6,28 @@
     <title>JOD tang | วิเคราะห์</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="css/style.css" />
   </head>
-  <body data-theme="dark" data-page="analyze">
+  <body data-page="analyze">
     <div class="app-shell">
-      <header class="topbar glass-panel">
+      <header class="topbar">
         <div class="profile-meta">
-          <div class="avatar">AS</div>
+          <div class="avatar">PS</div>
           <div>
             <p class="eyebrow">วิเคราะห์</p>
             <h1>ข้อมูลเชิงลึก</h1>
           </div>
         </div>
-        <button class="theme-toggle" aria-label="สลับโหมด">☀️</button>
       </header>
 
       <main class="page-content">
-        <section class="glass-panel section-panel">
+        <div class="status-insight">
+          <strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="inline-icon"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/></svg> สรุปสถานะ</strong>
+          <span>ใช้จ่ายไปแล้ว 78% ของงบเดือนนี้ ยังอยู่ในเกณฑ์ปกติ</span>
+        </div>
+
+        <section class="section-panel">
           <div class="panel-head">
             <h3>สัดส่วนรายจ่ายตามหมวด</h3>
             <span class="pill success">ปกติดี</span>
@@ -34,7 +38,7 @@
           <p id="emptyStateAnalyze" class="empty-state" hidden>ข้อมูลยังไม่เพียงพอสำหรับการวิเคราะห์ 7 วัน</p>
         </section>
 
-        <section class="glass-panel chart-panel">
+        <section class="chart-panel">
           <div class="panel-head">
             <h3>แนวโน้ม 6 เดือน</h3>
             <span>รายรับ vs รายจ่าย</span>
@@ -44,7 +48,7 @@
           </div>
         </section>
 
-        <section class="glass-panel section-panel">
+        <section class="section-panel">
           <div class="panel-head">
             <h3>ใช้อย่างปลอดภัยได้</h3>
             <span id="safeToSpendBadgeWrap"></span>
@@ -52,37 +56,37 @@
           <div class="insight-grid">
             <div class="insight-card">
               <span>อัตราการใช้จ่าย</span>
-              <strong>72%</strong>
+              <strong>78%</strong>
             </div>
             <div class="insight-card">
               <span>การคาดการณ์</span>
-              <strong>+฿18,500</strong>
+              <strong>+฿2,350</strong>
             </div>
             <div class="insight-card">
               <span>กองทุนฉุกเฉิน</span>
               <strong>52%</strong>
             </div>
           </div>
-          <p class="ai-disclaimer">ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
+          <p class="ai-disclaimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="inline-icon"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
         </section>
 
-        <section class="glass-panel section-panel">
+        <section class="section-panel">
           <div class="panel-head">
             <h3>แผนเก็บเงิน</h3>
             <button id="createPlanBtn" class="chip-button">+ สร้างแผนใหม่</button>
           </div>
           <div id="planCards" class="goal-stack"></div>
-          <p class="ai-disclaimer">ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
+          <p class="ai-disclaimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="inline-icon"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
         </section>
 
-        <section class="glass-panel section-panel">
+        <section class="section-panel">
           <div class="panel-head">
             <h3>จำลองผลกระทบก่อนซื้อ</h3>
           </div>
           <div class="simulator-box">
             <label class="field-label" for="purchasePrice">ราคา</label>
             <div class="simulator-row">
-              <input id="purchasePrice" type="number" value="32000" min="0" />
+              <input id="purchasePrice" type="number" value="50000" min="0" />
               <button id="simulatePurchaseBtn" class="chip-button">จำลอง</button>
             </div>
           </div>
@@ -96,16 +100,31 @@
               <strong id="saveLaterResult">฿0</strong>
             </div>
           </div>
-          <p class="ai-disclaimer">ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
+          <p class="ai-disclaimer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="inline-icon"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</p>
         </section>
       </main>
 
-      <nav class="bottom-nav glass-panel" aria-label="เมนูหลัก">
-        <a class="nav-item" href="index.html">ภาพรวม</a>
-        <a class="nav-item" href="transactions.html">รายการ</a>
-        <a class="nav-item" href="categories.html">หมวดหมู่</a>
-        <a class="nav-item active" href="analyze.html">วิเคราะห์</a>
-        <a class="nav-item" href="settings.html">ตั้งค่า</a>
+      <nav class="bottom-nav" aria-label="เมนูหลัก">
+        <a class="nav-item" href="index.html" aria-label="ภาพรวม">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="nav-label">ภาพรวม</span>
+        </a>
+        <a class="nav-item" href="transactions.html" aria-label="รายการ">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17V7"/><path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"/><path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"/></svg>
+          <span class="nav-label">รายการ</span>
+        </a>
+        <a class="nav-item" href="categories.html" aria-label="หมวดหมู่">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+          <span class="nav-label">หมวดหมู่</span>
+        </a>
+        <a class="nav-item active" href="analyze.html" aria-label="วิเคราะห์">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+          <span class="nav-label">วิเคราะห์</span>
+        </a>
+        <a class="nav-item" href="settings.html" aria-label="ตั้งค่า">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="nav-label">ตั้งค่า</span>
+        </a>
       </nav>
     </div>
 

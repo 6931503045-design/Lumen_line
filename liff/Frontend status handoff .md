@@ -1,5 +1,7 @@
 # JOD tang — สรุปสถานะ Frontend Redesign (v2) ส่งต่อให้ทำต่อ
 
+> **อัปเดต 2026-09-17:** งานที่เหลือทั้งหมดในหัวข้อ 6 ทำเสร็จแล้ว — ดูหมายเหตุท้ายไฟล์
+
 บริบท: กำลังรื้อ UI ของ LIFF ทั้ง 5 หน้าใหม่ทั้งหมด จากธีมเดิม (ม่วง-ชมพู, glassmorphism, dark/light toggle)
 ไปเป็นธีมใหม่ (เขียวอ่อน, การ์ดขาวเรียบ+ดำ accent, light mode เดียว, ไม่มี blur เลย)
 **ฟีเจอร์เดิมทั้งหมดต้องคงไว้ครบ แค่เปลี่ยนหน้าตา** — ห้ามตัดฟังก์ชันโดยไม่ได้คุยกันก่อน
@@ -104,3 +106,22 @@
 ## 8. บริบทโปรเจกต์กว้างๆ (เผื่อ AI อีกเครื่องไม่มีบริบทเลย)
 
 โปรเจกต์ "JOD tang" — บอทจดรายรับ-รายจ่ายบน LINE ภาษาไทย ใช้ Vanilla HTML/CSS/JS + Chart.js เท่านั้น (ห้าม framework), ฟอนต์ Noto Sans + Noto Sans Thai, ยังทำงานกับ mock data ล้วนๆ (ยังไม่ต่อ backend จริง — backend แยกทำอยู่คนละส่วน กำลังพัฒนาคู่ขนานกัน), LIFF (LINE Front-end Framework) คือกรอบที่ใช้เปิดหน้าเว็บนี้ข้างในแอป LINE โดยตรง
+
+## 9. หมายเหตุอัปเดต 2026-09-17 — งานหัวข้อ 6 เสร็จหมดแล้ว
+
+ทำครบทั้ง 5 ข้อในหัวข้อ 6:
+
+1. **`mock-data.js`** — เปลี่ยน persona เป็นนักศึกษาไทยแล้ว: "แพรวา ศรีสุข" (avatar `PS`) นักศึกษาชั้นปีที่ 3 ม.แม่ฟ้าหลวง ตัวเลขทุกอย่าง (รายรับ/รายจ่าย/หมวดหมู่/แผนออม/กราฟ) ปรับสเกลเป็นระดับนักศึกษาแล้ว
+2. **`index.html`** — เขียนใหม่ครบ: `.hero-dark` + `.hero-actions` (4 ปุ่ม: เพิ่มรายการ/รายการ/หมวดหมู่/วิเคราะห์), `#heroConfidenceBadge`/`#heroSafeToSpend`, ไม่มีกราฟ/goal cards/`.theme-toggle` แล้ว ตามหน้าโครงสร้างในหัวข้อ 2 (เหลือแค่ hero → งบประมาณรายเดือน → รายการล่าสุด ไม่มี summary-grid รายรับ/รายจ่ายแยกแล้วเพราะโครงสร้างที่ตกลงกันไม่ได้รวมไว้)
+3. **`transactions.html`, `categories.html`, `analyze.html`, `settings.html`** — เขียนใหม่ครบ ใช้ class จากหัวข้อ 5 ทั้งหมด, ลบ `.theme-toggle`/`darkModeToggle`/"แผนพรีเมียม" แล้ว, bottom-nav เป็น icon-only ทุกหน้า (🏠/🧾/🗂️/📊/⚙️ + `aria-label`), `analyze.html` มี `.status-insight` ("✨ สรุปสถานะ") แล้ว
+4. **`app.js`** — เพิ่ม `bindHeroActions()` ผูกปุ่ม `[data-hero-action="add"]` เข้ากับ `openAddTransactionModal` แล้ว (อีก 3 ปุ่มใช้ `<a href>` ลิงก์ตรงไปหน้าอื่นเลย ไม่ต้องมี JS เพิ่ม)
+5. **Cross-check id/class** — เช็คด้วยสคริปต์ grep/node ทุก `getElementById`/`querySelector` ใน `app.js` เทียบกับทุก HTML แล้ว ไม่มี id ขาดหาย, ไม่มี class เก่า (`glass-panel`/`card-glass`/`theme-toggle`/`darkModeToggle`) หลงเหลือ
+
+**บั๊กที่เจอเพิ่มระหว่างทางและแก้ไปด้วย:**
+- `categories.html` ไม่เคยโหลด Chart.js เลยตั้งแต่แรก แต่ `openCategoryDetail()` ต้องใช้ `Chart` สร้างกราฟ — เดิม fail เงียบ (guard `typeof Chart === 'undefined'` ใน `createChart()` แค่ return โดยไม่ error) ทำให้กดดูรายละเอียดหมวดหมู่แล้วไม่เห็นกราฟเลย ตอนนี้เพิ่ม `<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>` ให้แล้ว
+- `reportChart` เส้นงบประมาณ (`budgetLine`) เดิม hardcode ไว้ที่ `300000` ไม่อ้างอิง `mock.summary.monthlyBudgetLimit` เลย ทำให้เส้นงบในกราฟไม่ตรงกับงบที่ตั้งจริงถ้าเปลี่ยน mock data — แก้ให้ดึงจาก `mock.summary.monthlyBudgetLimit` แล้ว
+- `renderDashboard()` มีโค้ดอ่านค่า `#netBalance`/`#incomeAmount`/`#expenseAmount` ที่ไม่มี element เหล่านี้ในหน้าใหม่แล้ว (โครงสร้างหน้าใหม่ตัด summary-grid ออก) — ลบโค้ด dead lookup ทิ้งแล้ว
+
+**ทดสอบแล้ว:** เปิดทั้ง 5 หน้าด้วย headless Chromium (viewport 400px จำลองมือถือ) ผ่าน static server ในเครื่อง — ไม่มี console error บนหน้าไหนเลย รวมถึงตอนกดเปิด category detail modal ที่เพิ่ง fix เรื่อง Chart.js ไปด้วย
+
+**ยังไม่ได้ทำ (อยู่นอกสโคปงานนี้ ไม่ได้แตะ):** `js/api.js`, `js/charts.js`, `js/liff-init.js` (scaffold เปล่าของ W2-W4), การต่อ backend จริง
