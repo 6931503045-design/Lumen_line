@@ -6,95 +6,90 @@
     <title>JOD tang | ตั้งค่า</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/style.css?v=20260919k" />
   </head>
-  <body data-theme="dark" data-page="settings">
+  <body data-page="settings">
     <div class="app-shell">
-      <header class="topbar glass-panel">
+      <header class="topbar">
         <div class="profile-meta">
-          <div class="avatar">AS</div>
+          <div class="avatar">PS</div>
           <div>
             <p class="eyebrow">ตั้งค่า</p>
             <h1>การตั้งค่า</h1>
           </div>
         </div>
-        <button class="theme-toggle" aria-label="สลับโหมด">☀️</button>
       </header>
 
       <main class="page-content">
-        <section class="glass-panel section-panel profile-panel">
+        <section class="hero-dark an-profile">
           <div class="profile-row">
-            <div class="avatar large">AS</div>
+            <div class="avatar large">PS</div>
             <div>
-              <h3>อเล็กซานเดอร์ ซิมส์</h3>
-              <span>บัญชี LINE</span>
+              <h3>แพรวา ศรีสุข</h3>
+              <span>นักศึกษาชั้นปีที่ 3 · ม.แม่ฟ้าหลวง</span>
             </div>
           </div>
         </section>
 
-        <section class="glass-panel section-panel">
-          <div class="setting-list">
-            <div class="setting-item">
-              <div>
+        <section class="section-panel an-settings">
+          <div class="an-head"><h3>การแจ้งเตือนและผู้ช่วย</h3></div>
+          <div class="an-setting-list">
+            <div class="an-setting-row">
+              <span class="an-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/></svg></span>
+              <div class="an-action-text">
                 <strong>ผู้ช่วย AI</strong>
-                <span>คำแนะนำงบประมาณอัจฉริยะ</span>
+                <small>คำแนะนำงบประมาณอัจฉริยะ</small>
               </div>
-              <input type="checkbox" checked />
+              <button type="button" class="switch on" role="switch" aria-checked="true" aria-label="ผู้ช่วย AI" data-setting="aiAssistant"></button>
             </div>
-            <div class="setting-item">
-              <div>
+            <div class="an-setting-row">
+              <span class="an-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+              <div class="an-action-text">
                 <strong>สรุปรายวัน</strong>
-                <span>ทุกวันเวลา 08:00</span>
+                <small>ทุกวันเวลา 08:00</small>
               </div>
-              <input type="checkbox" checked />
-            </div>
-            <div class="setting-item">
-              <div>
-                <strong>โหมดมืด</strong>
-                <span>ใช้ธีมแบบพรีเมียม</span>
-              </div>
-              <input id="darkModeToggle" type="checkbox" checked />
+              <button type="button" class="switch on" role="switch" aria-checked="true" aria-label="สรุปรายวัน" data-setting="dailySummary"></button>
             </div>
           </div>
         </section>
 
-        <section class="glass-panel section-panel">
-          <div class="panel-head">
-            <h3>รายการประจำ</h3>
-            <button id="createRecurringBtn" class="chip-button">+ เพิ่มรายการ</button>
+        <section class="section-panel an-settings">
+          <div class="an-head"><h3>อีเมลสำหรับ forward</h3></div>
+          <div class="an-email-box">
+            <span class="an-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+            <p class="email-address" id="ingestEmail">user+ab12cd34@gmail.com</p>
           </div>
-          <div id="recurringList"></div>
-          <p class="ai-disclaimer">เงินเดือน ค่าหอ ค่าเน็ต — ระบบจะบันทึกให้เองทุกรอบ เวลา 06:00 น.</p>
-        </section>
-
-        <section class="glass-panel section-panel">
-          <div class="panel-head">
-            <h3>อีเมลสำหรับ forward</h3>
-          </div>
-          <p class="email-address" id="ingestEmail">กำลังโหลด…</p>
-          <button id="rotateTokenBtn" class="chip-button">สร้าง token ใหม่</button>
+          <button id="rotateTokenBtn" class="chip-button an-rotate-btn" type="button">สร้าง token ใหม่</button>
           <p class="ai-disclaimer">การสร้าง token ใหม่จะทำให้ที่อยู่เดิมใช้ไม่ได้ทันที</p>
-        </section>
-
-        <section class="glass-panel section-panel" id="accountPanel" hidden>
-          <button id="logoutBtn" class="chip-button">ออกจากระบบ</button>
         </section>
       </main>
 
-      <nav class="bottom-nav glass-panel" aria-label="เมนูหลัก">
-        <a class="nav-item" href="index.html">ภาพรวม</a>
-        <a class="nav-item" href="transactions.html">รายการ</a>
-        <a class="nav-item" href="categories.html">หมวดหมู่</a>
-        <a class="nav-item" href="analyze.html">วิเคราะห์</a>
-        <a class="nav-item active" href="settings.html">ตั้งค่า</a>
+      <nav class="bottom-nav" aria-label="เมนูหลัก">
+        <a class="nav-item" href="index.html" aria-label="ภาพรวม">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="nav-label">ภาพรวม</span>
+        </a>
+        <a class="nav-item" href="transactions.html" aria-label="รายการ">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17V7"/><path d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8"/><path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"/></svg>
+          <span class="nav-label">รายการ</span>
+        </a>
+        <a class="nav-item" href="categories.html" aria-label="หมวดหมู่">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+          <span class="nav-label">หมวดหมู่</span>
+        </a>
+        <a class="nav-item" href="analyze.html" aria-label="วิเคราะห์">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+          <span class="nav-label">วิเคราะห์</span>
+        </a>
+        <a class="nav-item active" href="settings.html" aria-label="ตั้งค่า">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>
+          <span class="nav-label">ตั้งค่า</span>
+        </a>
       </nav>
     </div>
 
-    <script src="js/api.js"></script>
-    <!-- mock-data.js เป็นค่าตั้งต้น/ตัวอย่างตอนยังไม่ล็อกอิน — boot.js จะทับด้วยข้อมูลจริง -->
-    <script src="js/mock-data.js"></script>
-    <script src="js/app.js"></script>
-    <script src="js/boot.js"></script>
+    <script src="js/mock-data.js?v=20260919k"></script>
+    <script src="js/app.js?v=20260919k"></script>
   </body>
 </html>
