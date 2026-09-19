@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/style.css?v=20260919k" />
   </head>
   <body data-page="transactions">
     <div class="app-shell">
@@ -22,18 +22,18 @@
       </header>
 
       <main class="page-content">
-        <section class="section-panel">
-          <div class="panel-head">
-            <h3>การเคลื่อนไหวของเงิน</h3>
-            <button class="chip-button">เดือนนี้</button>
+        <section class="hero-dark an-summary">
+          <div class="hero-top">
+            <p class="mini-label">การเคลื่อนไหวของเงิน</p>
+            <button id="summaryPeriodBtn" class="chip-button" type="button">เดือนนี้</button>
           </div>
           <div class="transaction-summary">
             <div>
-              <span>รายรับ</span>
+              <span class="summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 7 7 17"/><path d="M17 17H7V7"/></svg>รายรับ</span>
               <strong id="incomeSummary">฿0</strong>
             </div>
             <div>
-              <span>รายจ่าย</span>
+              <span class="summary-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>รายจ่าย</span>
               <strong id="expenseSummary">฿0</strong>
             </div>
           </div>
@@ -42,11 +42,9 @@
         <section class="section-panel">
           <div class="panel-head">
             <h3>รายการทั้งหมด</h3>
-            <div class="panel-actions">
-              <button id="toggleMultiSelectBtn" class="chip-button" type="button">เลือกหลายรายการ</button>
-              <button id="openDatePickerBtn" class="chip-button" type="button">เลือกวันที่</button>
-            </div>
+            <button id="toggleMultiSelectBtn" class="chip-button" type="button">เลือกหลายรายการ</button>
           </div>
+          <button id="openDatePickerBtn" class="chip-button range-chip" type="button">เลือกวันที่</button>
 
           <div class="tab-group" role="tablist" aria-label="กรองรายการ">
             <button class="tab active" data-filter="all">ทั้งหมด</button>
@@ -90,7 +88,7 @@
       </nav>
     </div>
 
-    <script src="js/mock-data.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/mock-data.js?v=20260919k"></script>
+    <script src="js/app.js?v=20260919k"></script>
   </body>
 </html>

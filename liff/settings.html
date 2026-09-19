@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/style.css?v=20260919k" />
   </head>
   <body data-page="settings">
     <div class="app-shell">
@@ -22,7 +22,7 @@
       </header>
 
       <main class="page-content">
-        <section class="section-panel profile-panel">
+        <section class="hero-dark an-profile">
           <div class="profile-row">
             <div class="avatar large">PS</div>
             <div>
@@ -32,31 +32,35 @@
           </div>
         </section>
 
-        <section class="section-panel">
-          <div class="setting-list">
-            <div class="setting-item">
-              <div>
+        <section class="section-panel an-settings">
+          <div class="an-head"><h3>การแจ้งเตือนและผู้ช่วย</h3></div>
+          <div class="an-setting-list">
+            <div class="an-setting-row">
+              <span class="an-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/></svg></span>
+              <div class="an-action-text">
                 <strong>ผู้ช่วย AI</strong>
-                <span>คำแนะนำงบประมาณอัจฉริยะ</span>
+                <small>คำแนะนำงบประมาณอัจฉริยะ</small>
               </div>
-              <input type="checkbox" checked />
+              <button type="button" class="switch on" role="switch" aria-checked="true" aria-label="ผู้ช่วย AI" data-setting="aiAssistant"></button>
             </div>
-            <div class="setting-item">
-              <div>
+            <div class="an-setting-row">
+              <span class="an-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+              <div class="an-action-text">
                 <strong>สรุปรายวัน</strong>
-                <span>ทุกวันเวลา 08:00</span>
+                <small>ทุกวันเวลา 08:00</small>
               </div>
-              <input type="checkbox" checked />
+              <button type="button" class="switch on" role="switch" aria-checked="true" aria-label="สรุปรายวัน" data-setting="dailySummary"></button>
             </div>
           </div>
         </section>
 
-        <section class="section-panel">
-          <div class="panel-head">
-            <h3>อีเมลสำหรับ forward</h3>
+        <section class="section-panel an-settings">
+          <div class="an-head"><h3>อีเมลสำหรับ forward</h3></div>
+          <div class="an-email-box">
+            <span class="an-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
+            <p class="email-address" id="ingestEmail">user+ab12cd34@gmail.com</p>
           </div>
-          <p class="email-address" id="ingestEmail">user+ab12cd34@gmail.com</p>
-          <button id="rotateTokenBtn" class="chip-button">สร้าง token ใหม่</button>
+          <button id="rotateTokenBtn" class="chip-button an-rotate-btn" type="button">สร้าง token ใหม่</button>
           <p class="ai-disclaimer">การสร้าง token ใหม่จะทำให้ที่อยู่เดิมใช้ไม่ได้ทันที</p>
         </section>
       </main>
@@ -85,7 +89,7 @@
       </nav>
     </div>
 
-    <script src="js/mock-data.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/mock-data.js?v=20260919k"></script>
+    <script src="js/app.js?v=20260919k"></script>
   </body>
 </html>

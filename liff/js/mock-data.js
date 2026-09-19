@@ -21,6 +21,7 @@ window.mockData = {
     daysOfData: 18,
     monthlyBudgetLimit: 800000,
     monthlyBudgetUsed: 620000,
+    forecastBalance: 90000, // ประมาณการเงินที่คาดว่าจะเหลือจากงบเมื่อสิ้นเดือน (+ เหลือ / - เกินงบ) ต้องไม่เกินงบที่เหลือตอนนี้ (฿1,800) — backend จะเป็นคนคำนวณ
   },
   transactions: [
     { id: 1, title: 'เงินโอนจากที่บ้าน', amount: 600000, type: 'income', category: 'เงินจากที่บ้าน', time: '08:15', date: 'วันนี้', dateKey: '2026-09-17', parsedBy: 'manual' },
@@ -65,6 +66,21 @@ window.mockData = {
   // limit ของแต่ละหมวดอ้างอิงจาก categories ด้านบน (ไม่ผูกกับเดือน สมมติว่างบที่ตั้งไม่เปลี่ยนรายเดือน มีแค่ยอดใช้จริงที่เปลี่ยน)
   monthlyHistory: [
     {
+      key: '2026-04',
+      label: 'เม.ย. 2026',
+      usage: { 1: 260000, 2: 220000, 3: 38000, 4: 30000, 5: 25000, 6: 45000, 7: 600000, 8: 150000 },
+    },
+    {
+      key: '2026-05',
+      label: 'พ.ค. 2026',
+      usage: { 1: 290000, 2: 220000, 3: 41000, 4: 15000, 5: 12000, 6: 32000, 7: 600000, 8: 250000 },
+    },
+    {
+      key: '2026-06',
+      label: 'มิ.ย. 2026',
+      usage: { 1: 310000, 2: 220000, 3: 39000, 4: 28000, 5: 18000, 6: 22000, 7: 600000, 8: 180000 },
+    },
+    {
       key: '2026-07',
       label: 'ก.ค. 2026',
       usage: { 1: 280000, 2: 220000, 3: 40000, 4: 18000, 5: 35000, 6: 20000, 7: 600000, 8: 200000 },
@@ -81,9 +97,9 @@ window.mockData = {
     },
   ],
   plans: [
-    { id: 1, name: 'ออมซื้อโน้ตบุ๊คใหม่', target: 2500000, saved: 1400000, progress: 56, confidence: 'high', status: 'normal', dueMonth: 'ธ.ค. 2026', monthly_save: 300000, active: true },
-    { id: 2, name: 'กองทุนฉุกเฉินนักศึกษา', target: 1500000, saved: 780000, progress: 52, confidence: 'medium', status: 'off_track', dueMonth: 'ม.ค. 2027', monthly_save: 150000, active: true },
-    { id: 3, name: 'ทริปทัศนศึกษากับเพื่อน', target: 800000, saved: 650000, progress: 81, confidence: 'high', status: 'completed', dueMonth: 'พ.ย. 2026', monthly_save: 80000, active: true },
+    { id: 1, name: 'ออมซื้อโน้ตบุ๊คใหม่', target: 2500000, saved: 1400000, history: [{ id: 1, date: '2026-04-05', time: '09:15', amount: 200000 }, { id: 2, date: '2026-05-05', time: '12:30', amount: 250000 }, { id: 3, date: '2026-06-05', time: '18:45', amount: 300000 }, { id: 4, date: '2026-07-05', time: '20:10', amount: 300000 }, { id: 5, date: '2026-08-05', time: '08:05', amount: 300000 }, { id: 6, date: '2026-09-10', time: '14:20', amount: 50000 }], progress: 56, confidence: 'high', status: 'normal', dueMonth: 'ธ.ค. 2026', monthly_save: 300000, active: true },
+    { id: 2, type: 'emergency', name: 'กองทุนฉุกเฉินนักศึกษา', target: 1500000, saved: 780000, history: [{ id: 1, date: '2026-05-02', time: '09:15', amount: 150000 }, { id: 2, date: '2026-06-02', time: '12:30', amount: 150000 }, { id: 3, date: '2026-07-02', time: '18:45', amount: 100000 }, { id: 4, date: '2026-08-02', time: '20:10', amount: 150000 }, { id: 5, date: '2026-09-02', time: '08:05', amount: 150000 }, { id: 6, date: '2026-09-12', time: '14:20', amount: 80000 }], progress: 52, confidence: 'medium', status: 'off_track', dueMonth: 'ม.ค. 2027', monthly_save: 150000, active: true },
+    { id: 3, name: 'ทริปทัศนศึกษากับเพื่อน', target: 800000, saved: 650000, history: [{ id: 1, date: '2026-03-08', time: '09:15', amount: 100000 }, { id: 2, date: '2026-04-08', time: '12:30', amount: 100000 }, { id: 3, date: '2026-05-08', time: '18:45', amount: 80000 }, { id: 4, date: '2026-06-08', time: '20:10', amount: 80000 }, { id: 5, date: '2026-07-08', time: '08:05', amount: 90000 }, { id: 6, date: '2026-08-08', time: '14:20', amount: 100000 }, { id: 7, date: '2026-09-08', time: '19:30', amount: 100000 }], progress: 81, confidence: 'high', status: 'completed', dueMonth: 'พ.ย. 2026', monthly_save: 80000, active: true },
   ],
   donutData: {
     labels: ['อาหาร', 'หอพัก', 'เดินทาง', 'ของใช้/ช้อปปิ้ง', 'อื่น ๆ'],
