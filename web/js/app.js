@@ -124,6 +124,14 @@ const pageState = {
   planWizard: { step: 1, name: '', amount: '', months: '', mode: 'balanced', emergency: false },
 };
 
+/**
+ * เทียบ id แบบไม่สนชนิด — ข้อมูลตัวอย่างใช้ id เป็นตัวเลข แต่ API จริงใช้ UUID ที่เป็นข้อความ
+ * ถ้าใช้ Number() แปลงเหมือนเดิม UUID จะกลายเป็น NaN แล้วหาอะไรไม่เจอเลยสักอย่าง
+ */
+function sameId(a, b) {
+  return String(a) === String(b);
+}
+
 function safeNumber(value) {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -315,7 +323,7 @@ function renderMonthlyBudgetSummary() {
   // แถบสัดส่วนใช้ popover แทนแล้ว เหลือแถวใน legend ที่กดเปิดรายละเอียด + ลิงก์ไปหน้าประวัติ
   container.querySelectorAll('.budget-legend-row[data-budget-category]').forEach((el) => {
     el.addEventListener('click', () => {
-      const category = rows.find((item) => item.id === Number(el.dataset.budgetCategory));
+      const category = rows.find((item) => sameId(item.id, el.dataset.budgetCategory));
       if (category) openBudgetCategoryModal(category, totalUsed, activeMonth.key, activeType);
     });
   });
@@ -847,11 +855,30 @@ function renderTransactionsPage() {
     const matchesCategory = !transactionState.categoryFilter || item.category === transactionState.categoryFilter;
     return matchesDate && matchesCategory;
   });
-  const periodIncome = summarySource.filter((item) => item.type === 'income').reduce((sum, item) => sum + Math.abs(item.amount), 0);
-  const periodExpense = summarySource.filter((item) => item.type === 'expense').reduce((sum, item) => sum + Math.abs(item.amount), 0);
+  // ⚖️ G1: ห้ามบวกยอดเงินเองในหน้าเว็บ — ยอดรวมต้องมาจาก API
+  // backend มี /api/summary ให้เฉพาะ "เดือนปัจจุบัน" ยังไม่มี endpoint สรุปตามช่วงวันที่ที่ผู้ใช้เลือกเอง
+  // ช่วงอื่นจึงแสดงว่ายังไม่มีข้อมูล แทนที่จะบวกจากรายการที่โหลดมา (ซึ่งถูกตัดที่ 200 รายการ จะได้ยอดผิด)
+  const defaultRange = getMonthBounds(new Date());
+  const isThisMonth = transactionState.rangeStart === defaultRange.start
+    && transactionState.rangeEnd === defaultRange.end
+    && !transactionState.categoryFilter;
+  const apiTotals = mock.summary && typeof mock.summary.income === 'number' ? mock.summary : null;
 
-  if (incomeSummary) incomeSummary.textContent = formatMoney(periodIncome);
-  if (expenseSummary) expenseSummary.textContent = formatMoney(periodExpense);
+  if (incomeSummary && expenseSummary) {
+    if (apiTotals && isThisMonth) {
+      incomeSummary.textContent = formatMoney(apiTotals.income);
+      expenseSummary.textContent = formatMoney(apiTotals.expense);
+    } else if (apiTotals) {
+      incomeSummary.textContent = '—';
+      expenseSummary.textContent = '—';
+    } else {
+      // โหมด mock (ยังไม่ต่อ API) คิดเองได้เพราะข้อมูลทั้งหมดอยู่ในเครื่องอยู่แล้ว
+      const periodIncome = summarySource.filter((item) => item.type === 'income').reduce((sum, item) => sum + Math.abs(item.amount), 0);
+      const periodExpense = summarySource.filter((item) => item.type === 'expense').reduce((sum, item) => sum + Math.abs(item.amount), 0);
+      incomeSummary.textContent = formatMoney(periodIncome);
+      expenseSummary.textContent = formatMoney(periodExpense);
+    }
+  }
   if (summaryPeriodBtn) {
     const defaultBounds = getMonthBounds(new Date());
     const isDefaultRange = transactionState.rangeStart === defaultBounds.start && transactionState.rangeEnd === defaultBounds.end;
@@ -956,8 +983,8 @@ function renderTransactionsPage() {
             const icon = renderIcon(item.type === 'income' ? 'wallet' : 'receipt');
             const aiBadge = item.parsedBy === 'ai' ? `<span class="ai-tag">${renderIcon('sparkles')} AI</span>` : '';
             const displayAmount = formatMoney(Math.abs(amount));
-            const selectedClass = transactionState.selectedIds.includes(item.id) ? 'row-selected' : '';
-            const isChecked = transactionState.selectedIds.includes(item.id);
+            const selectedClass = transactionState.selectedIds.some((selected) => sameId(selected, item.id)) ? 'row-selected' : '';
+            const isChecked = transactionState.selectedIds.some((selected) => sameId(selected, item.id));
             const checkbox = transactionState.multiSelect
               ? `<button type="button" class="row-check ${isChecked ? 'checked' : ''}" role="checkbox" aria-checked="${isChecked}" data-row-check="${item.id}">${isChecked ? renderIcon('check') : ''}</button>`
               : '';
@@ -1263,7 +1290,7 @@ function renderCategoriesPage() {
       card.addEventListener('drop', (event) => {
         event.preventDefault();
         const draggedId = Number(event.dataTransfer.getData('text/plain'));
-        const targetId = Number(card.dataset.categoryRow);
+        const targetId = card.dataset.categoryRow;
         reorderCategories(draggedId, targetId);
       });
     });
@@ -1483,7 +1510,10 @@ function getAnalyzeInsights() {
   const used = safeNumber(mock.summary.monthlyBudgetUsed);
   const limit = safeNumber(mock.summary.monthlyBudgetLimit);
   const rate = limit > 0 ? Math.round((used / limit) * 100) : 0;
-  const forecast = safeNumber(mock.summary.forecastBalance);
+  // null = backend ยังคำนวณให้ไม่ได้ ต่างจาก 0 ที่แปลว่าคาดว่าจะไม่เหลือเงินเลย
+  const forecast = mock.summary.forecastBalance === null || mock.summary.forecastBalance === undefined
+    ? null
+    : safeNumber(mock.summary.forecastBalance);
   const emergencyPlan = getEmergencyPlan();
   return { used, limit, rate, forecast, emergencyPlan };
 }
@@ -1495,7 +1525,13 @@ function renderAnalyzeTiles() {
   const { rate, forecast, emergencyPlan } = getAnalyzeInsights();
   const tiles = [
     { key: 'rate', icon: 'wallet', value: `${rate}%`, label: 'อัตราการใช้จ่าย' },
-    { key: 'forecast', icon: 'trending-up', value: `${forecast >= 0 ? '+' : '-'}${formatMoneyShort(Math.abs(forecast))}`, label: 'การคาดการณ์' },
+    {
+      key: 'forecast',
+      icon: 'trending-up',
+      // backend ยังไม่มีสูตรนี้ ถ้าโชว์ ฿0 ผู้ใช้จะอ่านว่า "คาดว่าจะไม่เหลือเลย" ซึ่งไม่จริง
+      value: forecast === null ? 'ยังไม่มีข้อมูล' : `${forecast >= 0 ? '+' : '-'}${formatMoneyShort(Math.abs(forecast))}`,
+      label: 'การคาดการณ์',
+    },
     { key: 'emergency', icon: 'leaf', value: emergencyPlan ? `${Math.round(emergencyPlan.progress || 0)}%` : 'ยังไม่มี', label: 'กองทุนฉุกเฉิน', prompt: !emergencyPlan },
   ].filter((tile) => !(tile.key === 'emergency' && !emergencyPlan && isEmergencyTileHidden()));
   container.classList.toggle('count-2', tiles.length === 2);
@@ -1586,6 +1622,19 @@ function openInsightDetail(key) {
 
   if (key === 'forecast') {
     const meta = getConfidenceMeta(mock.summary.safeToSpendConfidence || 'high');
+    if (forecast === null) {
+      openInsightModal({
+        title: 'การคาดการณ์สิ้นเดือน',
+        value: 'ยังไม่มีข้อมูล',
+        lead: 'ตัวเลขนี้ต้องให้ระบบคำนวณจากพฤติกรรมการใช้จ่ายของคุณ ตอนนี้ยังไม่มีสูตรคำนวณในระบบ จึงยังแสดงให้ไม่ได้',
+        rows: [
+          ['คงเหลือจากงบตอนนี้', formatMoney(Math.max(0, limit - used))],
+          ['วันที่เหลือในเดือนนี้', `${ref.daysLeft} วัน`],
+        ],
+        tip: 'ระหว่างนี้ดู "อัตราการใช้จ่าย" กับ "ใช้ได้เฉลี่ยต่อวัน" แทนได้',
+      });
+      return;
+    }
     const positive = forecast >= 0;
     openInsightModal({
       title: 'การคาดการณ์สิ้นเดือน',
@@ -1886,7 +1935,7 @@ function openPlanHistory(plan) {
 
 function findHistoryEntry(ref) {
   const [planId, entryId] = String(ref).split(':').map(Number);
-  const plan = mock.plans.find((item) => item.id === planId);
+  const plan = mock.plans.find((item) => sameId(item.id, planId));
   const entry = plan && (plan.history || []).find((item) => item.id === entryId);
   return plan && entry ? { plan, entry } : null;
 }
@@ -2016,9 +2065,13 @@ function getPurchaseSimulation() {
   const daysLeft = ref.daysLeft;
   const days = Math.max(1, daysLeft);
   const { income, expense } = mock.lineData;
-  const monthlySaving = income.length
-    ? Math.round(income.reduce((sum, value, i) => sum + (value - expense[i]), 0) / income.length)
-    : 0;
+  // ⚖️ G1: กำลังออมต่อเดือนต้องมาจาก service (/api/plans capacity) ห้ามหน้าเว็บเฉลี่ยเอง
+  // ค่าเฉลี่ยด้านล่างเป็นทางสำรองสำหรับโหมด mock เท่านั้น
+  const monthlySaving = typeof mock.summary.savingCapacity === 'number'
+    ? mock.summary.savingCapacity
+    : (income.length
+      ? Math.round(income.reduce((sum, value, i) => sum + (value - expense[i]), 0) / income.length)
+      : 0);
 
   const afterBuy = budgetLeft - price;
   const perDayBefore = budgetLeft > 0 ? Math.round(budgetLeft / days) : 0;
@@ -2217,7 +2270,10 @@ function renderAnalyzeDonut() {
       const length = Math.max(0, share * circumference - gap);
       const angle = (cursor + share / 2) * 2 * Math.PI - Math.PI / 2;
       const key = `donut-${i}`;
-      const amount = Math.round(safeNumber(mock.summary.expense) * share);
+      // ยอดของแต่ละหมวดมาจาก API ตรงๆ (donutData.amounts) ไม่คูณกลับจากเปอร์เซ็นต์ที่ปัดแล้ว
+      const amount = mock.donutData.amounts
+        ? safeNumber(mock.donutData.amounts[i])
+        : Math.round(safeNumber(mock.summary.expense) * share);
       analyzeDonutTip.data.set(key, {
         tipHtml: `
           <span class="overview-tip-title"><i class="legend-dot" style="background: ${colors[i]}"></i>${labels[i]}</span>
@@ -2249,7 +2305,10 @@ function renderAnalyzeDonut() {
   }
 
   const emptyState = document.getElementById('emptyStateAnalyze');
-  if (emptyState) emptyState.hidden = !(mock.summary.daysOfData < 7);
+  // daysOfData เป็น null เมื่อ API ยังไม่ส่งค่านี้มา — ระวัง null < 7 ได้ true
+  // ไม่รู้จำนวนวัน ไม่เท่ากับ รู้ว่าข้อมูลน้อย จึงไม่ควรขึ้นข้อความเตือน
+  const daysOfData = mock.summary.daysOfData;
+  if (emptyState) emptyState.hidden = !(typeof daysOfData === 'number' && daysOfData < 7);
 }
 
 function renderAnalyzeCategory() {
@@ -2430,7 +2489,23 @@ function setAnalyzeTab(tab) {
 }
 
 // render อย่างเดียว เรียกซ้ำได้ (เช่น หลังแก้ไข/โอนเงินเข้าแผน) ส่วนการผูก event อยู่ใน bindAnalyzePage
+/** SPEC §S2 + §S5.5 บังคับว่าเนื้อหาเชิงวางแผนต้องมีข้อความนี้กำกับทุกหน้า */
+function renderPlanningDisclaimer() {
+  if (document.getElementById('planningDisclaimer')) return;
+  const main = document.querySelector('.page-content');
+  if (!main) return;
+  const note = document.createElement('p');
+  note.id = 'planningDisclaimer';
+  note.className = 'ai-disclaimer';
+  note.style.textAlign = 'center';
+  note.textContent = 'ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน';
+  main.append(note);
+}
+
 function renderAnalyzePage() {
+  renderPlanningDisclaimer();
+  // ต้องวาดการ์ดจำลองซื้อใหม่ด้วย ไม่งั้นค้างตัวเลขจากข้อมูลชุดก่อนตอนโหลดข้อมูลจริงเสร็จ
+  renderPurchaseSimulation();
   renderAnalyzeStatus();
   renderAnalyzeTrend();
   renderAnalyzeTiles();
@@ -2505,7 +2580,7 @@ function bindAnalyzePage() {
       const chip = event.target.closest('[data-analyze-chip]');
       if (chip) {
         const value = chip.dataset.analyzeChip;
-        const next = value === 'all' ? 'all' : Number(value);
+        const next = value === 'all' ? 'all' : value;
         analyzeState.categoryId = analyzeState.categoryId === next ? 'all' : next;
         renderAnalyzeCategory();
         return;
@@ -2529,7 +2604,7 @@ function bindAnalyzePage() {
       }
       const catRow = event.target.closest('[data-analyze-cat]');
       if (catRow) {
-        analyzeState.categoryId = Number(catRow.dataset.analyzeCat);
+        analyzeState.categoryId = catRow.dataset.analyzeCat;
         renderAnalyzeCategory();
         return;
       }
@@ -2586,6 +2661,11 @@ function recalcPlanProgress(plan) {
 
 function openPlanTransfer(plan) {
   openAmountInputModal(0, (amount) => {
+    if (window.jodtangPersist) {
+      window.jodtangPersist.transferToPlan(plan.id, amount);
+      return;
+    }
+
     const now = new Date();
     plan.history = plan.history || [];
     plan.history.push({ id: Date.now(), date: toLocalDateKey(now), time: now.toTimeString().slice(0, 5), amount });
@@ -2701,6 +2781,17 @@ function renderPlanWizardStep() {
 
 function addPlanFromWizard() {
   const state = pageState.planWizard;
+
+  if (window.jodtangPersist) {
+    // backend เป็นคนสร้าง 3 ทางเลือกให้ (S5.3) หน้าเว็บห้ามเดายอดออมต่อเดือนเอง (G1)
+    window.jodtangPersist.createPlan({
+      title: state.name || 'ออมซื้อไอเทม',
+      targetSatang: Math.round(safeNumber(state.amount) * 100),
+      months: Math.max(1, safeNumber(state.months || 1)),
+    });
+    return;
+  }
+
   const name = state.name || 'ออมซื้อไอเทม';
   const target = safeNumber(state.amount) * 100;
   const months = Math.max(1, safeNumber(state.months || 1));
@@ -2874,6 +2965,19 @@ function openAddTransactionModal() {
       const amountValue = safeNumber(document.getElementById('newTxnAmount')?.value) * 100;
       const sign = type === 'income' ? 1 : -1;
       const nextAmount = amountValue * sign;
+
+      // ต่อ API แล้ว: ให้ backend เป็นคนบันทึกและคืนยอดใหม่มา (ห้ามแก้ข้อมูลในเครื่องเอง)
+      if (window.jodtangPersist) {
+        window.jodtangPersist.createTransaction({
+          type,
+          amountSatang: Math.round(amountValue),
+          categoryName: category,
+          note: title,
+          occurredAt: `${date}T${time}:00+07:00`,
+        });
+        return;
+      }
+
       mock.transactions.unshift({
         id: Date.now(),
         title,
@@ -2894,7 +2998,7 @@ function openAddTransactionModal() {
 }
 
 function openTransactionActionMenu(transactionId) {
-  const transaction = mock.transactions.find((item) => item.id === Number(transactionId));
+  const transaction = mock.transactions.find((item) => sameId(item.id, transactionId));
   if (!transaction) return;
 
   const html = `
@@ -2913,7 +3017,7 @@ function openTransactionActionMenu(transactionId) {
 }
 
 function editTransaction(transactionId) {
-  const transaction = mock.transactions.find((item) => item.id === Number(transactionId));
+  const transaction = mock.transactions.find((item) => sameId(item.id, transactionId));
   if (!transaction) return;
 
   const html = `
@@ -2973,11 +3077,23 @@ function editTransaction(transactionId) {
   const updateButton = document.querySelector('[data-update-transaction]');
   if (updateButton) {
     updateButton.addEventListener('click', () => {
-      const nextItem = mock.transactions.find((item) => item.id === Number(transactionId));
+      const nextItem = mock.transactions.find((item) => sameId(item.id, transactionId));
       if (!nextItem) return;
       const selectedType = document.querySelector('[data-edit-type].active')?.dataset.editType || nextItem.type;
       const nextDate = document.getElementById('editTxnDate')?.value || nextItem.dateKey || new Date().toISOString().slice(0, 10);
       const amountValue = safeNumber(document.getElementById('editTxnAmount')?.value) * 100;
+
+      if (window.jodtangPersist) {
+        window.jodtangPersist.updateTransaction(transactionId, {
+          type: selectedType,
+          amountSatang: Math.round(amountValue),
+          categoryName: document.getElementById('editTxnCategory')?.value || undefined,
+          note: document.getElementById('editTxnTitle')?.value || undefined,
+          occurredAt: `${nextDate}T${getCustomTimeValue('editTxnTime')}:00+07:00`,
+        });
+        return;
+      }
+
       nextItem.title = document.getElementById('editTxnTitle')?.value || nextItem.title;
       nextItem.category = document.getElementById('editTxnCategory')?.value || nextItem.category;
       nextItem.type = selectedType;
@@ -2994,10 +3110,16 @@ function editTransaction(transactionId) {
 }
 
 function deleteTransaction(transactionId) {
-  const target = mock.transactions.find((item) => item.id === Number(transactionId));
+  const target = mock.transactions.find((item) => sameId(item.id, transactionId));
   if (!target) return;
-  mock.transactions = mock.transactions.filter((item) => item.id !== Number(transactionId));
-  transactionState.selectedIds = transactionState.selectedIds.filter((id) => id !== Number(transactionId));
+
+  if (window.jodtangPersist) {
+    window.jodtangPersist.deleteTransaction(transactionId);
+    return;
+  }
+
+  mock.transactions = mock.transactions.filter((item) => !sameId(item.id, transactionId));
+  transactionState.selectedIds = transactionState.selectedIds.filter((id) => !sameId(id, transactionId));
   closeModal();
   renderDashboard();
   renderTransactionsPage();
@@ -3016,9 +3138,13 @@ function reorderCategories(draggedId, targetId) {
 }
 
 function setCategoryLimit(categoryId) {
-  const category = mock.categories.find((item) => item.id === Number(categoryId));
+  const category = mock.categories.find((item) => sameId(item.id, categoryId));
   if (!category) return;
   openAmountInputModal(category.limit || 30000, (amount) => {
+    if (window.jodtangPersist) {
+      window.jodtangPersist.setBudget(category.id, amount);
+      return;
+    }
     category.limit = amount;
     category.percentage = Math.round(((category.used || 0) / amount) * 100 || 0);
     renderCategoriesPage();
@@ -3027,7 +3153,7 @@ function setCategoryLimit(categoryId) {
 }
 
 function openCategoryMenu(categoryId) {
-  const category = mock.categories.find((item) => item.id === Number(categoryId));
+  const category = mock.categories.find((item) => sameId(item.id, categoryId));
   if (!category) return;
 
   const html = `
@@ -3082,7 +3208,7 @@ function openCategoryMenu(categoryId) {
 }
 
 function deleteCategory(categoryId) {
-  mock.categories = mock.categories.filter((item) => item.id !== Number(categoryId));
+  mock.categories = mock.categories.filter((item) => !sameId(item.id, categoryId));
   closeModal();
   renderCategoriesPage();
   showSuccessModal('ลบหมวดหมู่สำเร็จ');
@@ -3118,7 +3244,7 @@ const CATEGORY_COLOR_PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e8
 // รวมเปลี่ยนหมวดหมู่ + ประเภท ไว้ใน modal เดียว กด "บันทึก" ครั้งเดียวปรับทั้งคู่พร้อมกันได้เลย
 function openBatchEditModal() {
   const categoryNames = [...new Set(mock.categories.map((item) => item.name))];
-  const firstSelected = mock.transactions.find((item) => transactionState.selectedIds.includes(item.id));
+  const firstSelected = mock.transactions.find((item) => transactionState.selectedIds.some((selected) => sameId(selected, item.id)));
   let selectedType = firstSelected?.type || 'expense';
 
   const html = `
@@ -3156,7 +3282,7 @@ function openBatchEditModal() {
   document.querySelector('[data-confirm-batch-edit]').addEventListener('click', () => {
     const categoryName = document.getElementById('batchCategorySelect')?.value;
     mock.transactions.forEach((item) => {
-      if (!transactionState.selectedIds.includes(item.id)) return;
+      if (!transactionState.selectedIds.some((selected) => sameId(selected, item.id))) return;
       if (categoryName) item.category = categoryName;
       item.type = selectedType;
       item.amount = Math.abs(item.amount) * (selectedType === 'income' ? 1 : -1);
@@ -3261,7 +3387,7 @@ function formatMoneyShort(value) {
 
 // รายละเอียดหมวดหมู่: แท็บ "ภาพรวม" (โดนัท) + แท็บ "ประวัติ" (กราฟแท่งรายเดือน เลือกเดือนได้ พร้อมการ์ดสถิติ)
 function openCategoryDetail(categoryId) {
-  const category = mock.categories.find((item) => item.id === Number(categoryId));
+  const category = mock.categories.find((item) => sameId(item.id, categoryId));
   if (!category) return;
 
   const history = mock.monthlyHistory || [];
@@ -3461,9 +3587,11 @@ function bindTransactionControls() {
 
     const rowCheck = event.target.closest('[data-row-check]');
     if (rowCheck) {
-      const id = Number(rowCheck.dataset.rowCheck);
-      const has = transactionState.selectedIds.includes(id);
-      transactionState.selectedIds = has ? transactionState.selectedIds.filter((itemId) => itemId !== id) : [...transactionState.selectedIds, id];
+      const id = rowCheck.dataset.rowCheck;
+      const has = transactionState.selectedIds.some((selected) => sameId(selected, id));
+      transactionState.selectedIds = has
+        ? transactionState.selectedIds.filter((itemId) => !sameId(itemId, id))
+        : [...transactionState.selectedIds, id];
       renderTransactionsPage();
       return;
     }
@@ -3490,12 +3618,12 @@ function bindTransactionControls() {
       const action = batchAction.dataset.batchAction;
       if (action === 'select-all') {
         const allSelected = transactionState.visibleIds.length > 0
-          && transactionState.visibleIds.every((id) => transactionState.selectedIds.includes(id));
+          && transactionState.visibleIds.every((id) => transactionState.selectedIds.some((selected) => sameId(selected, id)));
         transactionState.selectedIds = allSelected ? [] : [...transactionState.visibleIds];
         renderTransactionsPage();
       }
       if (action === 'delete') {
-        mock.transactions = mock.transactions.filter((item) => !transactionState.selectedIds.includes(item.id));
+        mock.transactions = mock.transactions.filter((item) => !transactionState.selectedIds.some((selected) => sameId(selected, item.id)));
         transactionState.selectedIds = [];
         renderTransactionsPage();
         renderDashboard();
@@ -3509,8 +3637,8 @@ function bindTransactionControls() {
 
     const transferBtn = event.target.closest('[data-plan-transfer]');
     if (transferBtn) {
-      const planId = Number(transferBtn.dataset.planTransfer);
-      const plan = mock.plans.find((item) => item.id === planId);
+      const planId = transferBtn.dataset.planTransfer;
+      const plan = mock.plans.find((item) => sameId(item.id, planId));
       if (!plan) return;
       openPlanTransfer(plan);
       return;
@@ -3518,14 +3646,14 @@ function bindTransactionControls() {
 
     const planMenu = event.target.closest('[data-plan-menu]');
     if (planMenu) {
-      const plan = mock.plans.find((item) => item.id === Number(planMenu.dataset.planMenu));
+      const plan = mock.plans.find((item) => sameId(item.id, planMenu.dataset.planMenu));
       if (plan) openPlanMenu(plan);
       return;
     }
 
     const planEdit = event.target.closest('[data-plan-edit]');
     if (planEdit) {
-      const plan = mock.plans.find((item) => item.id === Number(planEdit.dataset.planEdit));
+      const plan = mock.plans.find((item) => sameId(item.id, planEdit.dataset.planEdit));
       if (!plan) return;
       const html = `
         <div class="modal-card small">
@@ -3546,7 +3674,7 @@ function bindTransactionControls() {
 
     const planSaveEdits = event.target.closest('[data-plan-save-edits]');
     if (planSaveEdits) {
-      const plan = mock.plans.find((item) => item.id === Number(planSaveEdits.dataset.planSaveEdits));
+      const plan = mock.plans.find((item) => sameId(item.id, planSaveEdits.dataset.planSaveEdits));
       if (!plan) return;
       plan.name = document.getElementById('editPlanName')?.value || plan.name;
       const editedTarget = Math.round(Number(document.getElementById('editPlanTarget')?.value) * 100);
@@ -3566,14 +3694,18 @@ function bindTransactionControls() {
 
     const planDelete = event.target.closest('[data-plan-delete]');
     if (planDelete) {
-      const plan = mock.plans.find((item) => item.id === Number(planDelete.dataset.planDelete));
+      const plan = mock.plans.find((item) => sameId(item.id, planDelete.dataset.planDelete));
       if (plan) openPlanDeleteConfirm(plan);
       return;
     }
 
     const planDeleteConfirm = event.target.closest('[data-plan-delete-confirm]');
     if (planDeleteConfirm) {
-      const plan = mock.plans.find((item) => item.id === Number(planDeleteConfirm.dataset.planDeleteConfirm));
+      const plan = mock.plans.find((item) => sameId(item.id, planDeleteConfirm.dataset.planDeleteConfirm));
+      if (window.jodtangPersist) {
+        window.jodtangPersist.cancelPlan(planDeleteConfirm.dataset.planDeleteConfirm);
+        return;
+      }
       if (plan) plan.active = false;
       closeModal();
       renderAnalyzePage();
@@ -3588,7 +3720,7 @@ function bindTransactionControls() {
       emergencyToggle.classList.toggle('on', isOn);
       emergencyToggle.setAttribute('aria-checked', String(isOn));
       const hint = document.getElementById('emergencyHint');
-      if (hint) hint.textContent = getEmergencyHint(isOn, Number(emergencyToggle.dataset.emergencyPlan) || null);
+      if (hint) hint.textContent = getEmergencyHint(isOn, emergencyToggle.dataset.emergencyPlan || null);
       return;
     }
 
@@ -3646,14 +3778,14 @@ function bindTransactionControls() {
 
     const planHistory = event.target.closest('[data-plan-history]');
     if (planHistory) {
-      const plan = mock.plans.find((item) => item.id === Number(planHistory.dataset.planHistory));
+      const plan = mock.plans.find((item) => sameId(item.id, planHistory.dataset.planHistory));
       if (plan) openPlanHistory(plan);
       return;
     }
 
     const planDetail = event.target.closest('[data-plan-detail]');
     if (planDetail) {
-      const plan = mock.plans.find((item) => item.id === Number(planDetail.dataset.planDetail));
+      const plan = mock.plans.find((item) => sameId(item.id, planDetail.dataset.planDetail));
       if (plan) openPlanDetail(plan);
       return;
     }
@@ -3672,7 +3804,7 @@ function bindTransactionControls() {
 
     const sortMoveBtn = event.target.closest('[data-sort-move]');
     if (sortMoveBtn) {
-      moveCategoryInDraft(Number(sortMoveBtn.dataset.sortId), sortMoveBtn.dataset.sortMove);
+      moveCategoryInDraft(sortMoveBtn.dataset.sortId, sortMoveBtn.dataset.sortMove);
       return;
     }
 
@@ -3829,6 +3961,10 @@ function saveSetting(key, value) {
 }
 
 function bindSettingsActions() {
+  // ถ้าต่อ API แล้ว boot.js เป็นคนจัดการหน้าตั้งค่าเอง (ค่าจริงจาก /api/settings)
+  // ไม่งั้นจะผูก listener ซ้อนกันสองชั้นแล้วกดปุ่มทีเดียวทำงานสองรอบ
+  if (window.__jodtangApiWired) return;
+
   // สวิตช์เปิด/ปิด (ผู้ช่วย AI, สรุปรายวัน) จำค่าไว้ในเบราว์เซอร์
   const saved = readSavedSettings();
   document.querySelectorAll('[data-setting]').forEach((toggle) => {
@@ -3856,12 +3992,17 @@ function bindSettingsActions() {
   }
 }
 
+/** โอนเข้าแผนออมเป็น type='transfer' ไม่ใช่รายรับหรือรายจ่าย (G7) ใช้แยกตอนกรองและแสดงผล */
+function isTransfer(item) {
+  return item.type === 'transfer';
+}
+
 function applyTransactionDeepLinkFilter() {
   const params = new URLSearchParams(window.location.search);
   const categoryId = Number(params.get('category'));
   if (!categoryId) return;
 
-  const category = mock.categories.find((item) => item.id === categoryId);
+  const category = mock.categories.find((item) => sameId(item.id, categoryId));
   if (!category) return;
 
   transactionState.categoryFilter = category.name;

@@ -14,8 +14,11 @@
   const api = window.moneyBotApi;
   if (!api) return;
 
+  // บอก app.js ว่าอย่าผูก handler แบบ mock ซ้อนเข้ามา (ต้องตั้งก่อน DOMContentLoaded)
+  window.__jodtangApiWired = true;
+
   /** หน้าที่ต่อ API เสร็จแล้ว — หน้าที่ยังไม่อยู่ในนี้จะขึ้นแถบบอกว่าเป็นข้อมูลตัวอย่าง */
-  const WIRED_PAGES = new Set(['dashboard']);
+  const WIRED_PAGES = new Set(['dashboard', 'transactions', 'categories', 'analyze', 'settings']);
 
   /** สีประจำหมวด — API ไม่ได้ส่งสีมา อันนี้เป็นเรื่องแสดงผลล้วนๆ ไม่ใช่ข้อมูลเงิน */
   const CATEGORY_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'];
@@ -189,20 +192,23 @@
     loadedMonths.add(monthKey);
   }
 
-  // ---------- โหลดหน้าสรุป ----------
+  // ---------- โหลดข้อมูลรวม (ใช้ร่วมกันทุกหน้า) ----------
 
-  async function loadDashboard(plans) {
-    const [summary, budgets, categories, transactions] = await Promise.all([
+  /** ข้อมูลที่ API ยังไม่มีให้ — หน้าเว็บต้องแสดงว่า "ยังไม่มีข้อมูล" ไม่ใช่โชว์ ฿0 */
+  const UNAVAILABLE = new Set();
+
+  async function loadAll() {
+    const [summary, budgets, categories, transactions, plans] = await Promise.all([
       api.fetchSummary(),
       api.fetchBudgets(),
       api.fetchCategories(),
       api.fetchTransactions(),
+      api.fetchPlans(),
     ]);
 
     const thisMonthKey = monthKeyOf(budgets.month);
     const safe = summary.safeToSpend;
 
-    // 6 เดือนจาก monthlyTrend — usage ของเดือนอื่นเติมทีหลังตอนผู้ใช้กดเปลี่ยนเดือน
     const history = summary.monthlyTrend.map((m) => ({
       key: m.month,
       label: m.month === thisMonthKey ? `${m.label} (เดือนนี้)` : m.label,
@@ -211,11 +217,25 @@
     const current = history.find((m) => m.key === thisMonthKey);
     if (current) {
       budgets.items.forEach((item) => { current.usage[item.categoryId] = item.spentSatang; });
+      loadedMonths.clear();
       loadedMonths.add(thisMonthKey);
     }
 
+    // โดนัท: สัดส่วนรายจ่ายตามหมวดของเดือนนี้ — เปอร์เซ็นต์คิดจากยอดที่ API ส่งมาเพื่อแสดงผลเท่านั้น
+    const expenseTotal = summary.expenseByCategory.reduce((sum, e) => sum + e.amountSatang, 0);
+    const donut = {
+      labels: summary.expenseByCategory.map((e) => e.name),
+      values: summary.expenseByCategory.map((e) => (expenseTotal ? Math.round((e.amountSatang / expenseTotal) * 100) : 0)),
+      colors: summary.expenseByCategory.map((_, i) => CATEGORY_COLORS[i % CATEGORY_COLORS.length]),
+      amounts: summary.expenseByCategory.map((e) => e.amountSatang),
+    };
+
+    // API ยังไม่มีตัวเลขพวกนี้ให้ (ดู docs/UI_CONTRACT.md — ห้ามเดา)
+    UNAVAILABLE.clear();
+    UNAVAILABLE.add('forecastBalance');
+    UNAVAILABLE.add('daysOfData');
+
     Object.assign(window.mockData, {
-      user: { name: '', avatar: '', subtitle: '' },
       summary: {
         balance: summary.netBalanceSatang,
         income: summary.monthIncomeSatang,
@@ -227,16 +247,199 @@
         monthlyBudgetLimit: budgets.totalLimitSatang,
         monthlyBudgetUsed: budgets.totalSpentSatang,
         safeToSpendConfidence: (plans.capacity && plans.capacity.confidence) || 'medium',
+        // กำลังออมต่อเดือนมาจาก service ฝั่ง backend ห้ามหน้าเว็บเดาเอง (G1)
+        savingCapacity: plans.capacity ? plans.capacity.disposableSatang : null,
+        forecastBalance: null,
+        daysOfData: null,
       },
       transactions: mapTransactions(transactions),
       categories: mapCategories(categories, budgets, summary.expenseByCategory),
       monthlyHistory: history,
       plans: mapPlans(plans),
+      donutData: donut,
+      lineData: {
+        labels: summary.monthlyTrend.map((m) => m.label),
+        income: summary.monthlyTrend.map((m) => m.incomeSatang),
+        expense: summary.monthlyTrend.map((m) => m.expenseSatang),
+      },
+      budgetsAvailable: budgets.available,
     });
-
-    window.__jodtangBudgetsAvailable = budgets.available;
-    renderDashboard();
   }
+
+  /** วาดหน้าใหม่หลังข้อมูลเปลี่ยน */
+  function renderCurrentPage() {
+    const page = document.body.dataset.page;
+    if (page === 'dashboard') renderDashboard();
+    if (page === 'transactions') renderTransactionsPage();
+    if (page === 'categories') renderCategoriesPage();
+    if (page === 'analyze') renderAnalyzePage();
+  }
+
+  async function refresh() {
+    await loadAll();
+    renderCurrentPage();
+  }
+
+  // ---------- หน้าตั้งค่า ----------
+
+  async function loadSettings() {
+    const settings = await api.fetchSettings();
+    const emailEl = document.getElementById('ingestEmail');
+    const ingest = settings.emailIngest || {};
+    if (emailEl) {
+      emailEl.textContent = ingest.available && ingest.address ? ingest.address : 'ระบบอีเมลยังไม่เปิดใช้งาน';
+    }
+
+    if (ingest.unparsedCount > 0) {
+      const box = document.querySelector('.an-email-box');
+      if (box) {
+        const note = document.createElement('p');
+        note.className = 'ai-disclaimer';
+        note.style.margin = 'var(--space-2) 0 0';
+        note.textContent = `มีอีเมล ${ingest.unparsedCount} ฉบับที่ระบบอ่านยอดไม่ออก`;
+        box.after(note);
+      }
+    }
+
+    // สวิตช์: backend มีแค่ aiEnabled แบบอ่านอย่างเดียว (ค่าระดับระบบ) ส่วนสรุปรายวันยังไม่มี endpoint
+    // จึงแสดงสถานะจริงแล้วล็อกไว้ ดีกว่าปล่อยให้กดได้แต่ไม่มีผลอะไร
+    const lock = (key, isOn, note) => {
+      const toggle = document.querySelector(`[data-setting="${key}"]`);
+      if (!toggle) return;
+      toggle.classList.toggle('on', Boolean(isOn));
+      toggle.setAttribute('aria-checked', String(Boolean(isOn)));
+      toggle.disabled = true;
+      toggle.style.opacity = '0.5';
+      toggle.style.cursor = 'not-allowed';
+      const text = toggle.closest('.an-setting-row')?.querySelector('.an-action-text small');
+      if (text) text.textContent = note;
+    };
+    lock('aiAssistant', settings.aiEnabled, settings.aiEnabled ? 'ระบบเปิดใช้งานอยู่ (ตั้งค่าที่เซิร์ฟเวอร์)' : 'ระบบปิดใช้งานอยู่ (ตั้งค่าที่เซิร์ฟเวอร์)');
+    lock('dailySummary', false, 'ยังไม่มี API สำหรับเปิด/ปิดรายคน');
+
+    const rotate = document.getElementById('rotateTokenBtn');
+    if (rotate) {
+      rotate.addEventListener('click', async () => {
+        rotate.disabled = true;
+        try {
+          const result = await api.rotateEmailToken();
+          if (emailEl && result.address) emailEl.textContent = result.address;
+          showSuccessModal('สร้างที่อยู่อีเมลใหม่แล้ว');
+        } catch (err) {
+          showSuccessModal(`สร้างใหม่ไม่สำเร็จ: ${err.message}`);
+        } finally {
+          rotate.disabled = false;
+        }
+      });
+    }
+  }
+
+  // ---------- บันทึกข้อมูลผ่าน API ----------
+  // app.js เรียกผ่าน window.jodtangPersist แทนการแก้ข้อมูลในเครื่อง แล้วโหลดใหม่ทั้งชุด
+  // เพื่อให้ทุกยอดบนหน้าเป็นตัวเลขที่ backend คำนวณ ไม่ใช่ที่หน้าเว็บเดาต่อเอง (G1)
+
+  async function runWrite(action, successText) {
+    try {
+      const result = await action();
+      closeModal();
+      await refresh();
+      if (successText) showSuccessModal(typeof successText === 'function' ? successText(result) : successText);
+      return result;
+    } catch (err) {
+      closeModal();
+      showSuccessModal(`ไม่สำเร็จ: ${(err && err.message) || 'เกิดข้อผิดพลาด'}`);
+      return null;
+    }
+  }
+
+  /** ให้ผู้ใช้เลือก 1 ใน 3 ทางเลือกที่ backend คำนวณมา แล้วยืนยัน (S5.3) */
+  function showPlanOptions(result) {
+    const options = result.options || [];
+    if (!options.length) {
+      showSuccessModal(result.requestedMonthsNote || 'ตอนนี้ยังออมไม่ไหว ลองลดเป้าหมายหรือยืดเวลาออกไป');
+      return;
+    }
+    openModal(`
+      <div class="modal-card small an-detail">
+        <div class="modal-head">
+          <h3>เลือกแบบที่ไหว</h3>
+          <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
+        </div>
+        ${result.requestedMonthsNote ? `<p class="an-detail-lead">${result.requestedMonthsNote}</p>` : ''}
+        <div class="an-action-list">
+          ${options.map((opt) => `
+            <button type="button" class="an-action" data-confirm-plan="${opt.planId}">
+              <span class="an-action-icon">${opt.emoji || '💰'}</span>
+              <span class="an-action-text">
+                <strong>${opt.title}</strong>
+                <small>เดือนละ ${formatMoney(opt.monthlySaveSatang)} · ${opt.months} เดือน · ครบ ${bangkok(opt.targetDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small>
+              </span>
+              ${renderConfidenceBadge(opt.confidence)}
+            </button>
+          `).join('')}
+        </div>
+        <p class="an-detail-tip">${renderIcon('sparkles')}<span>ตัวเลขทั้งหมดคำนวณจากกำลังออมจริงของคุณ</span></p>
+      </div>
+    `);
+    document.querySelectorAll('[data-confirm-plan]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        runWrite(() => api.confirmPlan(btn.dataset.confirmPlan), 'สร้างแผนสำเร็จ');
+      });
+    });
+  }
+
+  window.jodtangPersist = {
+    createTransaction: (body) => runWrite(() => api.createTransaction(body), (res) => {
+      if (res && res.budgetAlert) {
+        const a = res.budgetAlert;
+        return `บันทึกแล้ว · ${a.categoryName} ใช้ไป ${a.percentUsed}% ของงบแล้ว`;
+      }
+      return 'เพิ่มรายการสำเร็จ';
+    }),
+    updateTransaction: (id, patch) => runWrite(() => api.updateTransaction(id, patch), 'อัปเดตรายการสำเร็จ'),
+    deleteTransaction: (id) => runWrite(() => api.deleteTransaction(id), 'ลบรายการแล้ว'),
+    setBudget: (categoryId, limitSatang) => runWrite(() => api.saveBudget(categoryId, limitSatang), 'ตั้งงบสำเร็จ'),
+    transferToPlan: (planId, amountSatang) => runWrite(
+      () => api.transferToPlan(planId, amountSatang),
+      (res) => (res && res.justCompleted ? 'ยินดีด้วย ออมครบเป้าแล้ว' : 'โอนเงินเข้าแผนสำเร็จ')
+    ),
+    cancelPlan: (planId) => runWrite(() => api.cancelPlan(planId), 'ยกเลิกแผนแล้ว'),
+    createPlan: async (body) => {
+      try {
+        const result = await api.createPlan(body.title, body.targetSatang, body.months);
+        closeModal();
+        showPlanOptions(result);
+      } catch (err) {
+        closeModal();
+        showSuccessModal(`สร้างแผนไม่สำเร็จ: ${(err && err.message) || 'เกิดข้อผิดพลาด'}`);
+      }
+    },
+  };
+
+  // ---------- ปุ่มที่ยังไม่มี endpoint รองรับ ----------
+  // ดักไว้ตั้งแต่ชั้น capture ไม่ให้ handler ของ app.js ทำงาน เพราะมันจะแก้แค่ข้อมูลในเครื่อง
+  // แล้วผู้ใช้จะเข้าใจผิดว่าบันทึกแล้ว พอรีเฟรชก็หายไปเฉยๆ
+  const UNSUPPORTED = [
+    ['#addCategoryBtn', 'ยังเพิ่มหมวดหมู่จากหน้าเว็บไม่ได้ — หมวดใหม่จะถูกสร้างให้เองเมื่อพิมพ์ชื่อหมวดตอนเพิ่มรายการ'],
+    ['[data-category-delete]', 'ยังลบหมวดหมู่จากหน้าเว็บไม่ได้ (ยังไม่มี API)'],
+    ['#toggleCategorySortBtn', 'ยังจัดเรียงหมวดหมู่ไม่ได้ (ยังไม่มี API)'],
+    ['[data-toggle-essential]', 'ยังเปลี่ยน "หมวดจำเป็น" จากหน้าเว็บไม่ได้ (ยังไม่มี API)'],
+    ['[data-plan-edit]', 'ยังแก้ไขแผนไม่ได้ — ยกเลิกแล้วสร้างใหม่แทนได้'],
+    ['[data-plan-history]', 'ยังดูประวัติการโอนเข้าแผนไม่ได้ (ยังไม่มี API)'],
+    ['#emergencyToggle', 'ยังตั้งกองทุนฉุกเฉินไม่ได้ (ยังไม่มีฟิลด์นี้ใน API)'],
+  ];
+
+  document.addEventListener('click', (event) => {
+    for (const [selector, message] of UNSUPPORTED) {
+      if (event.target.closest(selector)) {
+        event.stopPropagation();
+        event.preventDefault();
+        closeModal();
+        showSuccessModal(message);
+        return;
+      }
+    }
+  }, true);
 
   // ---------- เริ่มทำงาน ----------
 
@@ -258,8 +461,8 @@
     }
 
     try {
-      const plans = await api.fetchPlans();
-      await loadDashboard(plans);
+      if (document.body.dataset.page === 'settings') await loadSettings();
+      else await refresh();
     } catch (err) {
       showError((err && err.message) || 'โหลดข้อมูลไม่สำเร็จ');
     }

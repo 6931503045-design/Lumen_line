@@ -44,6 +44,24 @@
     fetchSummary: () => request('/summary'),
     fetchTransactions: () => request('/transactions?limit=100'),
     fetchCategories: () => request('/categories'),
+    // รายการเงิน: backend รองรับ POST/PATCH/DELETE/restore อยู่แล้ว (ดู docs/UI_CONTRACT.md)
+    // body ทุกตัวใช้ amountSatang เป็นจำนวนเต็มสตางค์ และยอดเป็นบวกเสมอ ทิศทางดูจาก type (G3)
+    createTransaction: (payload) =>
+      request('/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+    updateTransaction: (transactionId, patch) =>
+      request(`/transactions/${encodeURIComponent(transactionId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      }),
+    deleteTransaction: (transactionId) =>
+      request(`/transactions/${encodeURIComponent(transactionId)}`, { method: 'DELETE' }),
+    restoreTransaction: (transactionId) =>
+      request(`/transactions/${encodeURIComponent(transactionId)}/restore`, { method: 'POST' }),
     fetchSettings: () => request('/settings'),
     // month = 'YYYY-MM' ถ้าไม่ส่ง backend จะใช้เดือนปัจจุบัน (ดู docs/UI_CONTRACT.md)
     fetchBudgets: (month) =>
