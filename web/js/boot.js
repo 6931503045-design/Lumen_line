@@ -14,8 +14,12 @@
   const api = window.moneyBotApi;
   if (!api) return;
 
-  // บอก app.js ว่าอย่าผูก handler แบบ mock ซ้อนเข้ามา (ต้องตั้งก่อน DOMContentLoaded)
+  // บอก app.js ว่าอย่าผูก handler แบบ mock ซ้อนเข้ามา (ต้องตั้งก่อน DOMContentLoaded
+  // เพราะตอนนั้นยังไม่รู้ว่ามี backend ไหม — ถ้าไม่มีจะถอนคืนใน enterPreviewMode())
   window.__jodtangApiWired = true;
+
+  /** true = ไม่มี backend ให้เรียก กำลังโชว์ข้อมูลตัวอย่างอย่างเดียว */
+  let previewMode = false;
 
   /** หน้าที่ต่อ API เสร็จแล้ว — หน้าที่ยังไม่อยู่ในนี้จะขึ้นแถบบอกว่าเป็นข้อมูลตัวอย่าง */
   const WIRED_PAGES = new Set(['dashboard', 'transactions', 'categories', 'analyze', 'settings']);
@@ -92,6 +96,31 @@
         </section>
       </main>
     `);
+  }
+
+  /**
+   * เปิดหน้าเว็บจากเซิร์ฟเวอร์ไฟล์ธรรมดา (Live Server, python -m http.server, GitHub Pages)
+   * จะไม่มี /api/* ให้เรียก — กรณีนี้ต้องให้ดู UI ด้วยข้อมูลตัวอย่างต่อไปได้ ไม่ใช่ปิดหน้าทิ้ง
+   * แต่ต้องบอกให้ชัดว่าไม่ใช่ข้อมูลจริง
+   */
+  function enterPreviewMode() {
+    previewMode = true;
+    // คืนค่าให้ app.js ทำงานแบบเดิมทุกอย่าง: ไม่มี backend ให้บันทึก การแก้ข้อมูลในเครื่องจึงเป็นทางเดียว
+    window.__jodtangApiWired = false;
+    delete window.jodtangPersist;
+    if (typeof bindSettingsActions === 'function') bindSettingsActions();
+    showPreviewBanner();
+  }
+
+  function showPreviewBanner() {
+    const main = document.querySelector('.page-content');
+    if (!main) return;
+    const banner = document.createElement('div');
+    banner.className = 'an-sim-verdict warn';
+    banner.style.marginBottom = 'var(--space-3)';
+    banner.innerHTML = 'กำลังดูตัวอย่างหน้าตาเว็บ ยังไม่ได้ต่อกับเซิร์ฟเวอร์ ตัวเลขทั้งหมดเป็นข้อมูลสมมติ'
+      + '<br><small style="font-weight:400">ถ้าต้องการข้อมูลจริง ให้รัน <code>npm run dev</code> แล้วเปิดที่ localhost:3000</small>';
+    main.prepend(banner);
   }
 
   /** หน้าที่ยังไม่ได้ต่อ API ต้องบอกให้ชัดว่าตัวเลขที่เห็นไม่ใช่ของจริง */
@@ -430,6 +459,8 @@
   ];
 
   document.addEventListener('click', (event) => {
+    // โหมดตัวอย่างไม่ต้องดัก ปล่อยให้ app.js สาธิตด้วยข้อมูลสมมติได้ตามปกติ
+    if (previewMode) return;
     for (const [selector, message] of UNSUPPORTED) {
       if (event.target.closest(selector)) {
         event.stopPropagation();
@@ -448,8 +479,17 @@
     try {
       me = await api.fetchMe();
     } catch (err) {
-      if (err && err.status === 401) showLogin();
-      else showError((err && err.message) || 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+      const status = err && err.status;
+      if (status === 401) {
+        // มี backend แต่ยังไม่ได้เข้าสู่ระบบ
+        showLogin();
+      } else if (status === undefined || status === 404) {
+        // ไม่มี backend ให้เรียกเลย (เปิดจากเซิร์ฟเวอร์ไฟล์ธรรมดา หรือเน็ตหลุด)
+        // ปล่อยให้ app.js แสดงข้อมูลตัวอย่างที่วาดไว้แล้วต่อไป แค่ติดป้ายบอก
+        enterPreviewMode();
+      } else {
+        showError((err && err.message) || 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+      }
       return;
     }
 
