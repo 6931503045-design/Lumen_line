@@ -45,7 +45,9 @@
     fetchTransactions: () => request('/transactions?limit=100'),
     fetchCategories: () => request('/categories'),
     fetchSettings: () => request('/settings'),
-    fetchBudgets: () => request('/budgets'),
+    // month = 'YYYY-MM' ถ้าไม่ส่ง backend จะใช้เดือนปัจจุบัน (ดู docs/UI_CONTRACT.md)
+    fetchBudgets: (month) =>
+      request(month ? `/budgets?month=${encodeURIComponent(month)}` : '/budgets'),
     // limitSatang เป็น "สตางค์" ให้ตรงกับหน่วยที่ทั้งหน้าเว็บใช้ (keypad คืนค่าเป็นสตางค์อยู่แล้ว)
     saveBudget: (categoryId, limitSatang) =>
       request(`/budgets/${encodeURIComponent(categoryId)}`, {

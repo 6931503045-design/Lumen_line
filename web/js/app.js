@@ -207,6 +207,8 @@ function renderMonthlyBudgetSummary() {
 
   const rows = mock.categories
     .filter((item) => item.type === activeType)
+    // หมวดที่ยังไม่ตั้งงบและยังไม่มียอดใช้ ไม่ต้องโชว์เป็นแถว ฿0.00 ให้รก
+    .filter((item) => safeNumber(item.limit) > 0 || safeNumber(activeMonth.usage[item.id]) > 0)
     .slice()
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
     .map((item) => ({
@@ -3795,6 +3797,10 @@ function bindHeroActions() {
 }
 
 function getRemainingThisMonth() {
+  // ⚖️ G1: ยอดคงเหลือของเดือนต้องมาจาก API (§S5.2 monthRemainingSatang) ห้ามหน้าเว็บคำนวณเอง
+  // ส่วนด้านล่างเป็นทางสำรองสำหรับตอนรันด้วย mock data ที่ยังไม่มีค่านี้
+  if (typeof mock.summary.monthRemaining === 'number') return mock.summary.monthRemaining;
+
   const history = mock.monthlyHistory || [];
   const currentMonth = history[history.length - 1];
   if (!currentMonth) return 0;
