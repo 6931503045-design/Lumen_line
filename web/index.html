@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css?v=20260920b" />
+    <link rel="stylesheet" href="css/style.css?v=20260920e" />
   </head>
   <body data-page="dashboard">
     <div class="app-shell">
@@ -30,8 +30,9 @@
             </div>
             <div class="hero-top-right">
               <span id="heroConfidenceBadge"></span>
-              <button type="button" class="hero-toggle-btn" id="heroFigureToggle" aria-label="สลับมุมมองตัวเลข">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
+              <button type="button" class="hero-period-btn" id="heroPeriodBtn" aria-label="เลือกช่วงเวลา: วัน สัปดาห์ เดือน">
+                <span id="heroPeriodLabel">วันนี้</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
               </button>
             </div>
           </div>
@@ -44,6 +45,22 @@
             <p class="mini-label" id="heroFigureLabel">ใช้ได้อย่างปลอดภัยวันนี้</p>
             <h2 id="heroSafeToSpend">฿0.00</h2>
           </div>
+
+          <div class="hero-limit" id="heroLimit" hidden>
+            <div class="an-meter"><span id="heroLimitBar" style="width: 0%"></span></div>
+            <div class="overview-stats">
+              <div class="overview-stat">
+                <span>ใช้ไปแล้ว</span>
+                <strong id="heroLimitUsed">฿0.00</strong>
+              </div>
+              <div class="overview-stat">
+                <span id="heroLimitCeilingLabel">เพดาน</span>
+                <strong id="heroLimitCeiling">฿0.00</strong>
+              </div>
+            </div>
+            <p class="hero-limit-note" id="heroLimitNote"></p>
+          </div>
+          <a class="hero-limit-setup" id="heroLimitSetup" href="settings.html#spendingLimits" hidden>ตั้งเพดานการใช้จ่าย ›</a>
 
           <div class="hero-actions">
             <button type="button" class="hero-action" data-hero-action="add" aria-label="เพิ่มรายการ">
@@ -102,9 +119,9 @@
       </nav>
     </div>
 
-    <script src="js/mock-data.js?v=20260920b"></script>
-    <script src="js/api.js?v=20260920b"></script>
-    <script src="js/app.js?v=20260920b"></script>
-    <script src="js/boot.js?v=20260920b"></script>
+    <script src="js/mock-data.js?v=20260920e"></script>
+    <script src="js/api.js?v=20260920e"></script>
+    <script src="js/app.js?v=20260920e"></script>
+    <script src="js/boot.js?v=20260920e"></script>
   </body>
 </html>

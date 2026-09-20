@@ -115,7 +115,7 @@ const categoryState = {
 
 const dashboardState = {
   budgetBreakdownOpen: false,
-  heroView: 'safe',
+  heroPeriod: 'daily', // ช่วงเวลาที่การ์ดบนสุดโชว์: daily | weekly | monthly
   activeType: 'expense',
   activeMonthKey: (mock.monthlyHistory && mock.monthlyHistory[mock.monthlyHistory.length - 1]?.key) || null,
 };
@@ -444,6 +444,312 @@ function renderDashboardPlans() {
   }
 }
 
+// ============================================================
+// เพดานการใช้จ่ายรายวัน / สัปดาห์ / เดือน (ร่าง SPEC §S5.10 — docs/DRAFT_S5.10_spending_limits.md)
+//
+// ⚠️ ตอนนี้เป็นฝั่งหน้าเว็บล้วนๆ: ยังไม่มี /api/limits จึงเก็บค่าที่ผู้ใช้ตั้งไว้ใน localStorage ของเบราว์เซอร์นี้
+// และคำนวณยอดใช้ไปจากรายการที่โหลดมาแล้ว — ต้องย้ายไปให้ backend ทำเมื่อร่างสเปคผ่านทีมรีวิว
+// (G1: ห้ามหน้าเว็บคำนวณเงินเอง) ค่าที่ระบบคำนวณให้ (โหมด system) ใช้ R/D ของ §S5.2 ที่ backend ส่งมาเป็นฐาน
+// ไม่ได้คิดสูตรใหม่ แต่เป็น "ค่าประมาณสด" ที่ย้อนคำนวณต้นงวดเอง ไม่ใช่ค่าที่ตรึงไว้ตามสเปค
+// ============================================================
+
+const SPENDING_LIMITS_KEY = 'jodtang.spendingLimits';
+const SPENDING_LIMIT_PERIODS = ['daily', 'weekly', 'monthly'];
+const SPENDING_LIMIT_META = {
+  daily: { label: 'รายวัน', heroLabel: 'วันนี้', title: 'เพดานรายวัน', icon: 'calendar' },
+  weekly: { label: 'รายสัปดาห์', heroLabel: 'สัปดาห์นี้', title: 'เพดานรายสัปดาห์', icon: 'calendar' },
+  monthly: { label: 'รายเดือน', heroLabel: 'เดือนนี้', title: 'เพดานรายเดือน', icon: 'calendar' },
+};
+
+function defaultSpendingLimit() {
+  return { enabled: false, mode: 'system', limitSatang: null };
+}
+
+function readSpendingLimits() {
+  let raw = {};
+  try {
+    raw = JSON.parse(window.localStorage.getItem(SPENDING_LIMITS_KEY) || '{}') || {};
+  } catch (error) {
+    raw = {};
+  }
+  const result = {};
+  SPENDING_LIMIT_PERIODS.forEach((period) => {
+    result[period] = { ...defaultSpendingLimit(), ...(raw[period] || {}) };
+  });
+  return result;
+}
+
+function saveSpendingLimit(period, patch) {
+  const all = readSpendingLimits();
+  all[period] = { ...all[period], ...patch };
+  try {
+    window.localStorage.setItem(SPENDING_LIMITS_KEY, JSON.stringify(all));
+  } catch (error) {
+    // เก็บไม่ได้ (เช่น โหมดส่วนตัว) ก็ยังใช้ได้ในหน้านี้ แค่ไม่จำข้ามหน้า
+  }
+  return all[period];
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function toDateKey(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+function parseDateKey(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function addDaysToKey(key, days) {
+  const date = parseDateKey(key);
+  date.setDate(date.getDate() + days);
+  return toDateKey(date);
+}
+
+/** วันนี้: ต่อ API จริงใช้วันที่จริง / โหมดตัวอย่างใช้วันล่าสุดของข้อมูลตัวอย่าง เพื่อให้ตัวเลขนิ่ง */
+function getLimitToday() {
+  if (window.__jodtangApiWired === true) return toDateKey(new Date());
+  const ref = getAnalyzeReference();
+  return `${ref.year}-${pad2(ref.month)}-${pad2(ref.day)}`;
+}
+
+/** สัปดาห์เริ่มวันอาทิตย์ตามปฏิทินไทย (ทีมตกลงแล้ว) — ต่างจาก getWeekStartIso ฝั่ง backend ที่เริ่มวันจันทร์สำหรับเตือนแผนออม */
+function getWeekStartSundayKey(key) {
+  return addDaysToKey(key, -parseDateKey(key).getDay());
+}
+
+/** ยอดรายจ่ายจริงในช่วงวันที่ (รวมปลายทั้งสองข้าง) — type='expense' เท่านั้น โอนเข้าแผนไม่นับ (G7) */
+function getSpentInRange(startKey, endKey) {
+  return mock.transactions
+    .filter((item) => item.type === 'expense' && item.dateKey && item.dateKey >= startKey && item.dateKey <= endKey)
+    .reduce((sum, item) => sum + Math.abs(safeNumber(item.amount)), 0);
+}
+
+/**
+ * เพดาน + ยอดใช้ + สถานะของช่วงเวลาหนึ่ง
+ * available=false เมื่อคำนวณให้แม่นยำไม่ได้ (โหมด system ของสัปดาห์ที่คาบสองเดือน ต้องมี R/D ของเดือนหน้าซึ่งมีแต่ backend)
+ * ห้ามเดาตัวเลขมาแทน — แสดงว่า "คำนวณไม่ได้" ดีกว่าโชว์เลขผิด
+ */
+function getSpendingLimitInfo(period) {
+  const setting = readSpendingLimits()[period];
+  const today = getLimitToday();
+  const info = { period, enabled: setting.enabled, mode: setting.mode, available: true, ceiling: 0, used: 0, remaining: 0, percent: 0, tone: 'success', note: '' };
+  if (!setting.enabled) return info;
+
+  const remainingMonth = getRemainingThisMonth();
+  // D ตาม §S5.2 = วันที่เหลือในเดือนรวมวันนี้
+  const daysLeft = typeof mock.summary.daysLeft === 'number' ? mock.summary.daysLeft : getAnalyzeReference().daysLeft + 1;
+  const daysLeftSafe = Math.max(1, daysLeft);
+
+  if (period === 'daily') {
+    info.used = getSpentInRange(today, today);
+  } else if (period === 'weekly') {
+    info.used = getSpentInRange(getWeekStartSundayKey(today), today);
+  } else {
+    info.used = safeNumber(mock.summary.expense);
+  }
+
+  if (setting.mode === 'manual' && safeNumber(setting.limitSatang) > 0) {
+    info.ceiling = safeNumber(setting.limitSatang);
+  } else if (period === 'daily') {
+    // ย้อนกลับไปต้นวัน: เอายอดที่ใช้วันนี้บวกกลับเข้า R ก่อนหาร D
+    info.ceiling = Math.max(0, Math.floor((remainingMonth + info.used) / daysLeftSafe));
+  } else if (period === 'weekly') {
+    const weekStart = getWeekStartSundayKey(today);
+    const weekEnd = addDaysToKey(weekStart, 6);
+    if (weekStart.slice(0, 7) !== weekEnd.slice(0, 7)) {
+      info.available = false;
+      info.note = 'สัปดาห์นี้คาบสองเดือน ระบบยังคำนวณเพดานให้แม่นยำไม่ได้ ลองตั้งเองแทนได้';
+      return info;
+    }
+    const elapsed = Math.round((parseDateKey(today) - parseDateKey(weekStart)) / 86400000);
+    info.ceiling = Math.max(0, Math.floor(((remainingMonth + info.used) / (daysLeftSafe + elapsed)) * 7));
+  } else {
+    // §S5.10.2: เพดานรายเดือน = ใช้ไปแล้ว + R
+    info.ceiling = Math.max(0, info.used + remainingMonth);
+  }
+
+  info.remaining = info.ceiling - info.used;
+  info.percent = info.ceiling > 0 ? Math.round((info.used / info.ceiling) * 100) : (info.used > 0 ? 100 : 0);
+  info.tone = info.percent >= 100 ? 'danger' : info.percent >= 80 ? 'warning' : 'success';
+  info.note = info.remaining < 0
+    ? `เกินเพดานไปแล้ว ${formatMoney(Math.abs(info.remaining))}`
+    : info.percent >= 80 ? `ใกล้ถึงเพดานแล้ว (${info.percent}%)` : '';
+  if (setting.mode === 'system') {
+    info.note = [info.note, 'ระบบคำนวณจากเงินที่เหลือของเดือนนี้ ค่าอาจขยับเมื่อรายรับเปลี่ยน'].filter(Boolean).join(' · ');
+  }
+  return info;
+}
+
+function renderHeroPeriod() {
+  const period = dashboardState.heroPeriod;
+  const meta = SPENDING_LIMIT_META[period];
+  const periodLabel = document.getElementById('heroPeriodLabel');
+  const figureLabel = document.getElementById('heroFigureLabel');
+  const figure = document.getElementById('heroSafeToSpend');
+  const limitBox = document.getElementById('heroLimit');
+  const setupLink = document.getElementById('heroLimitSetup');
+  if (!figureLabel || !figure) return;
+
+  if (periodLabel) periodLabel.textContent = meta.heroLabel;
+  const info = getSpendingLimitInfo(period);
+
+  if (limitBox) limitBox.hidden = true;
+  if (setupLink) setupLink.hidden = info.enabled;
+
+  if (!info.enabled) {
+    // ยังไม่เปิดเพดาน: รายวัน/รายเดือนคงมุมมองเดิมไว้ (ใช้ได้วันนี้ / เงินที่เหลือเดือนนี้)
+    if (period === 'daily') {
+      figureLabel.textContent = 'ใช้ได้อย่างปลอดภัยวันนี้';
+      figure.textContent = formatMoney(mock.summary.safeToSpend);
+    } else if (period === 'monthly') {
+      figureLabel.textContent = 'เงินที่เหลือในเดือนนี้';
+      figure.textContent = formatMoney(getRemainingThisMonth());
+    } else {
+      figureLabel.textContent = 'เพดานรายสัปดาห์';
+      figure.textContent = 'ยังไม่ได้ตั้ง';
+    }
+    return;
+  }
+
+  if (!info.available) {
+    figureLabel.textContent = meta.title;
+    figure.textContent = 'คำนวณไม่ได้';
+    if (limitBox) {
+      limitBox.hidden = false;
+      const bar = document.getElementById('heroLimitBar');
+      if (bar) bar.style.width = '0%';
+      document.getElementById('heroLimitUsed').textContent = '—';
+      document.getElementById('heroLimitCeiling').textContent = '—';
+      document.getElementById('heroLimitNote').textContent = info.note;
+    }
+    return;
+  }
+
+  figureLabel.textContent = info.remaining >= 0 ? `เหลือใช้ได้ในเพดาน${meta.label}` : `เกินเพดาน${meta.label}`;
+  figure.textContent = formatMoney(Math.abs(info.remaining));
+  if (limitBox) {
+    limitBox.hidden = false;
+    limitBox.dataset.tone = info.tone;
+    const bar = document.getElementById('heroLimitBar');
+    if (bar) bar.style.width = `${clamp(info.percent)}%`;
+    document.getElementById('heroLimitUsed').textContent = formatMoney(info.used);
+    document.getElementById('heroLimitCeilingLabel').textContent = meta.title;
+    document.getElementById('heroLimitCeiling').textContent = formatMoney(info.ceiling);
+    document.getElementById('heroLimitNote').textContent = info.note;
+  }
+}
+
+function openHeroPeriodModal() {
+  const rows = SPENDING_LIMIT_PERIODS.map((period) => {
+    const info = getSpendingLimitInfo(period);
+    const meta = SPENDING_LIMIT_META[period];
+    const state = info.enabled ? (info.available ? `เพดาน ${formatMoney(info.ceiling)}` : 'เปิดอยู่') : 'ยังไม่ได้ตั้งเพดาน';
+    return `
+      <button class="settings-row ${period === dashboardState.heroPeriod ? 'active-row' : ''}" type="button" data-hero-period="${period}">
+        <span>${meta.heroLabel}<small style="display:block;color:var(--muted);font-size:0.74rem">${state}</small></span>
+        <strong>›</strong>
+      </button>
+    `;
+  }).join('');
+
+  openModal(`
+    <div class="modal-card small">
+      <div class="modal-head">
+        <h3>ดูตามช่วงเวลา</h3>
+        <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
+      </div>
+      <div class="settings-list">${rows}</div>
+    </div>
+  `);
+
+  document.querySelectorAll('[data-hero-period]').forEach((button) => {
+    button.addEventListener('click', () => {
+      dashboardState.heroPeriod = button.dataset.heroPeriod;
+      closeModal();
+      renderHeroPeriod();
+    });
+  });
+}
+
+// ---------- ตั้งค่าเพดาน (หน้าตั้งค่า) ----------
+
+function renderSpendingLimitSettings() {
+  const container = document.getElementById('spendingLimitList');
+  if (!container) return;
+
+  container.innerHTML = SPENDING_LIMIT_PERIODS.map((period) => {
+    const setting = readSpendingLimits()[period];
+    const meta = SPENDING_LIMIT_META[period];
+    const info = getSpendingLimitInfo(period);
+    let summary = 'ปิดอยู่';
+    if (setting.enabled) {
+      summary = !info.available ? 'เปิดอยู่ · คำนวณไม่ได้ในสัปดาห์นี้'
+        : `เพดานตอนนี้ ${formatMoney(info.ceiling)} · ${setting.mode === 'manual' ? 'ตั้งเอง' : 'ระบบคำนวณ'}`;
+    }
+    return `
+      <div class="limit-row" data-limit-period="${period}">
+        <div class="limit-row-head">
+          <span class="an-action-icon">${renderIcon(meta.icon)}</span>
+          <div class="an-action-text">
+            <strong>${meta.title}</strong>
+            <small>${summary}</small>
+          </div>
+          <button type="button" class="switch ${setting.enabled ? 'on' : ''}" role="switch" aria-checked="${setting.enabled}" aria-label="เปิดเพดาน${meta.label}" data-limit-toggle="${period}"></button>
+        </div>
+        ${setting.enabled ? `
+          <div class="limit-row-body">
+            <div class="segmented-control">
+              <button type="button" class="segmented ${setting.mode === 'system' ? 'active' : ''}" data-limit-mode="${period}:system">ให้ระบบคำนวณ</button>
+              <button type="button" class="segmented ${setting.mode === 'manual' ? 'active' : ''}" data-limit-mode="${period}:manual">ตั้งเอง</button>
+            </div>
+            ${setting.mode === 'manual' ? `
+              <button type="button" class="settings-row" data-limit-amount="${period}">
+                <span>จำนวนเงินต่อ${meta.heroLabel === 'วันนี้' ? 'วัน' : meta.heroLabel === 'สัปดาห์นี้' ? 'สัปดาห์' : 'เดือน'}</span>
+                <strong>${safeNumber(setting.limitSatang) > 0 ? formatMoney(setting.limitSatang) : 'แตะเพื่อกรอก'}</strong>
+              </button>` : ''}
+          </div>` : ''}
+      </div>
+    `;
+  }).join('');
+
+  if (container.dataset.bound) return;
+  container.dataset.bound = 'true';
+  container.addEventListener('click', (event) => {
+    const toggle = event.target.closest('[data-limit-toggle]');
+    if (toggle) {
+      const period = toggle.dataset.limitToggle;
+      const next = !readSpendingLimits()[period].enabled;
+      saveSpendingLimit(period, { enabled: next });
+      renderSpendingLimitSettings();
+      return;
+    }
+    const modeBtn = event.target.closest('[data-limit-mode]');
+    if (modeBtn) {
+      const [period, mode] = modeBtn.dataset.limitMode.split(':');
+      saveSpendingLimit(period, { mode });
+      renderSpendingLimitSettings();
+      if (mode === 'manual' && !(safeNumber(readSpendingLimits()[period].limitSatang) > 0)) {
+        promptSpendingLimitAmount(period);
+      }
+      return;
+    }
+    const amountBtn = event.target.closest('[data-limit-amount]');
+    if (amountBtn) promptSpendingLimitAmount(amountBtn.dataset.limitAmount);
+  });
+}
+
+function promptSpendingLimitAmount(period) {
+  const meta = SPENDING_LIMIT_META[period];
+  openAmountInputModal(readSpendingLimits()[period].limitSatang || 0, (amount) => {
+    saveSpendingLimit(period, { limitSatang: amount, mode: 'manual' });
+    renderSpendingLimitSettings();
+  }, meta.title);
+}
+
 function renderDashboard() {
   const summary = mock.summary;
   const heroConfidenceBadge = document.getElementById('heroConfidenceBadge');
@@ -458,15 +764,7 @@ function renderDashboard() {
     heroConfidenceBadge.innerHTML = renderConfidenceBadge(summary.safeToSpendConfidence || 'high');
   }
 
-  if (heroFigureLabel && heroSafeToSpend) {
-    if (dashboardState.heroView === 'remaining') {
-      heroFigureLabel.textContent = 'เงินที่เหลือในเดือนนี้';
-      heroSafeToSpend.textContent = formatMoney(getRemainingThisMonth());
-    } else {
-      heroFigureLabel.textContent = 'ใช้ได้อย่างปลอดภัยวันนี้';
-      heroSafeToSpend.textContent = formatMoney(summary.safeToSpend);
-    }
-  }
+  renderHeroPeriod();
 
   if (transactionList) {
     transactionList.innerHTML = mock.transactions
@@ -3919,12 +4217,9 @@ function bindHeroActions() {
     heroAddBtn.addEventListener('click', openAddTransactionModal);
   }
 
-  const heroFigureToggle = document.getElementById('heroFigureToggle');
-  if (heroFigureToggle) {
-    heroFigureToggle.addEventListener('click', () => {
-      dashboardState.heroView = dashboardState.heroView === 'remaining' ? 'safe' : 'remaining';
-      renderDashboard();
-    });
+  const heroPeriodBtn = document.getElementById('heroPeriodBtn');
+  if (heroPeriodBtn) {
+    heroPeriodBtn.addEventListener('click', openHeroPeriodModal);
   }
 }
 
@@ -4025,6 +4320,7 @@ function initializePage() {
   bindTransactionControls();
   bindSettingsActions();
   bindHeroActions();
+  renderSpendingLimitSettings();
 
   const pageName = document.body.dataset.page;
   if (pageName === 'dashboard') renderDashboard();

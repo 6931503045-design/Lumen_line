@@ -109,6 +109,9 @@
     window.__jodtangApiWired = false;
     delete window.jodtangPersist;
     if (typeof bindSettingsActions === 'function') bindSettingsActions();
+    // หน้าถูกวาดไปแล้วตอนที่ยังไม่รู้ว่ามี backend (flag ยังเป็น true อยู่ทำให้ getLimitToday ใช้วันที่จริง)
+    // วาดใหม่หลังคืน flag เพื่อให้เพดานใช้วันที่ของข้อมูลตัวอย่าง
+    renderCurrentPage();
     showPreviewBanner();
   }
 
@@ -302,6 +305,7 @@
     if (page === 'transactions') renderTransactionsPage();
     if (page === 'categories') renderCategoriesPage();
     if (page === 'analyze') renderAnalyzePage();
+    if (page === 'settings') renderSpendingLimitSettings();
   }
 
   async function refresh() {
@@ -501,8 +505,13 @@
     }
 
     try {
-      if (document.body.dataset.page === 'settings') await loadSettings();
-      else await refresh();
+      if (document.body.dataset.page === 'settings') {
+        // หน้าตั้งค่าต้องโหลดข้อมูลรวมด้วย เพราะเพดานโหมด "ระบบคำนวณ" ใช้ยอดคงเหลือ/รายการของเดือนนี้
+        await Promise.all([loadAll(), loadSettings()]);
+        renderSpendingLimitSettings();
+      } else {
+        await refresh();
+      }
     } catch (err) {
       showError((err && err.message) || 'โหลดข้อมูลไม่สำเร็จ');
     }

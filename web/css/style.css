@@ -3682,3 +3682,85 @@ button.an-legend-row:hover { background: var(--surface-soft); }
   margin-bottom: var(--space-3);
   padding: 10px 14px;
 }
+
+/* ============================================================
+   เพดานการใช้จ่าย: ปุ่มเลือกช่วงเวลาบนการ์ดสรุป + แถบความคืบหน้า + แถวตั้งค่า
+   ============================================================ */
+
+.hero-period-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line-dark);
+  border-radius: var(--radius-pill);
+  background: var(--surface-dark-soft);
+  color: var(--on-dark);
+  padding: 6px 10px 6px 12px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hero-period-btn svg { width: 14px; height: 14px; }
+
+.hero-limit { margin-top: var(--space-3); }
+
+.hero-limit .an-meter > span { transition: width 0.25s ease; }
+.hero-limit[data-tone="warning"] .an-meter > span { background: #ffcf7a; }
+.hero-limit[data-tone="danger"] .an-meter > span { background: #ff9a9d; }
+
+.hero-limit-note {
+  margin: var(--space-2) 0 0;
+  color: var(--on-dark-muted);
+  font-size: 0.74rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.hero-limit-setup {
+  display: block;
+  margin: var(--space-2) auto 0;
+  width: fit-content;
+  color: var(--lime);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.an-limit-intro {
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.limit-row {
+  display: grid;
+  gap: var(--space-2);
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-soft);
+}
+
+.limit-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.limit-row-head .an-action-text { flex: 1; min-width: 0; }
+
+.limit-row-body {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--line);
+}
+
+.limit-row-body .segmented-control { margin: var(--space-2) 0 0; }
+.limit-row-body .settings-row { background: var(--surface); }
+
+/* display ที่ตั้งไว้ข้างบนทับ attribute hidden ต้องมีกฎนี้กำกับเอง */
+.hero-limit[hidden],
+.hero-limit-setup[hidden] { display: none; }
