@@ -465,6 +465,31 @@ function defaultSpendingLimit() {
   return { enabled: false, mode: 'system', limitSatang: null };
 }
 
+// รูปแบบของโหมด "ให้ระบบคำนวณ" — ตัวคูณ 0.8 ของ "ประหยัด" เป็นสมมติฐานฝั่งหน้าเว็บล้วนๆ
+// (เผื่อเงินไว้เพิ่มอีก 20% จากเพดานปกติ) ยังไม่ได้อยู่ในร่าง SPEC §S5.10 ต้องให้ทีมยืนยันตัวเลขจริงอีกที
+const SPENDING_PROFILE_KEY = 'jodtang.spendingLimitProfile';
+const SPENDING_PROFILE_META = {
+  moderate: { label: 'ปานกลาง', factor: 1, hint: 'ใช้เงินที่เหลือทั้งหมดอย่างสม่ำเสมอ ไม่มีเผื่อพิเศษ' },
+  frugal: { label: 'ประหยัด', factor: 0.8, hint: 'เพดานตึงกว่าปกติ 20% เผื่อเป็นเงินสำรองเพิ่ม' },
+};
+
+function readSpendingProfile() {
+  try {
+    const value = window.localStorage.getItem(SPENDING_PROFILE_KEY);
+    return value === 'frugal' ? 'frugal' : 'moderate';
+  } catch (error) {
+    return 'moderate';
+  }
+}
+
+function saveSpendingProfile(profile) {
+  try {
+    window.localStorage.setItem(SPENDING_PROFILE_KEY, profile);
+  } catch (error) {
+    // เก็บไม่ได้ก็ยังเลือกได้ในรอบนี้ แค่ไม่จำข้ามหน้า
+  }
+}
+
 function readSpendingLimits() {
   let raw = {};
   try {
@@ -570,6 +595,12 @@ function getSpendingLimitInfo(period) {
   } else {
     // §S5.10.2: เพดานรายเดือน = ใช้ไปแล้ว + R
     info.ceiling = Math.max(0, info.used + remainingMonth);
+  }
+
+  // โหมด manual เป็นตัวเลขที่ผู้ใช้กรอกเองแล้ว ไม่ต้องคูณตามรูปแบบ — คูณเฉพาะเพดานที่ระบบคำนวณให้
+  if (setting.mode !== 'manual') {
+    info.profile = readSpendingProfile();
+    info.ceiling = Math.max(0, Math.floor(info.ceiling * SPENDING_PROFILE_META[info.profile].factor));
   }
 
   info.remaining = info.ceiling - info.used;
@@ -688,7 +719,7 @@ function renderSpendingLimitSettings() {
     let summary = 'ปิดอยู่';
     if (setting.enabled) {
       summary = !info.available ? 'เปิดอยู่ · คำนวณไม่ได้ในสัปดาห์นี้'
-        : `เพดานตอนนี้ ${formatMoney(info.ceiling)} · ${setting.mode === 'manual' ? 'ตั้งเอง' : 'ระบบคำนวณ'}`;
+        : `เพดานตอนนี้ ${formatMoney(info.ceiling)} · ${setting.mode === 'manual' ? 'ตั้งเอง' : `ระบบคำนวณ · ${SPENDING_PROFILE_META[readSpendingProfile()].label}`}`;
     }
     return `
       <div class="limit-row" data-limit-period="${period}">
@@ -710,7 +741,7 @@ function renderSpendingLimitSettings() {
               <button type="button" class="settings-row" data-limit-amount="${period}">
                 <span>จำนวนเงินต่อ${meta.heroLabel === 'วันนี้' ? 'วัน' : meta.heroLabel === 'สัปดาห์นี้' ? 'สัปดาห์' : 'เดือน'}</span>
                 <strong>${safeNumber(setting.limitSatang) > 0 ? formatMoney(setting.limitSatang) : 'แตะเพื่อกรอก'}</strong>
-              </button>` : ''}
+              </button>` : `<small class="limit-row-note">เลือกรูปแบบประหยัด/ปานกลางได้ที่หน้าวิเคราะห์</small>`}
           </div>` : ''}
       </div>
     `;
@@ -724,14 +755,14 @@ function renderSpendingLimitSettings() {
       const period = toggle.dataset.limitToggle;
       const next = !readSpendingLimits()[period].enabled;
       saveSpendingLimit(period, { enabled: next });
-      renderSpendingLimitSettings();
+      refreshSpendingLimitViews();
       return;
     }
     const modeBtn = event.target.closest('[data-limit-mode]');
     if (modeBtn) {
       const [period, mode] = modeBtn.dataset.limitMode.split(':');
       saveSpendingLimit(period, { mode });
-      renderSpendingLimitSettings();
+      refreshSpendingLimitViews();
       if (mode === 'manual' && !(safeNumber(readSpendingLimits()[period].limitSatang) > 0)) {
         promptSpendingLimitAmount(period);
       }
@@ -746,9 +777,84 @@ function promptSpendingLimitAmount(period) {
   const meta = SPENDING_LIMIT_META[period];
   openAmountInputModal(readSpendingLimits()[period].limitSatang || 0, (amount) => {
     saveSpendingLimit(period, { limitSatang: amount, mode: 'manual' });
-    renderSpendingLimitSettings();
+    refreshSpendingLimitViews();
   }, meta.title);
 }
+
+/** วาดใหม่ทุกที่ที่กำลังแสดงเพดานอยู่บนหน้านี้ (แต่ละฟังก์ชันเช็ค element เองแล้วว่าไม่มีก็ไม่ทำอะไร) */
+function refreshSpendingLimitViews() {
+  renderSpendingLimitSettings();
+  renderAnalyzeLimits();
+  renderHeroPeriod();
+}
+
+// ---------- การ์ดเพดานในหน้าวิเคราะห์ ----------
+
+function renderAnalyzeLimits() {
+  const container = document.getElementById('analyzeLimitRows');
+  if (!container) return;
+
+  const profile = readSpendingProfile();
+  document.querySelectorAll('#analyzeLimitProfile [data-limit-profile]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.limitProfile === profile);
+  });
+
+  container.innerHTML = SPENDING_LIMIT_PERIODS.map((period) => {
+    const setting = readSpendingLimits()[period];
+    const meta = SPENDING_LIMIT_META[period];
+    const info = getSpendingLimitInfo(period);
+
+    if (!setting.enabled) {
+      return `
+        <div class="limit-row" data-limit-period="${period}">
+          <div class="limit-row-head">
+            <span class="an-action-icon">${renderIcon(meta.icon)}</span>
+            <div class="an-action-text">
+              <strong>${meta.title}</strong>
+              <small>ยังไม่ได้ตั้งเพดาน</small>
+            </div>
+            <button type="button" class="switch" role="switch" aria-checked="false" aria-label="เปิดเพดาน${meta.label}" data-limit-toggle="${period}"></button>
+          </div>
+        </div>
+      `;
+    }
+
+    if (!info.available) {
+      return `
+        <div class="limit-row" data-limit-period="${period}">
+          <div class="limit-row-head">
+            <span class="an-action-icon">${renderIcon(meta.icon)}</span>
+            <div class="an-action-text">
+              <strong>${meta.title}</strong>
+              <small>${info.note}</small>
+            </div>
+            <button type="button" class="switch on" role="switch" aria-checked="true" aria-label="ปิดเพดาน${meta.label}" data-limit-toggle="${period}"></button>
+          </div>
+        </div>
+      `;
+    }
+
+    const modeText = setting.mode === 'manual' ? 'ตั้งเอง' : `ระบบคำนวณ · ${SPENDING_PROFILE_META[profile].label}`;
+    return `
+      <div class="limit-row" data-limit-period="${period}">
+        <div class="limit-row-head">
+          <span class="an-action-icon">${renderIcon(meta.icon)}</span>
+          <div class="an-action-text">
+            <strong>${meta.title}</strong>
+            <small>ใช้ไป ${formatMoney(info.used)} จาก ${formatMoney(info.ceiling)} · ${modeText}</small>
+          </div>
+          <button type="button" class="switch on" role="switch" aria-checked="true" aria-label="ปิดเพดาน${meta.label}" data-limit-toggle="${period}"></button>
+        </div>
+        <div class="limit-row-body">
+          <div class="progress-bar ${info.tone}"><span style="width: ${clamp(info.percent)}%"></span></div>
+          ${info.note ? `<small class="limit-row-note">${info.note}</small>` : ''}
+          ${setting.mode === 'manual' ? `<button type="button" class="settings-row" data-limit-amount="${period}"><span>เปลี่ยนจำนวนเงิน</span><strong>${formatMoney(setting.limitSatang || 0)}</strong></button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 
 function renderDashboard() {
   const summary = mock.summary;
@@ -2808,6 +2914,7 @@ function renderAnalyzePage() {
   renderAnalyzeTrend();
   renderAnalyzeTiles();
   renderAnalyzeDonut();
+  renderAnalyzeLimits();
 
   const badgeWrap = document.getElementById('safeToSpendBadgeWrap');
   if (badgeWrap) {
@@ -2841,7 +2948,24 @@ function bindAnalyzePage() {
         event.stopPropagation();
         const segment = document.querySelector(`[data-overview-seg="${legendRow.dataset.donutLegend}"]`);
         if (segment) showBarTip(analyzeDonutTip, segment);
+        return;
       }
+
+      const profileBtn = event.target.closest('[data-limit-profile]');
+      if (profileBtn) {
+        saveSpendingProfile(profileBtn.dataset.limitProfile);
+        refreshSpendingLimitViews();
+        return;
+      }
+      const limitToggle = event.target.closest('[data-limit-toggle]');
+      if (limitToggle) {
+        const period = limitToggle.dataset.limitToggle;
+        saveSpendingLimit(period, { enabled: !readSpendingLimits()[period].enabled });
+        refreshSpendingLimitViews();
+        return;
+      }
+      const limitAmount = event.target.closest('[data-limit-amount]');
+      if (limitAmount) promptSpendingLimitAmount(limitAmount.dataset.limitAmount);
     });
   }
 
