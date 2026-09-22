@@ -88,18 +88,26 @@
   }
 
   /**
-   * ชื่อกับรูปใน HTML เป็นค่าสมมติที่ hardcode ไว้ตอนทำดีไซน์
-   * พอสลับมาใช้ข้อมูลจริงต้องเปลี่ยน ไม่งั้นผู้ใช้จะเห็นเงินตัวเองใต้ชื่อคนอื่น
-   * ข้อมูลมาจาก id_token ตอนล็อกอิน (เก็บไว้ใน session) ไม่ใช่จาก DB
-   * เพราะ users.display_name ยังไม่มีใครเขียนค่าลงไป
+   * ชื่อกับรูปของผู้ใช้ — ดีไซน์ใหม่อ่านจาก window.mockData.user แล้ว render เอง
+   * ไม่ใช่ให้เราเขียนลง DOM ตรงๆ เหมือนดีไซน์เดิม จึงต้องแก้ที่ "ข้อมูล" แทน
+   * ข้อมูลมาจาก id_token ตอนล็อกอิน ไม่ใช่จาก DB (users.display_name ยังไม่มีใครเขียนค่า)
    */
   function applyProfile(me) {
-    // index.html ใช้ .profile-meta h1 ส่วน settings.html ใช้ .profile-row h3
+    const data = window.mockData;
+    if (!data.user) data.user = {};
+
+    data.user.name = me.displayName || 'บัญชีของคุณ';
+    data.user.avatar = me.displayName ? me.displayName.trim().charAt(0).toUpperCase() : '👤';
+    data.user.pictureUrl = me.pictureUrl || null;
+    // ดีไซน์ใหม่มีบรรทัดรองใต้ชื่อ ("นักศึกษาชั้นปีที่ 3 · ม.แม่ฟ้าหลวง" ในข้อมูลตัวอย่าง)
+    // เราไม่รู้ข้อมูลนี้จริง จึงล้างทิ้ง ดีกว่าปล่อยข้อความของ persona ตัวอย่างค้างไว้
+    data.user.subtitle = '';
+
+    // เผื่อหน้าไหนยัง hardcode ชื่อ/รูปไว้ใน HTML
     const nameEl = document.querySelector('.profile-meta h1, .profile-row h3');
+    if (nameEl) nameEl.textContent = data.user.name;
+
     const avatarEl = document.querySelector('.profile-meta .avatar, .profile-row .avatar');
-
-    if (nameEl) nameEl.textContent = me.displayName || 'บัญชีของคุณ';
-
     if (avatarEl) {
       if (me.pictureUrl) {
         avatarEl.textContent = '';
@@ -107,10 +115,23 @@
         avatarEl.style.backgroundSize = 'cover';
         avatarEl.style.backgroundPosition = 'center';
       } else {
-        avatarEl.textContent = me.displayName ? me.displayName.trim().charAt(0).toUpperCase() : '👤';
+        avatarEl.textContent = data.user.avatar;
       }
     }
   }
+
+  /**
+   * DB เก็บหมวดเป็น emoji (ตาม DEFAULT_CATEGORIES ใน config/constants.ts)
+   * แต่ดีไซน์ใหม่ใช้ "ชื่อไอคอน" เช่น 'utensils' — ส่ง emoji ไปจะขึ้นไอคอนว่าง
+   */
+  const EMOJI_TO_ICON = {
+    '🍜': 'utensils', '🚗': 'bus', '🛍️': 'shopping-bag', '🏠': 'home',
+    '🎮': 'clapperboard', '💊': 'heart-pulse', '📚': 'graduation-cap',
+    '📦': 'receipt', '💰': 'banknote', '💵': 'briefcase', '↩️': 'banknote',
+  };
+
+  /** สีของหมวดในกราฟ — ดีไซน์ใหม่ต้องการ color ต่อหมวด ซึ่ง DB ไม่ได้เก็บไว้ */
+  const CATEGORY_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'];
 
   function applyLiveData(summary, transactions, categories, budgets, plans) {
     const data = window.mockData;
@@ -133,6 +154,14 @@
     data.summary.confidence = null;
     data.summary.progress = null;
     data.summary.daysOfData = null;
+
+    // ค่าที่ดีไซน์ใหม่เพิ่มเข้ามาแต่ backend ยังคำนวณไม่ได้ — ต้องล้าง
+    // ไม่ใช่ปล่อยเลขของ persona ตัวอย่างค้างไว้ ผู้ใช้จะอ่านว่าเป็นเงินตัวเอง
+    data.summary.forecastBalance = null;
+
+    // monthlyHistory = ยอดใช้รายหมวดย้อนหลังต่อเดือน ซึ่ง /api/summary ให้มาแค่ยอดรวม
+    // รายเดือน (monthlyTrend) ยังแยกรายหมวดไม่ได้ — ล้างเพื่อไม่ให้โชว์ประวัติปลอม
+    data.monthlyHistory = [];
 
     // งบรายเดือน: มีจริงแล้วตั้งแต่ budget.service — แต่ถ้าผู้ใช้ยังไม่เคยตั้งงบสักหมวด
     // ต้องคง null ไว้ให้การ์ดขึ้นว่า "ยังไม่ได้ตั้งงบประมาณ" ไม่ใช่ ฿0.00 ซึ่งอ่านว่า "งบเป็นศูนย์"
@@ -168,7 +197,9 @@
       return {
         id: category.id,
         name: category.name,
-        icon: category.emoji || '📦',
+        icon: EMOJI_TO_ICON[category.emoji] || 'receipt',
+        emoji: category.emoji || null,
+        color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
         // ยอดใช้เอาจาก budgets ก่อนถ้ามี เพราะ backend คิดจาก category_id ตรงๆ
         // ส่วน expenseByCategory จับคู่ด้วยชื่อซึ่งพลาดได้ถ้ามีหมวดชื่อซ้ำ
         used: budget ? budget.spentSatang : (spentByName.get(category.name) || 0),
@@ -196,6 +227,9 @@
         dueMonth: formatThaiMonthYear(plan.targetDate),
         monthly_save: plan.monthlySaveSatang,
         active: plan.status === 'active',
+        // ดีไซน์ใหม่แสดงประวัติการโอนเข้าแผนทีละครั้ง ซึ่ง /api/plans ส่งมาแต่ยอดรวม
+        // ปล่อย [] ให้ขึ้นว่ายังไม่มีประวัติ ดีกว่าโชว์ประวัติปลอม
+        history: [],
       }));
 
     // ความคืบหน้ารวมของแผนที่กำลังออมอยู่ — การ์ดบนแดชบอร์ดใช้ค่านี้
@@ -289,27 +323,32 @@
         return;
       }
 
-      // keypad ทำงานหน่วยสตางค์ (แสดงผลหารร้อย) ค่าที่ได้จึงส่งเข้า API ได้ตรงๆ
-      buildKeypadInput(category.limit || 0, async (limitSatang) => {
-        if (!limitSatang) {
-          // กด 0 = ยกเลิกงบหมวดนี้ ตีความแบบนี้เพราะ backend ไม่รับงบ 0 บาทอยู่แล้ว
-          await removeBudgetLive(category);
-          return;
-        }
+      // ดีไซน์ใหม่ใช้ openAmountInputModal แทนแป้น ATM เดิม — รับ/คืนเป็นสตางค์เหมือนกัน
+      // (ผู้ใช้กรอกเป็นบาท ฟังก์ชันคูณร้อยให้เอง) ค่าที่ได้จึงส่งเข้า API ได้ตรงๆ
+      openAmountInputModal(
+        category.limit || 0,
+        async (limitSatang) => {
+          if (!limitSatang) {
+            // กรอก 0 = ยกเลิกงบหมวดนี้ ตีความแบบนี้เพราะ backend ไม่รับงบ 0 บาทอยู่แล้ว
+            await removeBudgetLive(category);
+            return;
+          }
 
-        try {
-          const status = await window.moneyBotApi.saveBudget(category.id, limitSatang);
-          category.limit = status.limitSatang;
-          category.used = status.spentSatang;
-          category.percentage = status.percentUsed;
-          category.budgetLevel = status.level;
-          await refreshBudgetTotals();
-          showSuccessModal('ตั้งงบรายหมวดสำเร็จ');
-        } catch (err) {
-          console.error('[boot] ตั้งงบไม่สำเร็จ', err);
-          showSuccessModal(`ตั้งงบไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
-        }
-      });
+          try {
+            const status = await window.moneyBotApi.saveBudget(category.id, limitSatang);
+            category.limit = status.limitSatang;
+            category.used = status.spentSatang;
+            category.percentage = status.percentUsed;
+            category.budgetLevel = status.level;
+            await refreshBudgetTotals();
+            showSuccessModal('ตั้งงบรายหมวดสำเร็จ');
+          } catch (err) {
+            console.error('[boot] ตั้งงบไม่สำเร็จ', err);
+            showSuccessModal(`ตั้งงบไม่สำเร็จ: ${(err && err.message) || 'ไม่ทราบสาเหตุ'}`);
+          }
+        },
+        `ตั้งงบ ${category.name}`
+      );
     };
   }
 
@@ -454,7 +493,7 @@
           </div>
           <div class="card-row">
             <span>ถึงเป้า ${escapeHtml(plan.targetDate)}</span>
-            <span>${formatPercent(plan.percentComplete)}%</span>
+            <span>${Math.round(clamp(plan.percentComplete))}%</span>
           </div>
           <div class="plan-actions-row">${statusBadge}${actions}</div>
         </div>
@@ -644,7 +683,7 @@
         const plan = ((window.__livePlans && window.__livePlans.items) || [])
           .find((item) => item.planId === planId);
         // ตั้งค่าเริ่มต้นเป็นยอดออมต่อเดือนของแผน ซึ่งเป็นจำนวนที่ผู้ใช้ตั้งใจโอนอยู่แล้ว
-        buildKeypadInput(plan ? plan.monthlySaveSatang : 0, async (amountSatang) => {
+        openAmountInputModal(plan ? plan.monthlySaveSatang : 0, async (amountSatang) => {
           if (!amountSatang) return;
           try {
             const result = await window.moneyBotApi.transferToPlan(planId, amountSatang);
