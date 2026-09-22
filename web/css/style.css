@@ -2972,7 +2972,6 @@ h3 {
     grid-template-areas:
       'status trend'
       'tiles tiles'
-      'limits limits'
       'donut plans'
       'sim plans';
     grid-template-rows: auto auto auto 1fr;
@@ -2985,7 +2984,6 @@ h3 {
   .an-donut { grid-area: donut; }
   .an-plans { grid-area: plans; }
   .an-sim { grid-area: sim; }
-  .an-limits { grid-area: limits; }
 
   .an-tiles { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; }
   .an-tiles.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -3768,33 +3766,25 @@ button.an-legend-row:hover { background: var(--surface-soft); }
 .hero-limit-setup[hidden] { display: none; }
 
 /* ============================================================
-   การ์ดเพดานการใช้จ่ายในหน้าวิเคราะห์ (แชร์คลาส .limit-row* กับหน้าตั้งค่า)
+   ปุ่มเลือกรูปแบบของโหมด "ให้ระบบคำนวณ" (หน้าตั้งค่า — อยู่หัวการ์ดเพดาน มีผลกับทุกระดับ)
    ============================================================ */
 
-.an-limits-profile {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
-.an-limits-profile > span {
-  color: var(--muted);
-  font-size: 0.78rem;
-  flex-shrink: 0;
-}
-
-.an-limits-profile .segmented-control {
-  margin: 0;
-  width: auto;
-  min-width: 180px;
-}
-
-.an-limit-rows {
+.limit-profile-picker {
   display: grid;
   gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-soft);
 }
+
+.limit-profile-picker > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.limit-profile-picker .segmented-control { margin: 0; }
 
 .limit-row-note {
   color: var(--muted);
