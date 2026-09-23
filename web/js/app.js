@@ -3164,6 +3164,8 @@ function renderPlanWizardStep() {
         </label>
       </div>
       ${renderEmergencyToggleRow(state.emergency, null)}
+      <!-- boot.js เติมกำลังออมจริงจาก /api/plans/capacity ลงตรงนี้ โหมดตัวอย่างจะว่างไว้ -->
+      <p id="planCapacityHint" class="an-note" hidden></p>
       <div class="modal-actions">
         <button class="primary-btn full" type="button" data-plan-next="2">ต่อไป</button>
       </div>
@@ -3606,6 +3608,22 @@ function setCategoryLimit(categoryId) {
   }, 'ตั้งงบรายหมวด');
 }
 
+// ยกเลิกงบของหมวด — แยกเป็นปุ่มของตัวเอง ไม่ใช้วิธี "กรอก 0 แล้วถือว่ายกเลิก"
+// เพราะช่องกรอกจำนวนเงินไม่รับค่า 0 อยู่แล้ว ผู้ใช้จึงไม่มีทางกดไปถึง
+function clearCategoryLimit(categoryId) {
+  const category = mock.categories.find((item) => sameId(item.id, categoryId));
+  if (!category) return;
+  if (window.jodtangPersist && window.jodtangPersist.clearBudget) {
+    window.jodtangPersist.clearBudget(category.id);
+    return;
+  }
+  category.limit = null;
+  category.percentage = null;
+  closeModal();
+  renderCategoriesPage();
+  showSuccessModal('ยกเลิกงบหมวดนี้แล้ว');
+}
+
 function openCategoryMenu(categoryId) {
   const category = mock.categories.find((item) => sameId(item.id, categoryId));
   if (!category) return;
@@ -3624,7 +3642,8 @@ function openCategoryMenu(categoryId) {
           </div>
           <button type="button" class="switch ${category.isEssential ? 'on' : ''}" data-toggle-essential="${category.id}" role="switch" aria-checked="${!!category.isEssential}"></button>
         </div>
-        <button class="settings-row" type="button" data-category-set-limit="${category.id}"><span>ตั้งงบ</span><strong>›</strong></button>
+        <button class="settings-row" type="button" data-category-set-limit="${category.id}"><span>${category.limit ? 'แก้งบ' : 'ตั้งงบ'}</span><strong>›</strong></button>
+        ${category.limit ? `<button class="settings-row" type="button" data-category-clear-limit="${category.id}"><span>ยกเลิกงบ</span><strong>›</strong></button>` : ''}
         <button class="settings-row" type="button" data-category-view-detail="${category.id}"><span>ดูรายละเอียด</span><strong>›</strong></button>
         <button class="settings-row danger" type="button" data-category-delete="${category.id}"><span>ลบหมวดหมู่</span><strong>›</strong></button>
       </div>
@@ -4247,6 +4266,12 @@ function bindTransactionControls() {
     const categorySetLimit = event.target.closest('[data-category-set-limit]');
     if (categorySetLimit) {
       setCategoryLimit(categorySetLimit.dataset.categorySetLimit);
+      return;
+    }
+
+    const categoryClearLimit = event.target.closest('[data-category-clear-limit]');
+    if (categoryClearLimit) {
+      clearCategoryLimit(categoryClearLimit.dataset.categoryClearLimit);
       return;
     }
 

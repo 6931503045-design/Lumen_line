@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css?v=20260923a" />
+    <link rel="stylesheet" href="css/style.css?v=20260923b" />
   </head>
   <body data-page="settings">
     <div class="app-shell">
@@ -68,6 +68,15 @@
           <div id="spendingLimitList" class="an-setting-list"></div>
         </section>
 
+        <section class="section-panel an-settings" id="recurringPanel" hidden>
+          <div class="an-head">
+            <h3>รายการประจำ</h3>
+            <button id="createRecurringBtn" class="chip-button" type="button">+ เพิ่มรายการ</button>
+          </div>
+          <div id="recurringList" class="an-setting-list"></div>
+          <p class="ai-disclaimer">เงินเดือน ค่าหอ ค่าเน็ต — ระบบจะบันทึกให้เองทุกรอบ เวลา 06:00 น.</p>
+        </section>
+
         <section class="section-panel an-settings">
           <div class="an-head"><h3>อีเมลสำหรับ forward</h3></div>
           <div class="an-email-box">
@@ -110,9 +119,9 @@
       </nav>
     </div>
 
-    <script src="js/mock-data.js?v=20260923a"></script>
-    <script src="js/api.js?v=20260923a"></script>
-    <script src="js/app.js?v=20260923a"></script>
-    <script src="js/boot.js?v=20260923a"></script>
+    <script src="js/mock-data.js?v=20260923b"></script>
+    <script src="js/api.js?v=20260923b"></script>
+    <script src="js/app.js?v=20260923b"></script>
+    <script src="js/boot.js?v=20260923b"></script>
   </body>
 </html>

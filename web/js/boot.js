@@ -60,6 +60,20 @@
     return bangkok(new Date(y, m - 1, d).toISOString(), { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
+  /** กันข้อความจากผู้ใช้/หลังบ้านไม่ให้กลายเป็น HTML ตอนเอาไปต่อสตริง */
+  function escapeHtml(text) {
+    return String(text ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  /** บาทที่ผู้ใช้พิมพ์ -> สตางค์ (integer) — backend รับเฉพาะสตางค์ตามกฎ G3 */
+  function bahtToSatang(value) {
+    const baht = Number(String(value ?? '').replace(/,/g, '').trim());
+    if (!Number.isFinite(baht)) return null;
+    return Math.round(baht * 100);
+  }
+
   // ---------- หน้าจอสถานะ ----------
 
   function replaceShell(html) {
@@ -483,6 +497,7 @@
       }
     },
     setBudget: (categoryId, limitSatang) => runWrite(() => api.saveBudget(categoryId, limitSatang), 'ตั้งงบสำเร็จ'),
+    clearBudget: (categoryId) => runWrite(() => api.deleteBudget(categoryId), 'ยกเลิกงบหมวดนี้แล้ว'),
     transferToPlan: (planId, amountSatang) => runWrite(
       () => api.transferToPlan(planId, amountSatang),
       (res) => (res && res.justCompleted ? 'ยินดีด้วย ออมครบเป้าแล้ว' : 'โอนเงินเข้าแผนสำเร็จ')
@@ -500,9 +515,196 @@
     },
   };
 
-  // ---------- ปุ่มที่ยังไม่มี endpoint รองรับ ----------
-  // ดักไว้ตั้งแต่ชั้น capture ไม่ให้ handler ของ app.js ทำงาน เพราะมันจะแก้แค่ข้อมูลในเครื่อง
-  // แล้วผู้ใช้จะเข้าใจผิดว่าบันทึกแล้ว พอรีเฟรชก็หายไปเฉยๆ
+  // ---------- กำลังออมจริง ----------
+  // app.js เดาเงินออมต่อเดือนเองใน wizard (เป้าหมาย × 0.12 ฯลฯ) ซึ่งเป็นแค่ตัวอย่างหน้าจอ
+  // ตัวเลขที่ผูกพันจริงมาจาก /api/plans ตอนกดสร้าง (showPlanOptions) ตรงนี้จึงเติม
+  // "กำลังออมจริง" ที่ backend คำนวณให้ ผู้ใช้จะได้ไม่ตั้งเป้าที่ตัวเองไปไม่ถึงตั้งแต่ต้น (G1)
+
+  let planCapacity = null;
+
+  function fillPlanCapacityHint() {
+    const box = document.getElementById('planCapacityHint');
+    if (!box || !planCapacity) return;
+    const monthly = planCapacity.monthlyCapacitySatang;
+    if (typeof monthly !== 'number') return;
+    box.textContent = monthly > 0
+      ? `ตอนนี้คุณออมไหวราวเดือนละ ${formatMoney(monthly)}`
+      : 'ตอนนี้รายจ่ายยังกินรายรับหมด ลองลดงบสักหมวดก่อนตั้งแผน';
+    box.hidden = false;
+  }
+
+  function installPlanCapacity() {
+    const openOriginal = window.openPlanWizard;
+    const stepOriginal = window.renderPlanWizardStep;
+    if (typeof openOriginal !== 'function' || typeof stepOriginal !== 'function') return;
+
+    window.openPlanWizard = function wrappedOpenPlanWizard(preset) {
+      const result = openOriginal(preset);
+      // ดึงครั้งเดียวต่อการเปิด wizard แล้วเติมเมื่อได้คำตอบ ไม่บล็อกการเปิดหน้าต่าง
+      api.fetchPlanCapacity()
+        .then((capacity) => { planCapacity = capacity; fillPlanCapacityHint(); })
+        .catch(() => { planCapacity = null; });
+      return result;
+    };
+
+    // ทุกครั้งที่ย้อนกลับมา step 1 ช่องนี้ถูกสร้างใหม่ ต้องเติมซ้ำ
+    window.renderPlanWizardStep = function wrappedRenderPlanWizardStep() {
+      const result = stepOriginal();
+      fillPlanCapacityHint();
+      return result;
+    };
+  }
+
+  // ---------- รายการประจำ ----------
+  // เงินเดือน/ค่าหอ/ค่าเน็ต ที่ backend บันทึกให้เองทุกรอบ อยู่ในหน้าตั้งค่า
+  // ส่วนนี้ไม่ผ่าน window.mockData เพราะ app.js ไม่มีหน้าจอสำหรับมันมาก่อน จึงวาดเองทั้งก้อน
+
+  const FREQUENCY_LABEL = {
+    daily: 'ทุกวัน', weekly: 'ทุกสัปดาห์', monthly: 'ทุกเดือน', yearly: 'ทุกปี',
+  };
+
+  function renderRecurringList(items) {
+    const box = document.getElementById('recurringList');
+    if (!box) return;
+    if (!items.length) {
+      box.innerHTML = '<p class="an-note">ยังไม่มีรายการประจำ — ใส่เงินเดือนกับค่าหอไว้ ระบบจะบันทึกให้เองทุกรอบ</p>';
+      return;
+    }
+    box.innerHTML = items.map((rule) => `
+      <div class="setting-item">
+        <div>
+          <strong>${escapeHtml(rule.label)}</strong>
+          <span>${FREQUENCY_LABEL[rule.frequency] || escapeHtml(rule.frequency)} · ${formatMoney(rule.amountSatang)}${rule.nextRun ? ` · รอบถัดไป ${escapeHtml(rule.nextRun)}` : ''}</span>
+        </div>
+        <span class="pill ${rule.type === 'income' ? '' : 'muted'}">${rule.type === 'income' ? 'รายรับ' : 'รายจ่าย'}</span>
+        <button class="secondary-btn small" type="button" data-recurring-delete="${rule.id}">ลบ</button>
+      </div>
+    `).join('');
+  }
+
+  async function refreshRecurring() {
+    const box = document.getElementById('recurringList');
+    if (!box) return;
+    try {
+      const data = await api.fetchRecurring();
+      renderRecurringList(data.items || []);
+    } catch (err) {
+      box.innerHTML = `<p class="an-note">โหลดรายการประจำไม่สำเร็จ${err && err.message ? `: ${escapeHtml(err.message)}` : ''}</p>`;
+    }
+  }
+
+  function openRecurringModal() {
+    openModal(`
+      <div class="modal-card small">
+        <div class="modal-head">
+          <h3>เพิ่มรายการประจำ</h3>
+          <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
+        </div>
+        <div class="form-grid">
+          <label class="form-field">
+            <span>ชื่อรายการ</span>
+            <input id="recurringLabel" placeholder="เช่น เงินเดือน, ค่าหอ" />
+          </label>
+          <label class="form-field">
+            <span>จำนวนเงิน (บาท)</span>
+            <input id="recurringAmount" type="number" inputmode="decimal" min="1" step="0.01" placeholder="3500" />
+          </label>
+          <label class="form-field">
+            <span>ประเภท</span>
+            <div class="segmented-control">
+              <button type="button" class="segmented active" data-recurring-type="expense">รายจ่าย</button>
+              <button type="button" class="segmented" data-recurring-type="income">รายรับ</button>
+            </div>
+          </label>
+          <label class="form-field">
+            <span>ความถี่</span>
+            <select id="recurringFrequency">
+              <option value="monthly">ทุกเดือน</option>
+              <option value="weekly">ทุกสัปดาห์</option>
+              <option value="daily">ทุกวัน</option>
+              <option value="yearly">ทุกปี</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>เริ่มรอบแรกวันไหน</span>
+            <input id="recurringStart" type="date" />
+          </label>
+        </div>
+        <p id="recurringError" class="field-error" hidden></p>
+        <div class="modal-actions">
+          <button class="primary-btn full" type="button" id="recurringSubmit">บันทึก</button>
+        </div>
+      </div>
+    `);
+
+    // ค่าตั้งต้นคือวันนี้ตามเวลาไทย ไม่ใช่เวลาเครื่องผู้ใช้
+    const startInput = document.getElementById('recurringStart');
+    if (startInput) startInput.value = dateKeyOf(new Date());
+
+    let selectedType = 'expense';
+    document.querySelectorAll('[data-recurring-type]').forEach((button) => {
+      button.addEventListener('click', () => {
+        selectedType = button.dataset.recurringType;
+        document.querySelectorAll('[data-recurring-type]').forEach((other) => {
+          other.classList.toggle('active', other === button);
+        });
+      });
+    });
+
+    const submitBtn = document.getElementById('recurringSubmit');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', async () => {
+        const errorBox = document.getElementById('recurringError');
+        const showError = (message) => {
+          if (!errorBox) return;
+          errorBox.textContent = message;
+          errorBox.hidden = false;
+        };
+        const label = (document.getElementById('recurringLabel').value || '').trim();
+        const amountSatang = bahtToSatang(document.getElementById('recurringAmount').value);
+        const frequency = document.getElementById('recurringFrequency').value || 'monthly';
+        const startDate = document.getElementById('recurringStart').value || undefined;
+
+        if (!label) return showError('ใส่ชื่อรายการก่อน');
+        if (amountSatang === null || amountSatang <= 0) return showError('ใส่จำนวนเงินเป็นตัวเลขมากกว่า 0');
+
+        submitBtn.disabled = true;
+        if (errorBox) errorBox.hidden = true;
+        try {
+          await api.createRecurring({ label, type: selectedType, amountSatang, frequency, startDate });
+          closeModal();
+          await refreshRecurring();
+          showSuccessModal('เพิ่มรายการประจำแล้ว');
+        } catch (err) {
+          submitBtn.disabled = false;
+          showError((err && err.message) || 'บันทึกไม่สำเร็จ');
+        }
+      });
+    }
+  }
+
+  function installRecurringHandlers() {
+    // ส่วนนี้ซ่อนไว้ใน HTML เพราะโหมดตัวอย่าง (ไม่มี backend) กดแล้วจะไม่เกิดอะไรขึ้น
+    const panel = document.getElementById('recurringPanel');
+    if (panel) panel.hidden = false;
+
+    const addBtn = document.getElementById('createRecurringBtn');
+    if (addBtn) addBtn.addEventListener('click', openRecurringModal);
+
+    document.addEventListener('click', async (event) => {
+      const deleteBtn = event.target.closest('[data-recurring-delete]');
+      if (!deleteBtn) return;
+      deleteBtn.disabled = true;
+      try {
+        await api.deleteRecurring(deleteBtn.dataset.recurringDelete);
+        await refreshRecurring();
+      } catch (err) {
+        deleteBtn.disabled = false;
+        showAlertModal((err && err.message) || 'ลบไม่สำเร็จ', 'ลบรายการประจำไม่สำเร็จ');
+      }
+    });
+  }
+
   // ---------- ปุ่มที่ยังไม่มี endpoint รองรับ ----------
   // เดิมปล่อยให้กดได้แล้วค่อยขึ้นข้อความปฏิเสธ ซึ่งน่าหงุดหงิดกว่าไม่ต้องแสดงตั้งแต่แรก
   // ตอนนี้ซ่อนทิ้งไปเลยเมื่อต่อ API แล้ว (โหมดตัวอย่างยังโชว์ครบเพื่อใช้สาธิตดีไซน์)
@@ -555,6 +757,7 @@
     }
 
     applyProfile(me);
+    installPlanCapacity();
     hideUnsupported();
     unsupportedObserver.observe(document.body, { childList: true, subtree: true });
 
@@ -568,6 +771,8 @@
         // หน้าตั้งค่าต้องโหลดข้อมูลรวมด้วย เพราะเพดานโหมด "ระบบคำนวณ" ใช้ยอดคงเหลือ/รายการของเดือนนี้
         await Promise.all([loadAll(), loadSettings()]);
         renderSpendingLimitSettings();
+        installRecurringHandlers();
+        await refreshRecurring();
       } else {
         await refresh();
       }
