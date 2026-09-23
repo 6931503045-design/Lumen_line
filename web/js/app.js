@@ -876,8 +876,10 @@ function renderDashboard() {
       .slice(0, 4)
       .map((item) => {
         const amount = Number(item.amount || 0);
-        const sign = amount >= 0 ? '+' : '-';
-        const icon = renderIcon(item.type === 'income' ? 'wallet' : 'receipt');
+        // ⚖️ G7: เงินโอนเข้าแผนออมไม่ใช่รายจ่าย แสดงให้เป็นกลาง ไม่ติดลบ ไม่ย้อมสีแดง
+        const transfer = isTransfer(item);
+        const sign = transfer ? '' : amount >= 0 ? '+' : '-';
+        const icon = renderIcon(transfer ? 'arrow-left-right' : item.type === 'income' ? 'wallet' : 'receipt');
         const displayAmount = formatMoney(Math.abs(amount));
         const aiBadge = item.parsedBy === 'ai' ? `<span class="ai-tag">${renderIcon('sparkles')} AI</span>` : '';
 
@@ -887,10 +889,10 @@ function renderDashboard() {
               <div class="transaction-icon">${icon}</div>
               <div class="transaction-text">
                 <strong>${item.title}${aiBadge}</strong>
-                <small>${item.category} • ${item.time}</small>
+                <small>${transfer ? 'โอนเข้าแผนออม' : item.category} • ${item.time}</small>
               </div>
             </div>
-            <span class="amount ${item.type}">${sign}${displayAmount}</span>
+            <span class="amount ${transfer ? 'transfer' : item.type}">${sign}${displayAmount}</span>
           </li>
         `;
       })
@@ -1393,7 +1395,11 @@ function renderTransactionsPage() {
 
     const html = Object.entries(grouped)
       .map(([groupName, items]) => {
-        const groupTotal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        // ⚖️ G7: โอนเข้าแผนออม (type='transfer') ไม่ใช่รายรับหรือรายจ่าย ห้ามเอามารวมยอด
+        // API ส่งรายการพวกนี้ปนมาใน /api/transactions ด้วย (UI_CONTRACT เตือนไว้ตรงๆ)
+        const groupTotal = items
+          .filter((item) => !isTransfer(item))
+          .reduce((sum, item) => sum + Number(item.amount || 0), 0);
         const groupTotalSign = groupTotal >= 0 ? '+' : '-';
         return `
         <div class="date-group">
@@ -1403,8 +1409,10 @@ function renderTransactionsPage() {
           </div>
           ${items.map((item) => {
             const amount = Number(item.amount || 0);
-            const sign = amount >= 0 ? '+' : '-';
-            const icon = renderIcon(item.type === 'income' ? 'wallet' : 'receipt');
+            const transfer = isTransfer(item);
+            // เงินโอนเข้าแผนไม่ใช่เงินที่หายไปจากกระเป๋า จึงไม่ใส่เครื่องหมายลบและไม่ย้อมสีแบบรายจ่าย
+            const sign = transfer ? '' : amount >= 0 ? '+' : '-';
+            const icon = renderIcon(transfer ? 'arrow-left-right' : item.type === 'income' ? 'wallet' : 'receipt');
             const aiBadge = item.parsedBy === 'ai' ? `<span class="ai-tag">${renderIcon('sparkles')} AI</span>` : '';
             const displayAmount = formatMoney(Math.abs(amount));
             const selectedClass = transactionState.selectedIds.some((selected) => sameId(selected, item.id)) ? 'row-selected' : '';
@@ -1419,10 +1427,10 @@ function renderTransactionsPage() {
                 <div class="transaction-icon">${icon}</div>
                 <div class="transaction-text">
                   <strong>${item.title}${aiBadge}</strong>
-                  <small>${item.category} • ${item.time}</small>
+                  <small>${transfer ? 'โอนเข้าแผนออม' : item.category} • ${item.time}</small>
                 </div>
                 <div class="transaction-actions">
-                  <span class="amount ${item.type}">${sign}${displayAmount}</span>
+                  <span class="amount ${transfer ? 'transfer' : item.type}">${sign}${displayAmount}</span>
                   <button class="row-more" type="button" data-transaction-menu="${item.id}">${renderIcon('more-vertical')}</button>
                 </div>
               </div>
