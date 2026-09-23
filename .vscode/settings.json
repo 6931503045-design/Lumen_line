@@ -1,0 +1,6 @@
+{
+  // หน้าเว็บอยู่ในโฟลเดอร์ web/ ไม่ได้อยู่ที่รากโปรเจกต์
+  // ถ้าไม่ตั้งค่านี้ Live Server จะเสิร์ฟจากรากแล้วหา index.html ไม่เจอ ขึ้น 404
+  "liveServer.settings.root": "/web",
+  "liveServer.settings.donotShowInfoMsg": true
+}
