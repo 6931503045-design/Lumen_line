@@ -3791,3 +3791,38 @@ button.an-legend-row:hover { background: var(--surface-soft); }
   font-size: 0.74rem;
   line-height: 1.5;
 }
+
+/* บรรทัด safe-to-spend ที่ต้องเห็นเสมอบนการ์ดสรุป (SPEC P0 ข้อ 4) */
+.hero-safe-line {
+  margin: var(--space-2) 0 0;
+  text-align: center;
+  color: var(--on-dark-muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.hero-safe-line[hidden] { display: none; }
+.hero-safe-line.warn { color: #ffcf7a; }
+.hero-safe-line strong { color: var(--on-dark); font-weight: 700; }
+.hero-safe-line.warn strong { color: #ffcf7a; }
+
+/* ป้ายสถานะแบบ "ยังไม่มีข้อมูล" — ไม่ใช่ทั้งดีและไม่ดี */
+.pill.muted { background: var(--surface-soft); color: var(--muted); }
+.hero-dark .pill.muted { background: var(--surface-dark-soft); color: var(--on-dark-muted); }
+
+/* modal แจ้งว่าทำไม่ได้ — ไอคอนต้องไม่ใช่สีเขียวแบบ "สำเร็จ" */
+.alert-modal .success-icon { background: var(--surface-soft); color: var(--muted); }
+
+.limit-storage-note {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(245, 165, 36, 0.12);
+  color: #8a6100;
+}
+
+/* ============================================================
+   กฎกลางของ [hidden]
+   กับดักที่โดนมาแล้ว 3 รอบ: พอ class ไหนตั้ง display (flex/grid) ไว้ มันจะทับ attribute hidden
+   ทำให้ element ที่สั่งซ่อนยังโผล่อยู่ แก้ทีละคลาสแล้วพลาดซ้ำเรื่อยๆ จึงคุมไว้ที่เดียวตรงนี้
+   ============================================================ */
+[hidden] { display: none !important; }

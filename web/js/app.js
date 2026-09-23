@@ -615,6 +615,13 @@ function getSpendingLimitInfo(period) {
   return info;
 }
 
+/** ผู้ใช้ยังไม่มีข้อมูลเลย — ห้ามโชว์ ฿0 ลอยๆ เพราะอ่านได้ว่า "ฉันมีเงินศูนย์บาท" (UI_CONTRACT ข้อ unavailable) */
+function hasNoDataYet() {
+  return safeNumber(mock.summary.transactionCount) === 0
+    && safeNumber(mock.summary.income) === 0
+    && safeNumber(mock.summary.expense) === 0;
+}
+
 function renderHeroPeriod() {
   const period = dashboardState.heroPeriod;
   const meta = SPENDING_LIMIT_META[period];
@@ -623,26 +630,67 @@ function renderHeroPeriod() {
   const figure = document.getElementById('heroSafeToSpend');
   const limitBox = document.getElementById('heroLimit');
   const setupLink = document.getElementById('heroLimitSetup');
+  const safeLine = document.getElementById('heroSafeLine');
   if (!figureLabel || !figure) return;
 
   if (periodLabel) periodLabel.textContent = meta.heroLabel;
   const info = getSpendingLimitInfo(period);
+  const overspent = safeNumber(mock.summary.overspent);
+  const noData = hasNoDataYet();
 
   if (limitBox) limitBox.hidden = true;
   if (setupLink) setupLink.hidden = info.enabled;
+  if (safeLine) safeLine.hidden = true;
+
+  // ⚖️ SPEC P0 ข้อ 4: safe-to-spend ต้องเห็นได้บนหน้าสรุปเสมอ ห้ามถูกเพดานที่ผู้ใช้ตั้งเองบังจนหาย
+  // และถ้าเพดานที่ตั้งเองสูงกว่าที่ระบบคำนวณว่าปลอดภัย ต้องเตือน ไม่ใช่เชียร์ให้ใช้ตามเพดาน
+  function renderSafeLine() {
+    if (!safeLine) return;
+    if (noData) {
+      safeLine.hidden = false;
+      safeLine.className = 'hero-safe-line';
+      safeLine.innerHTML = 'ยังไม่มีข้อมูลพอคำนวณ — เริ่มจากพิมพ์รายการแรกในแชท LINE';
+      return;
+    }
+    if (overspent > 0) {
+      safeLine.hidden = false;
+      safeLine.className = 'hero-safe-line warn';
+      safeLine.innerHTML = `เดือนนี้ใช้เกินไปแล้ว <strong>${formatMoney(overspent)}</strong>`;
+      return;
+    }
+    if (period !== 'daily' || !info.enabled) return;
+    const safe = safeNumber(mock.summary.safeToSpend);
+    safeLine.hidden = false;
+    if (info.ceiling > safe) {
+      safeLine.className = 'hero-safe-line warn';
+      safeLine.innerHTML = `เพดานที่ตั้งไว้สูงกว่าที่ระบบคำนวณว่าปลอดภัย — วันนี้ควรใช้ไม่เกิน <strong>${formatMoney(safe)}</strong>`;
+    } else {
+      safeLine.className = 'hero-safe-line';
+      safeLine.innerHTML = `ระบบคำนวณว่าวันนี้ใช้ได้อย่างปลอดภัย <strong>${formatMoney(safe)}</strong>`;
+    }
+  }
 
   if (!info.enabled) {
-    // ยังไม่เปิดเพดาน: รายวัน/รายเดือนคงมุมมองเดิมไว้ (ใช้ได้วันนี้ / เงินที่เหลือเดือนนี้)
     if (period === 'daily') {
-      figureLabel.textContent = 'ใช้ได้อย่างปลอดภัยวันนี้';
-      figure.textContent = formatMoney(mock.summary.safeToSpend);
+      if (noData) {
+        figureLabel.textContent = 'ใช้ได้อย่างปลอดภัยวันนี้';
+        figure.textContent = 'ยังไม่มีข้อมูล';
+      } else if (overspent > 0) {
+        // สัญญาข้อ safeToSpend: เกินแล้วต้องบอกว่าเกินเท่าไหร่ ห้ามโชว์ ฿0 เฉยๆ
+        figureLabel.textContent = 'เดือนนี้ใช้เกินงบไปแล้ว';
+        figure.textContent = formatMoney(overspent);
+      } else {
+        figureLabel.textContent = 'ใช้ได้อย่างปลอดภัยวันนี้';
+        figure.textContent = formatMoney(mock.summary.safeToSpend);
+      }
     } else if (period === 'monthly') {
       figureLabel.textContent = 'เงินที่เหลือในเดือนนี้';
-      figure.textContent = formatMoney(getRemainingThisMonth());
+      figure.textContent = noData ? 'ยังไม่มีข้อมูล' : formatMoney(getRemainingThisMonth());
     } else {
       figureLabel.textContent = 'เพดานรายสัปดาห์';
       figure.textContent = 'ยังไม่ได้ตั้ง';
     }
+    renderSafeLine();
     return;
   }
 
@@ -657,6 +705,7 @@ function renderHeroPeriod() {
       document.getElementById('heroLimitCeiling').textContent = '—';
       document.getElementById('heroLimitNote').textContent = info.note;
     }
+    renderSafeLine();
     return;
   }
 
@@ -672,6 +721,7 @@ function renderHeroPeriod() {
     document.getElementById('heroLimitCeiling').textContent = formatMoney(info.ceiling);
     document.getElementById('heroLimitNote').textContent = info.note;
   }
+  renderSafeLine();
 }
 
 function openHeroPeriodModal() {
@@ -1190,6 +1240,24 @@ function buildDatePickerModal() {
   }
 }
 
+/** ข้อความใต้การ์ดสรุปตอนที่ยอดรวมของช่วง/หมวดที่เลือกยังคำนวณให้ไม่ได้ */
+function showRangeSummaryNote(show) {
+  const card = document.querySelector('.an-summary');
+  if (!card) return;
+  let note = document.getElementById('rangeSummaryNote');
+  if (!show) {
+    if (note) note.remove();
+    return;
+  }
+  if (!note) {
+    note = document.createElement('p');
+    note.id = 'rangeSummaryNote';
+    note.className = 'hero-limit-note';
+    card.append(note);
+  }
+  note.textContent = 'ยอดรวมแสดงได้เฉพาะทั้งเดือนนี้ ถ้ากรองหมวดหรือเลือกช่วงวันเอง ระบบยังสรุปยอดให้ไม่ได้ (รายการด้านล่างยังกรองถูกต้อง)';
+}
+
 function renderTransactionsPage() {
   const incomeSummary = document.getElementById('incomeSummary');
   const expenseSummary = document.getElementById('expenseSummary');
@@ -1221,9 +1289,12 @@ function renderTransactionsPage() {
     if (apiTotals && isThisMonth) {
       incomeSummary.textContent = formatMoney(apiTotals.income);
       expenseSummary.textContent = formatMoney(apiTotals.expense);
+      showRangeSummaryNote(false);
     } else if (apiTotals) {
+      // ยังไม่มี endpoint สรุปตามช่วง/หมวด — บอกให้ชัดว่าทำไมตัวเลขหาย ไม่ใช่ปล่อยเป็นขีดลอยๆ
       incomeSummary.textContent = '—';
       expenseSummary.textContent = '—';
+      showRangeSummaryNote(true);
     } else {
       // โหมด mock (ยังไม่ต่อ API) คิดเองได้เพราะข้อมูลทั้งหมดอยู่ในเครื่องอยู่แล้ว
       const periodIncome = summarySource.filter((item) => item.type === 'income').reduce((sum, item) => sum + Math.abs(item.amount), 0);
@@ -1777,10 +1848,14 @@ function renderAnalyzeStatus() {
 
   const used = safeNumber(mock.summary.monthlyBudgetUsed);
   const limit = safeNumber(mock.summary.monthlyBudgetLimit);
-  const percent = limit > 0 ? Math.round((used / limit) * 100) : 0;
-  const tone = percent >= 100 ? 'danger' : percent >= 85 ? 'warning' : 'success';
-  const toneLabel = tone === 'danger' ? 'เกินงบ' : tone === 'warning' ? 'ใกล้เต็มงบ' : 'ปกติดี';
-  const toneText = tone === 'danger' ? 'เกินงบเดือนนี้แล้ว ควรชะลอการใช้จ่าย' : tone === 'warning' ? 'ใกล้เต็มงบเดือนนี้แล้ว' : 'ยังอยู่ในเกณฑ์ปกติ';
+  // ยังไม่ตั้งงบ = ไม่มีอะไรให้เทียบ ห้ามสรุปว่า "ปกติดี" เพราะ 0 ÷ 0 ได้ 0%
+  const noBudget = limit <= 0;
+  const percent = noBudget ? 0 : Math.round((used / limit) * 100);
+  const tone = noBudget ? 'muted' : percent >= 100 ? 'danger' : percent >= 85 ? 'warning' : 'success';
+  const toneLabel = noBudget ? 'ยังไม่ได้ตั้งงบ' : tone === 'danger' ? 'เกินงบ' : tone === 'warning' ? 'ใกล้เต็มงบ' : 'ปกติดี';
+  const toneText = noBudget
+    ? 'ตั้งงบรายหมวดก่อน ระบบถึงจะบอกได้ว่าเดือนนี้ใช้จ่ายเป็นยังไง'
+    : tone === 'danger' ? 'เกินงบเดือนนี้แล้ว ควรชะลอการใช้จ่าย' : tone === 'warning' ? 'ใกล้เต็มงบเดือนนี้แล้ว' : 'ยังอยู่ในเกณฑ์ปกติ';
 
   container.innerHTML = `
     <div class="hero-top">
@@ -1788,13 +1863,13 @@ function renderAnalyzeStatus() {
       <span class="pill ${tone}">${toneLabel}</span>
     </div>
     <div class="hero-figure">
-      <h2>${percent}%</h2>
+      <h2>${noBudget ? 'ยังไม่มีข้อมูล' : `${percent}%`}</h2>
     </div>
-    <p class="an-status-text">ใช้จ่ายไปแล้ว ${percent}% ของงบเดือนนี้ ${toneText}</p>
+    <p class="an-status-text">${noBudget ? toneText : `ใช้จ่ายไปแล้ว ${percent}% ของงบเดือนนี้ ${toneText}`}</p>
     <div class="an-meter"><span style="width: ${clamp(percent)}%"></span></div>
     <div class="overview-stats">
       <div class="overview-stat"><span>ใช้ไปแล้ว</span><strong>${formatMoney(used)}</strong></div>
-      <div class="overview-stat"><span>งบทั้งเดือน</span><strong>${formatMoney(limit)}</strong></div>
+      <div class="overview-stat"><span>งบทั้งเดือน</span><strong>${noBudget ? 'ยังไม่ได้ตั้ง' : formatMoney(limit)}</strong></div>
     </div>
     <button type="button" class="an-status-more" data-analyze-insight="rate">ดูรายละเอียด ${renderIcon('chevron-right')}</button>
   `;
@@ -3191,6 +3266,24 @@ function openModal(html) {
 function closeModal() {
   document.querySelector('.global-modal')?.remove();
   document.body.classList.remove('modal-open');
+}
+
+/**
+ * แจ้งว่าทำไม่ได้/ผิดพลาด — คนละตัวกับ showSuccessModal
+ * เดิมข้อความปฏิเสธถูกยัดเข้า showSuccessModal ทำให้ขึ้นเครื่องหมายถูกสีเขียวกับหัวข้อ "สำเร็จ"
+ * แล้วตามด้วยข้อความว่าทำไม่ได้ ซึ่งขัดกันเองจนผู้ใช้สับสน
+ */
+function showAlertModal(message, title = 'ยังทำไม่ได้') {
+  openModal(`
+    <div class="modal-card success-modal alert-modal">
+      <div class="success-icon">${renderIcon('info')}</div>
+      <h3>${title}</h3>
+      <p>${message}</p>
+      <div class="modal-actions">
+        <button class="primary-btn full" type="button" data-close-modal="true">เข้าใจแล้ว</button>
+      </div>
+    </div>
+  `);
 }
 
 function showSuccessModal(message) {

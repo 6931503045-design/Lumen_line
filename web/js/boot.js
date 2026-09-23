@@ -86,6 +86,18 @@
     `);
   }
 
+  function showOffline() {
+    replaceShell(`
+      <main class="page-content">
+        <section class="an-card">
+          <h3>เชื่อมต่อไม่ได้</h3>
+          <p class="an-detail-lead">ตอนนี้ติดต่อเซิร์ฟเวอร์ไม่ได้ อาจเป็นเพราะสัญญาณอินเทอร์เน็ตหลุด<br>ข้อมูลการเงินของคุณยังอยู่ครบ แค่ตอนนี้ดึงมาแสดงไม่ได้</p>
+          <button class="primary-btn full" type="button" onclick="location.reload()">ลองใหม่อีกครั้ง</button>
+        </section>
+      </main>
+    `);
+  }
+
   function showError(message) {
     replaceShell(`
       <main class="page-content">
@@ -121,8 +133,8 @@
     const banner = document.createElement('div');
     banner.className = 'an-sim-verdict warn';
     banner.style.marginBottom = 'var(--space-3)';
-    banner.innerHTML = 'กำลังดูตัวอย่างหน้าตาเว็บ ยังไม่ได้ต่อกับเซิร์ฟเวอร์ ตัวเลขทั้งหมดเป็นข้อมูลสมมติ'
-      + '<br><small style="font-weight:400">ถ้าต้องการข้อมูลจริง ให้รัน <code>npm run dev</code> แล้วเปิดที่ localhost:3000</small>';
+    banner.innerHTML = 'กำลังดูตัวอย่างหน้าตาเว็บ ตัวเลขทั้งหมดเป็นข้อมูลสมมติ ไม่ใช่ข้อมูลของคุณ'
+      + '<br><small style="font-weight:400">หน้านี้เปิดจากที่ที่ไม่มีระบบหลังบ้าน ถ้าต้องการข้อมูลจริงให้เข้าผ่านลิงก์ของแอป</small>';
     main.prepend(banner);
   }
 
@@ -226,9 +238,6 @@
 
   // ---------- โหลดข้อมูลรวม (ใช้ร่วมกันทุกหน้า) ----------
 
-  /** ข้อมูลที่ API ยังไม่มีให้ — หน้าเว็บต้องแสดงว่า "ยังไม่มีข้อมูล" ไม่ใช่โชว์ ฿0 */
-  const UNAVAILABLE = new Set();
-
   async function loadAll() {
     const [summary, budgets, categories, transactions, plans] = await Promise.all([
       api.fetchSummary(),
@@ -262,16 +271,14 @@
       amounts: summary.expenseByCategory.map((e) => e.amountSatang),
     };
 
-    // API ยังไม่มีตัวเลขพวกนี้ให้ (ดู docs/UI_CONTRACT.md — ห้ามเดา)
-    UNAVAILABLE.clear();
-    UNAVAILABLE.add('forecastBalance');
-    UNAVAILABLE.add('daysOfData');
-
     Object.assign(window.mockData, {
       summary: {
         balance: summary.netBalanceSatang,
         income: summary.monthIncomeSatang,
         expense: summary.monthExpenseSatang,
+        transactionCount: summary.transactionCount,
+        // ชื่อตัวเลขที่ backend บอกเองว่ายังคำนวณให้ไม่ได้ — หน้าเว็บต้องขึ้นว่า "ยังไม่มีข้อมูล" ไม่ใช่ ฿0
+        unavailable: Array.isArray(summary.unavailable) ? summary.unavailable : [],
         safeToSpend: safe.perDaySatang,
         overspent: safe.overspentSatang,
         monthRemaining: safe.monthRemainingSatang,
@@ -350,6 +357,28 @@
     lock('aiAssistant', settings.aiEnabled, settings.aiEnabled ? 'ระบบเปิดใช้งานอยู่ (ตั้งค่าที่เซิร์ฟเวอร์)' : 'ระบบปิดใช้งานอยู่ (ตั้งค่าที่เซิร์ฟเวอร์)');
     lock('dailySummary', false, 'ยังไม่มี API สำหรับเปิด/ปิดรายคน');
 
+    const logout = document.getElementById('logoutBtn');
+    if (logout) {
+      logout.hidden = false;
+      logout.addEventListener('click', () => {
+        openModal(`
+          <div class="modal-card small an-detail">
+            <div class="modal-head">
+              <h3>ออกจากระบบ?</h3>
+              <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
+            </div>
+            <p class="an-detail-lead">ข้อมูลของคุณยังอยู่ครบ เข้าสู่ระบบด้วย LINE เดิมเมื่อไรก็กลับมาดูได้</p>
+            <div class="an-detail-actions two">
+              <button class="secondary-btn" type="button" data-close-modal="true">ยกเลิก</button>
+              <button class="primary-btn danger" type="button" id="confirmLogoutBtn">ออกจากระบบ</button>
+            </div>
+          </div>
+        `);
+        const confirmBtn = document.getElementById('confirmLogoutBtn');
+        if (confirmBtn) confirmBtn.addEventListener('click', () => api.logout());
+      });
+    }
+
     const rotate = document.getElementById('rotateTokenBtn');
     if (rotate) {
       rotate.addEventListener('click', async () => {
@@ -359,7 +388,7 @@
           if (emailEl && result.address) emailEl.textContent = result.address;
           showSuccessModal('สร้างที่อยู่อีเมลใหม่แล้ว');
         } catch (err) {
-          showSuccessModal(`สร้างใหม่ไม่สำเร็จ: ${err.message}`);
+          showAlertModal(err.message, 'สร้างที่อยู่ใหม่ไม่สำเร็จ');
         } finally {
           rotate.disabled = false;
         }
@@ -380,7 +409,7 @@
       return result;
     } catch (err) {
       closeModal();
-      showSuccessModal(`ไม่สำเร็จ: ${(err && err.message) || 'เกิดข้อผิดพลาด'}`);
+      showAlertModal((err && err.message) || 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง', 'บันทึกไม่สำเร็จ');
       return null;
     }
   }
@@ -389,7 +418,7 @@
   function showPlanOptions(result) {
     const options = result.options || [];
     if (!options.length) {
-      showSuccessModal(result.requestedMonthsNote || 'ตอนนี้ยังออมไม่ไหว ลองลดเป้าหมายหรือยืดเวลาออกไป');
+      showAlertModal(result.requestedMonthsNote || 'ตอนนี้ยังออมไม่ไหว ลองลดเป้าหมายหรือยืดเวลาออกไป', 'สร้างแผนไม่ได้');
       return;
     }
     openModal(`
@@ -430,7 +459,29 @@
       return 'เพิ่มรายการสำเร็จ';
     }),
     updateTransaction: (id, patch) => runWrite(() => api.updateTransaction(id, patch), 'อัปเดตรายการสำเร็จ'),
-    deleteTransaction: (id) => runWrite(() => api.deleteTransaction(id), 'ลบรายการแล้ว'),
+    deleteTransaction: async (id) => {
+      // สัญญาแนะนำให้ทำปุ่ม "เลิกทำ" ค้างไว้แทนการถามยืนยันก่อนลบทุกครั้ง
+      // backend ลบแบบ soft delete จึงกู้คืนได้จริงด้วย /restore
+      const result = await runWrite(() => api.deleteTransaction(id), null);
+      if (!result) return;
+      openModal(`
+        <div class="modal-card success-modal">
+          <div class="success-icon">${renderIcon('check')}</div>
+          <h3>ลบรายการแล้ว</h3>
+          <p>ถ้าลบผิด กดเลิกทำได้ทันที</p>
+          <div class="modal-actions split">
+            <button class="secondary-btn" type="button" id="undoDeleteBtn">เลิกทำ</button>
+            <button class="primary-btn" type="button" data-close-modal="true">เรียบร้อย</button>
+          </div>
+        </div>
+      `);
+      const undo = document.getElementById('undoDeleteBtn');
+      if (undo) {
+        undo.addEventListener('click', () => {
+          runWrite(() => api.restoreTransaction(id), 'กู้คืนรายการแล้ว');
+        });
+      }
+    },
     setBudget: (categoryId, limitSatang) => runWrite(() => api.saveBudget(categoryId, limitSatang), 'ตั้งงบสำเร็จ'),
     transferToPlan: (planId, amountSatang) => runWrite(
       () => api.transferToPlan(planId, amountSatang),
@@ -444,7 +495,7 @@
         showPlanOptions(result);
       } catch (err) {
         closeModal();
-        showSuccessModal(`สร้างแผนไม่สำเร็จ: ${(err && err.message) || 'เกิดข้อผิดพลาด'}`);
+        showAlertModal((err && err.message) || 'เกิดข้อผิดพลาด', 'สร้างแผนไม่สำเร็จ');
       }
     },
   };
@@ -452,29 +503,32 @@
   // ---------- ปุ่มที่ยังไม่มี endpoint รองรับ ----------
   // ดักไว้ตั้งแต่ชั้น capture ไม่ให้ handler ของ app.js ทำงาน เพราะมันจะแก้แค่ข้อมูลในเครื่อง
   // แล้วผู้ใช้จะเข้าใจผิดว่าบันทึกแล้ว พอรีเฟรชก็หายไปเฉยๆ
-  const UNSUPPORTED = [
-    ['#addCategoryBtn', 'ยังเพิ่มหมวดหมู่จากหน้าเว็บไม่ได้ — หมวดใหม่จะถูกสร้างให้เองเมื่อพิมพ์ชื่อหมวดตอนเพิ่มรายการ'],
-    ['[data-category-delete]', 'ยังลบหมวดหมู่จากหน้าเว็บไม่ได้ (ยังไม่มี API)'],
-    ['#toggleCategorySortBtn', 'ยังจัดเรียงหมวดหมู่ไม่ได้ (ยังไม่มี API)'],
-    ['[data-toggle-essential]', 'ยังเปลี่ยน "หมวดจำเป็น" จากหน้าเว็บไม่ได้ (ยังไม่มี API)'],
-    ['[data-plan-edit]', 'ยังแก้ไขแผนไม่ได้ — ยกเลิกแล้วสร้างใหม่แทนได้'],
-    ['[data-plan-history]', 'ยังดูประวัติการโอนเข้าแผนไม่ได้ (ยังไม่มี API)'],
-    ['#emergencyToggle', 'ยังตั้งกองทุนฉุกเฉินไม่ได้ (ยังไม่มีฟิลด์นี้ใน API)'],
+  // ---------- ปุ่มที่ยังไม่มี endpoint รองรับ ----------
+  // เดิมปล่อยให้กดได้แล้วค่อยขึ้นข้อความปฏิเสธ ซึ่งน่าหงุดหงิดกว่าไม่ต้องแสดงตั้งแต่แรก
+  // ตอนนี้ซ่อนทิ้งไปเลยเมื่อต่อ API แล้ว (โหมดตัวอย่างยังโชว์ครบเพื่อใช้สาธิตดีไซน์)
+  const UNSUPPORTED_SELECTORS = [
+    '#addCategoryBtn',
+    '#toggleCategorySortBtn',
+    '[data-category-delete]',
+    '[data-toggle-essential]',
+    '[data-plan-edit]',
+    '[data-plan-history]',
+    '#emergencyToggle',
   ];
 
-  document.addEventListener('click', (event) => {
-    // โหมดตัวอย่างไม่ต้องดัก ปล่อยให้ app.js สาธิตด้วยข้อมูลสมมติได้ตามปกติ
+  /** ซ่อนของที่ยังใช้ไม่ได้ เรียกซ้ำได้ทุกครั้งที่หน้าถูกวาดใหม่ */
+  function hideUnsupported() {
     if (previewMode) return;
-    for (const [selector, message] of UNSUPPORTED) {
-      if (event.target.closest(selector)) {
-        event.stopPropagation();
-        event.preventDefault();
-        closeModal();
-        showSuccessModal(message);
-        return;
-      }
-    }
-  }, true);
+    document.querySelectorAll(UNSUPPORTED_SELECTORS.join(', ')).forEach((el) => {
+      // สวิตช์ "หมวดจำเป็น" อยู่ในแถวที่มีข้อความอธิบาย ต้องซ่อนทั้งแถวไม่ให้เหลือข้อความลอยๆ
+      const row = el.closest('.setting-item, .an-action, .settings-row');
+      (row || el).hidden = true;
+    });
+  }
+
+  // DOM ของหลายจุดถูกสร้างใหม่ตลอด (เมนู ⋮, รายการหมวด) เลยต้องคอยซ่อนซ้ำหลังทุกการวาด
+  const unsupportedObserver = new MutationObserver(() => hideUnsupported());
+
 
   // ---------- เริ่มทำงาน ----------
 
@@ -487,10 +541,13 @@
       if (status === 401) {
         // มี backend แต่ยังไม่ได้เข้าสู่ระบบ
         showLogin();
-      } else if (status === undefined || status === 404) {
-        // ไม่มี backend ให้เรียกเลย (เปิดจากเซิร์ฟเวอร์ไฟล์ธรรมดา หรือเน็ตหลุด)
-        // ปล่อยให้ app.js แสดงข้อมูลตัวอย่างที่วาดไว้แล้วต่อไป แค่ติดป้ายบอก
+      } else if (status === 404) {
+        // ไม่มี /api/* ให้เรียกเลย = เปิดจากเซิร์ฟเวอร์ไฟล์ธรรมดาตอนทำดีไซน์
         enterPreviewMode();
+      } else if (status === undefined) {
+        // fetch ล้มโดยไม่มี status = เน็ตหลุด/เซิร์ฟเวอร์ล่ม
+        // 🔴 ห้ามตกไปโหมดตัวอย่างเด็ดขาด ผู้ใช้จริงจะเห็นยอดเงินสมมติของคนอื่นแทนของตัวเอง
+        showOffline();
       } else {
         showError((err && err.message) || 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
       }
@@ -498,6 +555,8 @@
     }
 
     applyProfile(me);
+    hideUnsupported();
+    unsupportedObserver.observe(document.body, { childList: true, subtree: true });
 
     if (!WIRED_PAGES.has(document.body.dataset.page)) {
       showSampleBanner();

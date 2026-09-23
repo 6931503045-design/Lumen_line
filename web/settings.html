@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css?v=20260922b" />
+    <link rel="stylesheet" href="css/style.css?v=20260922d" />
   </head>
   <body data-page="settings">
     <div class="app-shell">
@@ -57,6 +57,7 @@
         <section class="section-panel an-settings" id="spendingLimits">
           <div class="an-head"><h3>เพดานการใช้จ่าย</h3></div>
           <p class="an-limit-intro">ตั้งเพดานว่าวัน สัปดาห์ หรือเดือนหนึ่งควรใช้ไม่เกินเท่าไร เตือนอย่างเดียว ยังบันทึกรายการได้ตามปกติ</p>
+          <p class="an-limit-intro limit-storage-note">⚠️ ตอนนี้ค่าที่ตั้งไว้เก็บอยู่ในเครื่องนี้เท่านั้น ถ้าเปิดจากเครื่องอื่นหรือล้างข้อมูลเบราว์เซอร์จะต้องตั้งใหม่</p>
           <div class="limit-profile-picker">
             <span>รูปแบบของโหมด "ให้ระบบคำนวณ" — มีผลกับทุกระดับที่เปิดโหมดนี้ไว้</span>
             <div class="segmented-control" id="spendingLimitProfile">
@@ -75,6 +76,13 @@
           </div>
           <button id="rotateTokenBtn" class="chip-button an-rotate-btn" type="button">สร้าง token ใหม่</button>
           <p class="ai-disclaimer">การสร้าง token ใหม่จะทำให้ที่อยู่เดิมใช้ไม่ได้ทันที</p>
+        </section>
+
+        <section class="section-panel an-settings">
+          <button id="logoutBtn" class="settings-row danger" type="button" hidden>
+            <span>ออกจากระบบ</span>
+            <strong>›</strong>
+          </button>
         </section>
       </main>
 
@@ -102,9 +110,9 @@
       </nav>
     </div>
 
-    <script src="js/mock-data.js?v=20260922b"></script>
-    <script src="js/api.js?v=20260922b"></script>
-    <script src="js/app.js?v=20260922b"></script>
-    <script src="js/boot.js?v=20260922b"></script>
+    <script src="js/mock-data.js?v=20260922d"></script>
+    <script src="js/api.js?v=20260922d"></script>
+    <script src="js/app.js?v=20260922d"></script>
+    <script src="js/boot.js?v=20260922d"></script>
   </body>
 </html>
