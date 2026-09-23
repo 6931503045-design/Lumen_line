@@ -584,13 +584,20 @@
 
   async function refreshRecurring() {
     const box = document.getElementById('recurringList');
+    const panel = document.getElementById('recurringPanel');
     if (!box) return;
     try {
       const data = await api.fetchRecurring();
       renderRecurringList(data.items || []);
     } catch (err) {
+      if (err && err.status === 404) {
+        // backend รุ่นนี้ยังไม่มี /recurring — ซ่อนทั้งส่วนไปเลย ดีกว่าโชว์กล่องที่กดแล้วพัง
+        if (panel) panel.hidden = true;
+        return;
+      }
       box.innerHTML = `<p class="an-note">โหลดรายการประจำไม่สำเร็จ${err && err.message ? `: ${escapeHtml(err.message)}` : ''}</p>`;
     }
+    if (panel) panel.hidden = false;
   }
 
   function openRecurringModal() {
@@ -685,9 +692,7 @@
 
   function installRecurringHandlers() {
     // ส่วนนี้ซ่อนไว้ใน HTML เพราะโหมดตัวอย่าง (ไม่มี backend) กดแล้วจะไม่เกิดอะไรขึ้น
-    const panel = document.getElementById('recurringPanel');
-    if (panel) panel.hidden = false;
-
+    // ใครเป็นคนเปิด: refreshRecurring() หลังรู้แล้วว่า backend รองรับ endpoint นี้จริง
     const addBtn = document.getElementById('createRecurringBtn');
     if (addBtn) addBtn.addEventListener('click', openRecurringModal);
 
