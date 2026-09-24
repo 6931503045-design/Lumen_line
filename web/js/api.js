@@ -44,6 +44,21 @@
     fetchSummary: () => request('/summary'),
     fetchTransactions: () => request('/transactions?limit=100'),
     fetchCategories: () => request('/categories'),
+    createCategory: ({ name, type, emoji, isEssential }) =>
+      request('/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, type, emoji, isEssential }),
+      }),
+    // patch: ส่งเฉพาะฟิลด์ที่เปลี่ยน — เปลี่ยน type ไม่ได้ (backend ปฏิเสธ)
+    updateCategory: (categoryId, patch) =>
+      request(`/categories/${encodeURIComponent(categoryId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      }),
+    deleteCategory: (categoryId) =>
+      request(`/categories/${encodeURIComponent(categoryId)}`, { method: 'DELETE' }),
     // รายการเงิน: backend รองรับ POST/PATCH/DELETE/restore อยู่แล้ว (ดู docs/UI_CONTRACT.md)
     // body ทุกตัวใช้ amountSatang เป็นจำนวนเต็มสตางค์ และยอดเป็นบวกเสมอ ทิศทางดูจาก type (G3)
     createTransaction: (payload) =>

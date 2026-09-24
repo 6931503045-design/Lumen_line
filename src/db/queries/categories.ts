@@ -118,3 +118,106 @@ export async function findCategoryOwnedByUser(
   }
   return (data ?? null) as UserCategory | null;
 }
+
+/**
+ * สร้างหมวดใหม่ที่ผู้ใช้ตั้งเอง — คืน null ถ้าชื่อ+ประเภทนี้มีอยู่แล้ว (23505)
+ * ให้ชั้น service ตัดสินใจว่าจะบอกผู้ใช้ว่าอย่างไร ไม่ใช่โยน error ดิบขึ้นไป
+ *
+ * is_default: false ตายตัว — หมวดตั้งต้นมีแต่ตัวที่ seed ตอน follow เท่านั้น
+ * ถ้าปล่อยให้ผู้ใช้ตั้ง is_default ได้ ลำดับการเรียงในหน้าหมวดหมู่จะเพี้ยน
+ */
+export async function insertCategory(input: {
+  userId: string;
+  name: string;
+  type: 'income' | 'expense';
+  emoji: string | null;
+  isEssential: boolean;
+}): Promise<UserCategory | null> {
+  const { data, error } = await supabase
+    .from('categories')
+    .insert({
+      user_id: input.userId,
+      name: input.name,
+      type: input.type,
+      emoji: input.emoji,
+      is_default: false,
+      is_essential: input.isEssential,
+    })
+    .select('id, name, type, emoji, is_essential, is_default')
+    .single();
+
+  if (error) {
+    if (error.code === '23505') return null;
+    throw error;
+  }
+  return data as UserCategory;
+}
+
+/**
+ * แก้หมวดของผู้ใช้คนนี้ — คืน null ถ้าไม่ใช่ของเขา, คืน 'duplicate' ถ้าชื่อซ้ำหมวดอื่น
+ * ⚖️ G6: .eq('user_id') คู่กับ .eq('id') เสมอ ไม่ใช่กรอง id อย่างเดียว
+ */
+export async function updateCategoryForUser(
+  userId: string,
+  categoryId: string,
+  patch: { name?: string; emoji?: string | null; isEssential?: boolean }
+): Promise<UserCategory | null | 'duplicate'> {
+  const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.emoji !== undefined) row.emoji = patch.emoji;
+  if (patch.isEssential !== undefined) row.is_essential = patch.isEssential;
+
+  const { data, error } = await supabase
+    .from('categories')
+    .update(row)
+    .eq('user_id', userId)
+    .eq('id', categoryId)
+    .select('id, name, type, emoji, is_essential, is_default')
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === '23505') return 'duplicate';
+    throw error;
+  }
+  return (data ?? null) as UserCategory | null;
+}
+
+/**
+ * นับรายการเงินที่ยังผูกกับหมวดนี้ (ไม่นับที่ถูกลบไปแล้ว)
+ * ใช้ก่อนลบหมวด เพราะ transactions.category_id ไม่มี on delete cascade
+ * ถ้าลบทั้งที่ยังมีรายการผูกอยู่ DB จะปฏิเสธด้วย FK violation ซึ่งผู้ใช้อ่านไม่รู้เรื่อง
+ */
+export async function countTransactionsUsingCategory(
+  userId: string,
+  categoryId: string
+): Promise<number> {
+  const { count, error } = await supabase
+    .from('transactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('category_id', categoryId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw error;
+  }
+  return count ?? 0;
+}
+
+/** ลบหมวดของผู้ใช้คนนี้ คืน false ถ้าไม่มีแถวไหนถูกลบ (ไม่ใช่ของเขา/ไม่มีจริง) */
+export async function deleteCategoryForUser(
+  userId: string,
+  categoryId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('categories')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', categoryId)
+    .select('id');
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? []).length > 0;
+}

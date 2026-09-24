@@ -1,6 +1,22 @@
 // ชุดไอคอนหมวดหมู่ (Lucide) ที่ผู้ใช้เลือกได้ตอนสร้าง/แก้หมวดหมู่ — ครอบคลุมหมวดทั่วไปที่สุด
 // หมวดไหนไม่มีไอคอนที่ตรง (หรือชื่อ key ไม่ตรงกับ key ในนี้เลย เช่น data เก่า/พิมพ์ผิด) จะ fallback ไปที่ "tag" อัตโนมัติ
 // ป้องกันเคส "หมวดหมู่ไม่มีไอคอน" ไม่ให้เกิดขึ้นได้เลย ไม่ว่าผู้ใช้จะตั้งชื่อหมวดว่าอะไรก็ตาม
+/**
+ * ไอคอน -> อีโมจิ (ใช้ตอนบันทึกหมวดใหม่)
+ *
+ * ตาราง categories เก็บได้แค่ช่อง emoji ไม่มีช่องเก็บชื่อไอคอน
+ * ถ้าไม่แปลง ไอคอนที่ผู้ใช้เลือกจะหายทันทีที่รีเฟรช แล้วกลายเป็นไอคอนกลางหมด
+ * — ผู้ใช้จะคิดว่า "เลือกไอคอนไม่ได้" ทั้งที่บันทึกไปแล้วแต่แปลกลับไม่ได้
+ * ขาเข้าอยู่ที่ boot.js (EMOJI_TO_ICON) ต้องแก้คู่กันเสมอ
+ */
+const ICON_TO_EMOJI = {
+  utensils: '🍜', home: '🏠', bus: '🚗', car: '🚙', fuel: '⛽',
+  'shopping-bag': '🛍️', shirt: '👕', 'graduation-cap': '📚', 'book-open': '📖',
+  clapperboard: '🎮', coffee: '☕', 'heart-pulse': '💊', dumbbell: '🏋️',
+  'paw-print': '🐾', plane: '✈️', gift: '🎁', users: '👥', smartphone: '📱',
+  banknote: '💰', briefcase: '💵', 'piggy-bank': '🐖', tag: '📦',
+};
+
 const CATEGORY_ICON_LIBRARY = {
   utensils: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
   home: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
@@ -27,6 +43,21 @@ const CATEGORY_ICON_LIBRARY = {
 };
 
 const CATEGORY_ICON_FALLBACK = 'tag';
+
+/**
+ * หนีอักขระ HTML ก่อนยัดข้อความของผู้ใช้ลง innerHTML
+ *
+ * 🔴 จำเป็นจริง ไม่ใช่กันไว้เฉยๆ: ชื่อรายการจากอีเมลธนาคารมาจากหัวข้ออีเมล
+ * ซึ่งมีเครื่องหมาย " และ & ได้ตามปกติ ถ้าไม่หนี:
+ *   - ใน value="..." เครื่องหมาย " จะปิด attribute กลางทาง ช่องกรอกโชว์ข้อความขาดครึ่ง
+ *   - < > จะถูกอ่านเป็นแท็ก ทำให้การ์ดเพี้ยนหรือฝัง HTML ที่เราไม่ได้เขียนเข้ามาได้
+ * หนีเครื่องหมายคำพูดทั้งสองแบบ จึงใช้ได้ทั้งใน attribute และใน text node
+ */
+function escapeHtml(text) {
+  return String(text ?? '').replace(/[&<>"']/g, (ch) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+  ));
+}
 
 function renderCategoryIcon(iconKey) {
   const inner = CATEGORY_ICON_LIBRARY[iconKey] || CATEGORY_ICON_LIBRARY[CATEGORY_ICON_FALLBACK];
@@ -245,7 +276,7 @@ function renderMonthlyBudgetSummary() {
         isIncome: activeType === 'income',
         shareLabel: `ของ${typeLabel}เดือนนี้`,
       });
-      return `<button type="button" class="stacked-bar-seg" data-overview-seg="${key}" style="width: ${sharePercent}%; background: ${item.color}" aria-label="${item.name}"></button>`;
+      return `<button type="button" class="stacked-bar-seg" data-overview-seg="${key}" style="width: ${sharePercent}%; background: ${item.color}" aria-label="${escapeHtml(item.name)}"></button>`;
     })
     .join('');
 
@@ -256,7 +287,7 @@ function renderMonthlyBudgetSummary() {
         <div class="budget-legend-row" data-budget-category="${item.id}">
           <div class="budget-legend-head">
             <span class="legend-dot" style="background: ${item.color}"></span>
-            <span>${item.name}</span>
+            <span>${escapeHtml(item.name)}</span>
             <strong>${formatMoney(item.used)}</strong>
           </div>
           <div class="progress-bar budget-legend-bar ${isOpen ? '' : 'hidden'}"><span style="width: ${itemPercent}%; background: ${item.color}"></span></div>
@@ -336,7 +367,7 @@ function openBudgetCategoryModal(category, totalUsed, monthKey, activeType) {
   const html = `
     <div class="modal-card small">
       <div class="modal-head">
-        <h3><span class="legend-dot" style="background: ${category.color}"></span> ${category.name}</h3>
+        <h3><span class="legend-dot" style="background: ${category.color}"></span> ${escapeHtml(category.name)}</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
       <div class="summary-row"><span>${typeLabel}ในหมวดนี้</span><strong>${formatMoney(category.used)}</strong></div>
@@ -418,7 +449,7 @@ function renderDashboardPlans() {
       <button type="button" class="dash-plan" data-plan-detail="${plan.id}">
         <span class="dash-plan-icon">${renderCategoryIcon('piggy-bank')}</span>
         <span class="dash-plan-main">
-          <span class="dash-plan-top"><strong>${plan.name}</strong>${status}</span>
+          <span class="dash-plan-top"><strong>${escapeHtml(plan.name)}</strong>${status}</span>
           <span class="dash-plan-bar"><i style="width: ${percent}%"></i></span>
         </span>
         <span class="dash-plan-pct">${percent}%</span>
@@ -888,7 +919,7 @@ function renderDashboard() {
             <div class="transaction-left">
               <div class="transaction-icon">${icon}</div>
               <div class="transaction-text">
-                <strong>${item.title}${aiBadge}</strong>
+                <strong>${escapeHtml(item.title)}${aiBadge}</strong>
                 <small>${transfer ? 'โอนเข้าแผนออม' : item.category} • ${item.time}</small>
               </div>
             </div>
@@ -1044,13 +1075,13 @@ function renderCustomSelect(fieldId, options, selectedValue) {
   return `
     <div class="custom-select" data-select-field="${fieldId}">
       <button type="button" class="custom-select-trigger" data-select-trigger>
-        <span data-select-display>${selected}</span>
+        <span data-select-display>${escapeHtml(selected)}</span>
         ${renderIcon('chevron-down', 'trigger-icon')}
       </button>
       <div class="popover-panel select-popover" hidden data-select-popover>
-        ${options.map((option) => `<button type="button" class="select-option ${option === selected ? 'active' : ''}" data-select-option="${option}">${option}</button>`).join('')}
+        ${options.map((option) => `<button type="button" class="select-option ${option === selected ? 'active' : ''}" data-select-option="${escapeHtml(option)}">${escapeHtml(option)}</button>`).join('')}
       </div>
-      <input type="hidden" id="${fieldId}" value="${selected}" />
+      <input type="hidden" id="${fieldId}" value="${escapeHtml(selected)}" />
     </div>
   `;
 }
@@ -1426,7 +1457,7 @@ function renderTransactionsPage() {
                 ${checkbox}
                 <div class="transaction-icon">${icon}</div>
                 <div class="transaction-text">
-                  <strong>${item.title}${aiBadge}</strong>
+                  <strong>${escapeHtml(item.title)}${aiBadge}</strong>
                   <small>${transfer ? 'โอนเข้าแผนออม' : item.category} • ${item.time}</small>
                 </div>
                 <div class="transaction-actions">
@@ -1519,7 +1550,7 @@ function renderCategoryOverview() {
           isIncome,
           shareLabel: isIncome ? 'ของเป้ารวม' : 'ของงบรวม',
         });
-        return `<button type="button" class="stacked-bar-seg" data-overview-seg="${key}" style="width: ${share}%; background: ${item.color}" aria-label="${item.name}"></button>`;
+        return `<button type="button" class="stacked-bar-seg" data-overview-seg="${key}" style="width: ${share}%; background: ${item.color}" aria-label="${escapeHtml(item.name)}"></button>`;
       })
       .join('');
 
@@ -1562,7 +1593,7 @@ function showBarTip(ctx, segment) {
     `;
   } else {
     tip.innerHTML = `
-      <span class="overview-tip-title"><i class="legend-dot" style="background: ${data.color}"></i>${data.name}</span>
+      <span class="overview-tip-title"><i class="legend-dot" style="background: ${data.color}"></i>${escapeHtml(data.name)}</span>
       <span class="overview-tip-amount">${formatMoney(data.used)} <small>จาก ${formatMoney(data.limit)}</small></span>
       <span class="overview-tip-meta">${Math.round(data.sharePercent)}% ${data.shareLabel} · ${data.isIncome ? 'ได้รับ' : 'ใช้'} ${Math.round(data.categoryPercent)}% ของหมวดนี้</span>
     `;
@@ -1674,7 +1705,7 @@ function renderCategoriesPage() {
           <div class="category-name">
             <span class="drag-handle">${renderIcon('grip-vertical')}</span>
             ${iconBadge}
-            <span>${item.name}</span>
+            <span>${escapeHtml(item.name)}</span>
           </div>
           <div class="sort-controls">
             <button type="button" class="sort-btn" data-sort-move="up" data-sort-id="${item.id}" aria-label="เลื่อนขึ้น" ${index === 0 ? 'disabled' : ''}>${renderIcon('chevron-up')}</button>
@@ -1690,7 +1721,7 @@ function renderCategoriesPage() {
         <div class="category-top">
           <div class="category-name">
             ${iconBadge}
-            <span>${item.name}</span>
+            <span>${escapeHtml(item.name)}</span>
           </div>
           <div class="category-top-right">
             <span class="pill ${getProgressTone(percent)}">${percent}%</span>
@@ -1798,7 +1829,7 @@ function renderPlanCards() {
           <div class="goal-header">
             <span class="goal-icon">${renderCategoryIcon('piggy-bank')}</span>
             <div class="goal-title">
-              <strong>${plan.name}</strong>
+              <strong>${escapeHtml(plan.name)}</strong>
               ${plan.type === 'emergency' ? '<span class="goal-tag">กองทุนฉุกเฉิน</span>' : ''}
             </div>
             <button class="row-more plan-more" type="button" data-plan-menu="${plan.id}" aria-label="ตัวเลือกแผน">${renderIcon('more-vertical')}</button>
@@ -1985,7 +2016,7 @@ function openInsightModal({ title, value, pill, progress, lead, rows, extra, tip
   openModal(`
     <div class="modal-card small an-detail">
       <div class="modal-head">
-        <h3>${title}</h3>
+        <h3>${escapeHtml(title)}</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
       <div class="an-detail-hero">
@@ -2045,7 +2076,7 @@ function openInsightDetail(key) {
         <div class="an-scale">${scale}</div>
         <h4 class="an-detail-sub">หมวดที่ใช้มากที่สุด</h4>
         <div class="an-detail-rows">
-          ${topCategories.map(({ item, spent }) => `<div class="summary-row"><span><i class="legend-dot" style="background: ${item.color}"></i> ${item.name}</span><strong>${formatMoney(spent)} · ${Math.round((spent / totalSpent) * 100)}%</strong></div>`).join('')}
+          ${topCategories.map(({ item, spent }) => `<div class="summary-row"><span><i class="legend-dot" style="background: ${item.color}"></i> ${escapeHtml(item.name)}</span><strong>${formatMoney(spent)} · ${Math.round((spent / totalSpent) * 100)}%</strong></div>`).join('')}
         </div>
       `,
       tip: tone === 'success'
@@ -2184,7 +2215,7 @@ function getEmergencyHint(isOn, planId) {
   if (!isOn) return 'เงินสำรองยามจำเป็น เช่น ป่วย ของพัง หรือรายได้ขาดช่วง ตั้งได้แผนเดียว';
   const other = getEmergencyPlan();
   if (other && other.id !== planId) {
-    return `ตอนนี้ "${other.name}" เป็นกองทุนฉุกเฉินอยู่ ถ้าเปิดตัวเลือกนี้ ระบบจะย้ายมาที่แผนนี้แทน`;
+    return `ตอนนี้ "${escapeHtml(other.name)}" เป็นกองทุนฉุกเฉินอยู่ ถ้าเปิดตัวเลือกนี้ ระบบจะย้ายมาที่แผนนี้แทน`;
   }
   return 'แผนนี้จะแสดงเป็นกองทุนฉุกเฉินในหน้าวิเคราะห์';
 }
@@ -2277,7 +2308,7 @@ function openPlanMenu(plan) {
   openModal(`
     <div class="modal-card small an-detail">
       <div class="modal-head">
-        <h3>${plan.name}</h3>
+        <h3>${escapeHtml(plan.name)}</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
       <div class="an-action-list">
@@ -2352,7 +2383,7 @@ function openPlanHistory(plan) {
         <h3>ประวัติการเงิน</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
-      <p class="an-history-plan">${plan.name}</p>
+      <p class="an-history-plan">${escapeHtml(plan.name)}</p>
       <div class="an-detail-hero">
         <strong>${formatMoney(plan.saved)}</strong>
         <span class="pill success">${entries.length} ครั้ง</span>
@@ -2385,7 +2416,7 @@ function openHistoryEntryEdit(plan, entry) {
         <h3>แก้ไขรายการโอน</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
-      <p class="an-history-plan">${plan.name}</p>
+      <p class="an-history-plan">${escapeHtml(plan.name)}</p>
       <div class="form-grid">
         <label class="form-field">
           <span>จำนวนเงิน (บาท)</span>
@@ -2418,7 +2449,7 @@ function openHistoryDeleteConfirm(plan, entry) {
         <h3>ลบรายการโอนนี้?</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
-      <p class="an-detail-lead">รายการโอน <strong>${formatMoney(entry.amount)}</strong> ของแผน "${plan.name}" จะถูกลบ และยอดออมของแผนจะลดลงตามจำนวนนี้ (เหลือ ${formatMoney(Math.max(0, plan.saved - entry.amount))})</p>
+      <p class="an-detail-lead">รายการโอน <strong>${formatMoney(entry.amount)}</strong> ของแผน "${escapeHtml(plan.name)}" จะถูกลบ และยอดออมของแผนจะลดลงตามจำนวนนี้ (เหลือ ${formatMoney(Math.max(0, plan.saved - entry.amount))})</p>
       <div class="an-detail-actions two">
         <button class="secondary-btn" type="button" data-plan-history="${plan.id}">ยกเลิก</button>
         <button class="primary-btn danger" type="button" data-history-delete-confirm="${plan.id}:${entry.id}">ลบรายการ</button>
@@ -2434,7 +2465,7 @@ function openPlanDeleteConfirm(plan) {
         <h3>ลบแผนนี้?</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
-      <p class="an-detail-lead">แผน "<strong>${plan.name}</strong>" จะถูกนำออกจากรายการ เงินที่ออมไว้ ${formatMoney(plan.saved)} จะไม่ถูกนับเป็นแผนอีกต่อไป</p>
+      <p class="an-detail-lead">แผน "<strong>${escapeHtml(plan.name)}</strong>" จะถูกนำออกจากรายการ เงินที่ออมไว้ ${formatMoney(plan.saved)} จะไม่ถูกนับเป็นแผนอีกต่อไป</p>
       <div class="an-detail-actions two">
         <button class="secondary-btn" type="button" data-close-modal="true">ยกเลิก</button>
         <button class="primary-btn danger" type="button" data-plan-delete-confirm="${plan.id}">ลบแผน</button>
@@ -2496,6 +2527,12 @@ function openTrendDetail(type) {
 function getPurchaseSimulation() {
   const priceInput = document.getElementById('purchasePrice');
   const price = Math.round(Math.max(0, Number(priceInput ? priceInput.value : 0) || 0) * 100);
+
+  // 🔴 แก้บั๊ก: ผู้ใช้ที่ยังไม่เคยตั้งงบสักหมวด totalLimitSatang = 0
+  // budgetLeft จึงเป็น 0 แล้วทุกราคาถูกตัดสินว่า "เกินงบเดือนนี้" ทั้งที่ระบบไม่รู้งบเลย
+  // คำตอบผิดที่ฟังดูมั่นใจ แย่กว่าการบอกตรงๆ ว่ายังตอบไม่ได้
+  const hasBudget = safeNumber(mock.summary.monthlyBudgetLimit) > 0;
+
   const budgetLeft = safeNumber(mock.summary.monthlyBudgetLimit) - safeNumber(mock.summary.monthlyBudgetUsed);
   const ref = getAnalyzeReference();
   const daysLeft = ref.daysLeft;
@@ -2520,7 +2557,11 @@ function getPurchaseSimulation() {
   // ไม่เกินครึ่งของงบที่เหลือ = ok · เกินครึ่งแต่ยังอยู่ในงบ = warn · เกินงบที่เหลือ = over
   let tone = 'ok';
   let verdict = 'ใส่ราคาที่อยากซื้อ เพื่อดูว่ากระทบงบแค่ไหน';
-  if (price > 0) {
+  if (!hasBudget) {
+    // ยังไม่มีงบให้เทียบ = ไม่ตัดสิน บอกไปตรงๆ ว่าต้องตั้งงบก่อน
+    tone = '';
+    verdict = 'ต้องตั้งงบรายเดือนก่อน ระบบจึงจะบอกได้ว่าการซื้อนี้กระทบงบแค่ไหน';
+  } else if (price > 0) {
     if (price > budgetLeft) {
       tone = 'over';
       verdict = `เกินงบเดือนนี้ ${formatMoney(overBy)} ไม่เหลืองบให้ใช้รายวันจนสิ้นเดือน${monthsToSave === null ? '' : ` · ออมก่อนราว ${monthsToSave} เดือนจะไม่กระทบงบ`}`;
@@ -2534,7 +2575,7 @@ function getPurchaseSimulation() {
       verdict = `ซื้อได้ และงบยังพอใช้ถึงสิ้นเดือน เฉลี่ยวันละ ${formatMoneyShort(perDayAfter)} (เดิม ${formatMoneyShort(perDayBefore)})`;
     }
   }
-  return { price, budgetLeft, daysLeft, days, monthlySaving, afterBuy, perDayBefore, perDayAfter, dropPercent, overBy, monthsToSave, saveDate, tone, verdict };
+  return { hasBudget, price, budgetLeft, daysLeft, days, monthlySaving, afterBuy, perDayBefore, perDayAfter, dropPercent, overBy, monthsToSave, saveDate, tone, verdict };
 }
 
 function renderPurchaseSimulation() {
@@ -2544,13 +2585,19 @@ function renderPurchaseSimulation() {
     if (el) el.textContent = text;
   };
   set('buyNowResult', formatMoney(sim.price));
-  set('buyNowNote', sim.price === 0
-    ? 'ยังไม่ได้ใส่ราคา'
-    : sim.afterBuy >= 0
-      ? `งบเหลือ ${formatMoney(sim.afterBuy)} · วันละ ${formatMoneyShort(sim.perDayAfter)}`
-      : `เกินงบ ${formatMoney(sim.overBy)} · ไม่เหลือให้ใช้รายวัน`);
-  set('saveLaterResult', sim.monthsToSave === null ? '—' : `${sim.monthsToSave} เดือน`);
-  set('saveLaterNote', sim.price === 0 ? 'ยังไม่ได้ใส่ราคา' : sim.monthsToSave === null ? 'ตอนนี้ยังเก็บเงินไม่ได้' : `ออมเดือนละ ${formatMoney(sim.monthlySaving)} ครบราว ${sim.saveDate}`);
+  if (!sim.hasBudget) {
+    set('buyNowNote', 'ยังไม่ได้ตั้งงบ');
+    set('saveLaterResult', '—');
+    set('saveLaterNote', 'ตั้งงบที่หน้าหมวดหมู่ก่อน');
+  } else {
+    set('buyNowNote', sim.price === 0
+      ? 'ยังไม่ได้ใส่ราคา'
+      : sim.afterBuy >= 0
+        ? `งบเหลือ ${formatMoney(sim.afterBuy)} · วันละ ${formatMoneyShort(sim.perDayAfter)}`
+        : `เกินงบ ${formatMoney(sim.overBy)} · ไม่เหลือให้ใช้รายวัน`);
+    set('saveLaterResult', sim.monthsToSave === null ? '—' : `${sim.monthsToSave} เดือน`);
+    set('saveLaterNote', sim.price === 0 ? 'ยังไม่ได้ใส่ราคา' : sim.monthsToSave === null ? 'ตอนนี้ยังเก็บเงินไม่ได้' : `ออมเดือนละ ${formatMoney(sim.monthlySaving)} ครบราว ${sim.saveDate}`);
+  }
   const verdict = document.getElementById('simVerdict');
   if (verdict) {
     verdict.textContent = sim.verdict;
@@ -2568,6 +2615,19 @@ function openPurchaseResult() {
       priceInput.classList.add('invalid');
       priceInput.focus();
     }
+    return;
+  }
+
+  // ยังไม่ได้ตั้งงบ = ไม่มีอะไรให้เทียบ ต้องหยุดที่นี่
+  // ถ้าปล่อยผ่าน toneMap[''] เป็น undefined แล้ว tone.pill โยน TypeError กด "จำลอง" แล้วเงียบ
+  if (!sim.hasBudget) {
+    openInsightModal({
+      title: 'จำลองผลกระทบก่อนซื้อ',
+      value: formatMoney(sim.price),
+      lead: 'ระบบยังไม่รู้งบรายเดือนของคุณ จึงบอกไม่ได้ว่าการซื้อนี้กระทบแค่ไหน',
+      rows: [],
+      tip: 'ตั้งงบรายหมวดที่หน้า "หมวดหมู่" แล้วกลับมาลองอีกครั้ง',
+    });
     return;
   }
 
@@ -2786,7 +2846,7 @@ function renderAnalyzeCategory() {
     `<button type="button" class="an-chip icon-only ${isAll ? 'active' : ''}" data-analyze-chip="all" aria-label="ทุกหมวด">${renderIcon('layout-grid')}</button>`,
     ...expenseCategories.map((item) => {
       const active = category && category.id === item.id;
-      return `<button type="button" class="an-chip ${active ? 'active' : ''}" data-analyze-chip="${item.id}"><i class="legend-dot" style="background: ${item.color}"></i>${item.name}${active ? renderIcon('x') : ''}</button>`;
+      return `<button type="button" class="an-chip ${active ? 'active' : ''}" data-analyze-chip="${item.id}"><i class="legend-dot" style="background: ${item.color}"></i>${escapeHtml(item.name)}${active ? renderIcon('x') : ''}</button>`;
     }),
   ].join('');
 
@@ -2883,7 +2943,7 @@ function renderAnalyzeCategory() {
           <button type="button" class="an-list-row rich" data-analyze-cat="${item.id}">
             <span class="category-badge" style="background: ${item.color}26; color: ${item.color}">${renderCategoryIcon(item.icon)}</span>
             <span class="an-list-main">
-              <strong>${item.name}</strong>
+              <strong>${escapeHtml(item.name)}</strong>
               <span class="an-list-bar"><i style="width: ${share}%; background: ${item.color}"></i></span>
             </span>
             <span class="an-list-amount"><strong>${formatMoneyShort(used)}</strong><small>${share}%</small></span>
@@ -3317,7 +3377,7 @@ function openAmountInputModal(amountValue, onComplete, title = 'กรอกจ�
   const html = `
     <div class="modal-card small">
       <div class="modal-head">
-        <h3>${title}</h3>
+        <h3>${escapeHtml(title)}</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
       <div class="form-grid">
@@ -3460,7 +3520,7 @@ function openTransactionActionMenu(transactionId) {
   const html = `
     <div class="modal-card small">
       <div class="modal-head">
-        <h3>${transaction.title}</h3>
+        <h3>${escapeHtml(transaction.title)}</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
       <div class="settings-list">
@@ -3496,7 +3556,7 @@ function editTransaction(transactionId) {
         </label>
         <label class="form-field">
           <span>รายละเอียด</span>
-          <input id="editTxnTitle" value="${transaction.title}" />
+          <input id="editTxnTitle" value="${escapeHtml(transaction.title)}" />
         </label>
         <label class="form-field">
           <span>จำนวนเงิน</span>
@@ -3631,7 +3691,7 @@ function openCategoryMenu(categoryId) {
   const html = `
     <div class="modal-card small">
       <div class="modal-head">
-        <h3>${category.name}</h3>
+        <h3>${escapeHtml(category.name)}</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
       <div class="settings-list">
@@ -3654,6 +3714,11 @@ function openCategoryMenu(categoryId) {
   const switchBtn = document.querySelector('[data-toggle-essential]');
   if (switchBtn) {
     switchBtn.addEventListener('click', () => {
+      if (window.jodtangPersist) {
+        window.jodtangPersist.updateCategory(category.id, { isEssential: !category.isEssential });
+        return;
+      }
+
       category.isEssential = !category.isEssential;
       switchBtn.classList.toggle('on', category.isEssential);
       switchBtn.setAttribute('aria-checked', String(category.isEssential));
@@ -3681,6 +3746,12 @@ function openCategoryMenu(categoryId) {
 }
 
 function deleteCategory(categoryId) {
+  if (window.jodtangPersist) {
+    // backend ปฏิเสธพร้อมบอกจำนวนรายการที่ยังผูกอยู่ ถ้าหมวดนี้ถูกใช้งานอยู่
+    window.jodtangPersist.deleteCategory(categoryId);
+    return;
+  }
+
   mock.categories = mock.categories.filter((item) => !sameId(item.id, categoryId));
   closeModal();
   renderCategoriesPage();
@@ -3830,7 +3901,19 @@ function openAddCategoryModal() {
       }
 
       const type = document.querySelector('[data-new-category-type].active')?.dataset.newCategoryType || 'expense';
-      const limit = safeNumber(document.getElementById('newCategoryLimit')?.value) * 100;
+      // ⚖️ G3 ปัดเป็นจำนวนเต็มสตางค์ เพราะ 80.05 * 100 ใน JS ได้ 8004.999999999999
+      const limit = Math.round(safeNumber(document.getElementById('newCategoryLimit')?.value) * 100);
+
+      if (window.jodtangPersist) {
+        // DB เก็บไอคอนเป็นอีโมจิ ไม่ใช่ชื่อไอคอน — ส่งอีโมจิไปถ้าแปลงได้
+        window.jodtangPersist.createCategory({
+          name,
+          type,
+          emoji: ICON_TO_EMOJI[selectedIcon] || null,
+        });
+        return;
+      }
+
       const maxSortOrder = mock.categories.reduce((max, item) => Math.max(max, item.sortOrder || 0), 0);
       const nextColor = CATEGORY_COLOR_PALETTE[mock.categories.length % CATEGORY_COLOR_PALETTE.length];
 
@@ -3872,7 +3955,7 @@ function openCategoryDetail(categoryId) {
   const html = `
     <div class="modal-card wide">
       <div class="modal-head">
-        <h3>${category.name}</h3>
+        <h3>${escapeHtml(category.name)}</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
       <div class="segmented-control lime">
@@ -4132,7 +4215,7 @@ function bindTransactionControls() {
         <div class="modal-card small">
           <div class="modal-head"><h3>แก้ไขแผน</h3><button class="close-btn" data-close-modal="true" type="button">${renderIcon('x')}</button></div>
           <div class="form-grid">
-            <label class="form-field floating"><span>ชื่อแผน</span><input id="editPlanName" value="${plan.name}" /></label>
+            <label class="form-field floating"><span>ชื่อแผน</span><input id="editPlanName" value="${escapeHtml(plan.name)}" /></label>
             <label class="form-field floating"><span>เป้าหมาย (บาท)</span><input id="editPlanTarget" type="number" min="1" value="${plan.target / 100}" /></label>
             <label class="form-field floating"><span>ออมต่อเดือน (บาท)</span><input id="editPlanSave" type="number" min="0" value="${(plan.monthly_save || 0) / 100}" /></label>
             <label class="form-field floating"><span>วันครบกำหนด</span><input id="editPlanDue" value="${plan.dueMonth || 'มี.ค. 2026'}" /></label>
@@ -4475,7 +4558,9 @@ function isTransfer(item) {
 
 function applyTransactionDeepLinkFilter() {
   const params = new URLSearchParams(window.location.search);
-  const categoryId = Number(params.get('category'));
+  // 🔴 แก้บั๊ก: id ของหมวดเป็น uuid ไม่ใช่ตัวเลข Number() จึงคืน NaN แล้วหลุด return ทุกครั้ง
+  // ผลคือปุ่ม "ดูรายการในหน้าประวัติ" พามาถึงหน้านี้จริง แต่ตัวกรองไม่เคยถูกใช้ — เงียบ ไม่มี error
+  const categoryId = params.get('category');
   if (!categoryId) return;
 
   const category = mock.categories.find((item) => sameId(item.id, categoryId));

@@ -3829,3 +3829,341 @@ button.an-legend-row:hover { background: var(--surface-soft); }
 
 /* เงินโอนเข้าแผนออม — ไม่ใช่รายรับหรือรายจ่าย (G7) จึงใช้สีกลางๆ ไม่เขียวไม่แดง */
 .amount.transfer { color: var(--muted); }
+
+/* ============================================================
+   แถบ PROTOTYPE — ชี้ว่าหน้าจอนี้ตอบ requirement ข้อไหน (Milestone 3)
+   ไม่ใช่ส่วนหนึ่งของผลิตภัณฑ์ ผู้ใช้กด "ซ่อน" ได้และระบบจะจำไว้
+   ============================================================ */
+
+.proto-bar {
+  background: var(--surface-dark);
+  color: var(--on-dark);
+  font-size: 12px;
+  border-bottom: 2px solid var(--lime);
+}
+
+.proto-bar[hidden] {
+  display: none;
+}
+
+.proto-bar-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 8px var(--space-3) 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.proto-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.proto-tag {
+  font-family: 'Noto Sans', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--lime);
+  border: 1px solid var(--lime);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.proto-nav {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.proto-nav-link {
+  padding: 3px 8px;
+  border-radius: 5px;
+  color: var(--on-dark-muted);
+  white-space: nowrap;
+}
+
+.proto-nav-link:hover {
+  background: var(--surface-dark-soft);
+  color: var(--on-dark);
+}
+
+.proto-nav-link.active {
+  background: var(--surface-dark-soft);
+  color: var(--on-dark);
+  font-weight: 700;
+}
+
+.proto-toggle {
+  background: none;
+  border: 1px solid var(--line-dark);
+  color: var(--on-dark-muted);
+  border-radius: 5px;
+  padding: 3px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.proto-toggle:hover {
+  color: var(--on-dark);
+  border-color: var(--on-dark-muted);
+}
+
+.proto-covers-label {
+  font-family: 'Noto Sans', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--on-dark-muted);
+  white-space: nowrap;
+}
+
+.proto-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* ชิป 1 ใบ = FR 1 ข้อ — รหัสตัวหนา ตามด้วยชื่อย่อเพื่อให้อ่านรู้เรื่องโดยไม่ต้องเปิด SRS */
+.proto-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-family: 'Noto Sans', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.proto-chip small {
+  font-family: 'Noto Sans Thai', 'Noto Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+/* Must = ตัวที่ prototype ถูกตรวจว่าครอบครบไหม จึงเน้นสุด */
+.proto-chip.must {
+  background: var(--lime);
+  color: #1c2416;
+}
+
+.proto-chip.should {
+  background: var(--surface-dark-soft);
+  color: var(--on-dark);
+  border-color: var(--line-dark);
+}
+
+.proto-chip.could {
+  background: transparent;
+  color: var(--on-dark-muted);
+  border-color: var(--line-dark);
+}
+
+.proto-chip.none {
+  background: transparent;
+  color: #ffb4a8;
+  border-color: #ffb4a8;
+}
+
+/* ปุ่มลอยเล็ก ๆ ตอนแถบถูกซ่อน — ต้องกลับมาเปิดได้ ไม่งั้นซ่อนแล้วหายถาวร */
+.proto-pill {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 60;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--lime);
+  background: var(--surface-dark);
+  color: var(--lime);
+  font-family: 'Noto Sans', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.proto-pill[hidden] {
+  display: none;
+}
+
+@media (max-width: 420px) {
+  /* จอแคบ: ในแถบบนสุดตัดชื่อย่อออก เหลือแต่รหัส FR ไม่งั้นชิปล้นจนอ่านไม่ออก
+     แต่ในหน้าสารบัญต้องคงไว้ เพราะที่นั่นชื่อย่อคือเนื้อหาหลักไม่ใช่ของประดับ */
+  .proto-bar .proto-chip small {
+    display: none;
+  }
+}
+
+/* ============================================================
+   หน้า prototype.html — สารบัญหน้าจอสำหรับการตรวจ M3
+   ใช้ token เดียวกับทั้งแอป (สี/ฟอนต์/ระยะ) เพราะเกณฑ์ให้คะแนน
+   "design system เดียวทั้งชุด" — หน้าสารบัญที่หน้าตาหลุดไปคนละทางจะเสียคะแนนตรงนั้น
+   ============================================================ */
+
+.proto-index {
+  max-width: 720px;
+}
+
+.proto-lead {
+  margin: 0 0 var(--space-2);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.proto-lead code {
+  font-family: 'Noto Sans', monospace;
+  font-size: 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.proto-lead a {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.proto-screens {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.proto-screen {
+  display: block;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+}
+
+.proto-screen p {
+  margin: 0 0 var(--space-2);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.proto-screen p:last-child {
+  margin-bottom: 0;
+}
+
+/* การ์ดที่คลิกเปิดหน้าจอจริงได้ — ต้องดูต่างจากการ์ดที่เป็นแค่คำอธิบาย */
+.proto-screen.link {
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.proto-screen.link:hover {
+  border-color: var(--text);
+}
+
+.proto-screen-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: 6px;
+}
+
+.proto-screen-head strong {
+  font-size: 15px;
+  color: var(--text-strong);
+}
+
+.proto-screen-go {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.proto-screen.link:hover .proto-screen-go {
+  color: var(--text-strong);
+}
+
+/* ชิปในหน้าสารบัญอยู่บนพื้นขาว จึงต้องกลับสีจากที่ใช้บนแถบดำ */
+.proto-screen .proto-chip.should,
+.proto-coverage .proto-chip.should {
+  background: var(--surface-dark);
+  color: var(--on-dark);
+  border-color: var(--surface-dark);
+}
+
+.proto-screen .proto-chip.could,
+.proto-coverage .proto-chip.could {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.proto-coverage {
+  display: grid;
+  gap: 6px;
+}
+
+.proto-cov-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 7px var(--space-2);
+  background: var(--surface-soft);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.proto-cov-row span:nth-child(2) {
+  color: var(--muted);
+  min-width: 0;
+}
+
+.proto-cov-row strong {
+  font-size: 12px;
+  color: var(--text-strong);
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  /* จอแคบ: ซ้อนเป็น 2 บรรทัด ไม่งั้นคอลัมน์ขวาถูกบีบจนอ่านไม่ออก */
+  .proto-cov-row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .proto-cov-row strong {
+    grid-column: 2;
+    text-align: left;
+  }
+}
+
+/* รหัส FR ต้องไม่ถูกตัดขึ้นบรรทัดใหม่ ("FR-" / "02") — ส่วนชื่อย่อขึ้นบรรทัดใหม่ได้ */
+.proto-chip {
+  white-space: nowrap;
+}
+
+.proto-chip small {
+  white-space: normal;
+}
+
+/* หัวการ์ดในหน้าสารบัญ: ให้ชิปตกลงบรรทัดใหม่ได้แทนที่จะบีบชื่อหน้าจอจนแตก */
+.proto-screen-head {
+  flex-wrap: wrap;
+}
+
+.proto-screen-head .proto-chip {
+  max-width: 100%;
+}

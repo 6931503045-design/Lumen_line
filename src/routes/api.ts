@@ -48,6 +48,12 @@ import {
   type UpdateTransactionInput,
 } from '../services/transaction.service';
 import { listCategoriesByUser } from '../db/queries/categories';
+import {
+  CategoryError,
+  createCategory,
+  removeCategory,
+  updateCategory,
+} from '../services/category.service';
 import { ensureEmailIngestToken, rotateEmailIngestToken } from '../db/queries/users';
 import { countUnparsedEmails } from '../db/queries/emails';
 import { env } from '../config/env';
@@ -265,6 +271,41 @@ apiRouter.get(
         isDefault: category.is_default,
       }))
     );
+  })
+);
+
+/**
+ * สร้างหมวดใหม่ — body: { name, type, emoji?, isEssential? }
+ * ⚖️ G2 ผู้ใช้กดปุ่มในหน้าเว็บเอง = ยืนยันแล้ว ไม่ต้องผ่าน pending_actions
+ */
+apiRouter.post(
+  '/categories',
+  handle(async (req, res) => {
+    const created = await createCategory(req.userId!, (req.body ?? {}) as Record<string, unknown>);
+    res.status(201).json(created);
+  })
+);
+
+/** แก้หมวด — ส่งเฉพาะฟิลด์ที่เปลี่ยน (name / emoji / isEssential) */
+apiRouter.patch(
+  '/categories/:categoryId',
+  handle(async (req, res) => {
+    res.json(
+      await updateCategory(
+        req.userId!,
+        req.params.categoryId!,
+        (req.body ?? {}) as Record<string, unknown>
+      )
+    );
+  })
+);
+
+/** ลบหมวด — ปฏิเสธถ้ายังมีรายการเงินผูกอยู่ (ดูเหตุผลใน category.service) */
+apiRouter.delete(
+  '/categories/:categoryId',
+  handle(async (req, res) => {
+    await removeCategory(req.userId!, req.params.categoryId!);
+    res.json({ removed: true });
   })
 );
 

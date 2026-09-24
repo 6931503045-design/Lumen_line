@@ -39,6 +39,19 @@
     'รายได้พิเศษ': 'briefcase', 'ทุนการศึกษา': 'graduation-cap',
   };
 
+  /**
+   * อีโมจิ -> ไอคอน สำหรับหมวดที่ผู้ใช้สร้างเอง ซึ่งชื่อไม่ตรงกับตารางข้างบนแน่นอน
+   * ต้องตรงกับ ICON_TO_EMOJI ใน app.js เสมอ (ทางกลับของกันและกัน)
+   */
+  const EMOJI_TO_ICON = {
+    '🍜': 'utensils', '🏠': 'home', '🚗': 'bus', '🚙': 'car', '⛽': 'fuel',
+    '🛍️': 'shopping-bag', '👕': 'shirt', '📚': 'graduation-cap', '📖': 'book-open',
+    '🎮': 'clapperboard', '☕': 'coffee', '💊': 'heart-pulse', '🏋️': 'dumbbell',
+    '🐾': 'paw-print', '✈️': 'plane', '🎁': 'gift', '👥': 'users', '📱': 'smartphone',
+    '💰': 'banknote', '💵': 'briefcase', '🐖': 'piggy-bank', '📦': 'tag',
+    '↩️': 'banknote',
+  };
+
   const bangkok = (iso, opts) =>
     new Intl.DateTimeFormat('th-TH', { timeZone: 'Asia/Bangkok', calendar: 'gregory', ...opts }).format(new Date(iso));
 
@@ -95,9 +108,24 @@
           <p style="color:var(--on-dark-muted);margin:0 0 20px">เข้าสู่ระบบด้วย LINE เพื่อดูข้อมูลการเงินของคุณ</p>
           ${note ? `<p class="an-sim-verdict" style="margin-bottom:20px">${note}</p>` : ''}
           <a class="primary-btn full" style="display:block;text-decoration:none" href="/auth/login">เข้าสู่ระบบด้วย LINE</a>
+          <button class="secondary-btn full" type="button" id="previewAnywayBtn" style="margin-top:10px">ดูตัวอย่างหน้าจอก่อน</button>
         </section>
       </main>
     `);
+
+    // 🔴 สำคัญต่อการตรวจงาน (Milestone 3): ถ้าไม่มีปุ่มนี้ คนที่เปิดลิงก์โดยไม่มีบัญชี LINE
+    // จะเห็นแค่กำแพงล็อกอิน คลิกดูหน้าจอไม่ได้สักหน้า ทั้งที่เกณฑ์ขอให้ "เปิดดูได้ในเบราว์เซอร์"
+    // enterPreviewMode() มีอยู่แล้วสำหรับกรณีไม่มี backend — ใช้ตัวเดิมซ้ำได้เลย
+    // โหลดหน้าใหม่พร้อม ?preview=1 แทนการคืน DOM เดิม เพราะ replaceShell() เขียนทับ
+    // .app-shell ไปแล้ว การใส่ HTML เดิมกลับจะได้ element ชุดใหม่ที่ไม่มี listener ของ app.js
+    const previewBtn = document.getElementById('previewAnywayBtn');
+    if (previewBtn) {
+      previewBtn.addEventListener('click', () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('preview', '1');
+        window.location.href = url.toString();
+      });
+    }
   }
 
   function showOffline() {
@@ -184,7 +212,8 @@
       return {
         id: cat.id,
         name: cat.name,
-        icon: CATEGORY_ICONS[cat.name] || 'tag',
+        // ชื่อหมวดตั้งต้นก่อน แล้วค่อยถอยไปใช้อีโมจิที่ผู้ใช้เลือกตอนสร้างหมวดเอง
+        icon: CATEGORY_ICONS[cat.name] || EMOJI_TO_ICON[cat.emoji] || 'tag',
         color: CATEGORY_COLORS[index % CATEGORY_COLORS.length],
         type: cat.type,
         isEssential: Boolean(cat.isEssential),
@@ -496,6 +525,14 @@
         });
       }
     },
+    // ---------- หมวดหมู่ ----------
+    // เดิมปุ่มเพิ่ม/ลบหมวดแก้แต่ mock.categories ในหน่วยความจำแล้วขึ้นว่า "สำเร็จ"
+    // ผู้ใช้รีเฟรชทีเดียวหายหมด ซึ่งแย่กว่าไม่มีปุ่มเลย
+    createCategory: (body) => runWrite(() => api.createCategory(body), 'เพิ่มหมวดหมู่สำเร็จ'),
+    updateCategory: (categoryId, patch) => runWrite(() => api.updateCategory(categoryId, patch), 'แก้หมวดหมู่สำเร็จ'),
+    // backend ตอบ 409 พร้อมบอกจำนวนรายการที่ยังผูกอยู่ ถ้าลบไม่ได้ — runWrite โชว์ข้อความนั้นให้เอง
+    deleteCategory: (categoryId) => runWrite(() => api.deleteCategory(categoryId), 'ลบหมวดหมู่สำเร็จ'),
+
     setBudget: (categoryId, limitSatang) => runWrite(() => api.saveBudget(categoryId, limitSatang), 'ตั้งงบสำเร็จ'),
     clearBudget: (categoryId) => runWrite(() => api.deleteBudget(categoryId), 'ยกเลิกงบหมวดนี้แล้ว'),
     transferToPlan: (planId, amountSatang) => runWrite(
@@ -740,6 +777,13 @@
   // ---------- เริ่มทำงาน ----------
 
   async function start() {
+    // ?preview=1 = ผู้ใช้กด "ดูตัวอย่างหน้าจอก่อน" จากหน้าล็อกอิน — ข้ามการเรียก API ไปเลย
+    // ใช้ทางเดียวกับตอนไม่มี backend (404) ซึ่งทำงานอยู่แล้ว
+    if (new URLSearchParams(window.location.search).get('preview') === '1') {
+      enterPreviewMode();
+      return;
+    }
+
     let me;
     try {
       me = await api.fetchMe();

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JOD tang | Prototype — สารบัญหน้าจอ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/style.css?v=20260923b" />
+  </head>
+  <body data-page="prototype">
+    <div class="app-shell proto-index">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">JOD tang · CLICKABLE PROTOTYPE</p>
+          <h1>Prototype v1 — สารบัญหน้าจอ</h1>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <section class="section-panel">
+          <p class="proto-lead">
+            หน้าจอทั้งหมด <strong>5 หน้า</strong> ครอบ <strong>Must FR ครบทั้ง 8 ข้อ</strong>
+            (FR-01 … FR-08 ตาม <code>docs/SRS.md</code> §4) จัดกลุ่มตาม
+            <strong>เส้นทางการใช้งานจริงของผู้ใช้</strong> ไม่ใช่หน้าจอลอย ๆ
+          </p>
+          <p class="proto-lead">
+            ทุกหน้ามีแถบดำบนสุดบอกว่าหน้านั้น <code>Covers:</code> requirement ข้อไหน
+            <strong>เปิดคลิกดูได้เลยโดยไม่ต้องล็อกอิน</strong> — จะเห็นข้อมูลตัวอย่างพร้อมแถบแจ้งเตือน
+            ส่วนการล็อกอินด้วย LINE จะเปลี่ยนเป็นข้อมูลเงินจริงของผู้ใช้คนนั้น
+          </p>
+          <p class="ai-disclaimer">
+            เอกสารอ้างอิง: <a href="https://github.com/6931503045-design/Lumen_line/blob/main/docs/SRS.md" target="_blank" rel="noopener">docs/SRS.md</a>
+            (requirement + เกณฑ์ยอมรับ + Golden Thread) ·
+            <a href="https://github.com/6931503045-design/Lumen_line/blob/main/SPEC.md" target="_blank" rel="noopener">SPEC.md</a> (สถาปัตยกรรม)
+          </p>
+        </section>
+
+        <!-- ───────────────────────────────────────────────────────────── -->
+        <section class="section-panel">
+          <div class="an-head">
+            <h3>เส้นทางที่ 1 — จดเงินเข้าระบบ</h3>
+            <span class="pill">ใน LINE / อีเมล</span>
+          </div>
+          <p class="proto-lead">
+            สองข้อนี้<strong>ไม่ใช่หน้าจอเว็บ</strong> — เกิดในแชท LINE และในอีเมล
+            สาธิตสดตอน demo ส่วนผลลัพธ์จะไปโผล่ที่ <a href="transactions.html">หน้ารายการ</a>
+          </p>
+          <div class="proto-screens">
+            <article class="proto-screen">
+              <div class="proto-screen-head">
+                <strong>แชท LINE</strong>
+                <span class="proto-chip must">FR-01<small>จดจากข้อความแชท</small></span>
+              </div>
+              <p>พิมพ์ <code>กาแฟ 80</code> แล้วระบบบันทึกพร้อมหมวดให้ทันที มีปุ่ม ↩️ ยกเลิก / ✏️ แก้หมวด</p>
+            </article>
+            <article class="proto-screen">
+              <div class="proto-screen-head">
+                <strong>อีเมลธนาคาร (K PLUS)</strong>
+                <span class="proto-chip must">FR-02<small>จดจากอีเมลธนาคาร</small></span>
+              </div>
+              <p>อีเมลที่ forward เข้ามาถูกแปลงเป็นรายการอัตโนมัติภายใน 5 นาที — ตรวจลายเซ็น DKIM ก่อนทุกฉบับ</p>
+            </article>
+          </div>
+        </section>
+
+        <!-- ───────────────────────────────────────────────────────────── -->
+        <section class="section-panel">
+          <div class="an-head">
+            <h3>เส้นทางที่ 2 — "วันนี้ใช้ได้อีกเท่าไหร่?"</h3>
+            <span class="pill success">คำถามหลักข้อ 1</span>
+          </div>
+          <div class="proto-screens">
+            <a class="proto-screen link" href="index.html">
+              <div class="proto-screen-head">
+                <strong>1. ภาพรวม</strong>
+                <span class="proto-screen-go">เปิด →</span>
+              </div>
+              <p>ยอดคงเหลือ · รายรับ/รายจ่ายเดือนนี้ · กราฟสัดส่วนรายหมวด · การ์ดแผนออม · ปุ่มเพิ่มรายการ</p>
+              <div class="proto-chips">
+                <span class="proto-chip must">FR-04<small>สรุป + กราฟ</small></span>
+                <span class="proto-chip must">FR-05<small>ใช้ได้วันละเท่าไหร่</small></span>
+                <span class="proto-chip must">FR-03<small>เพิ่มรายการ</small></span>
+                <span class="proto-chip must">FR-07<small>แผนออม</small></span>
+              </div>
+            </a>
+            <a class="proto-screen link" href="transactions.html">
+              <div class="proto-screen-head">
+                <strong>2. รายการ</strong>
+                <span class="proto-screen-go">เปิด →</span>
+              </div>
+              <p>รายการเงินทั้งหมด · ค้นหา/กรองตามช่วงวัน · แก้ไข ลบ และแก้ทีละหลายรายการ · ป้ายบอกว่ารายการมาจากแชทหรืออีเมล</p>
+              <div class="proto-chips">
+                <span class="proto-chip must">FR-04<small>ดูรายการ</small></span>
+                <span class="proto-chip must">FR-03<small>เพิ่ม/แก้/ลบ</small></span>
+                <span class="proto-chip must">FR-02<small>ผลจากอีเมล</small></span>
+              </div>
+            </a>
+          </div>
+        </section>
+
+        <!-- ───────────────────────────────────────────────────────────── -->
+        <section class="section-panel">
+          <div class="an-head">
+            <h3>เส้นทางที่ 3 — คุมงบไม่ให้ใช้เกิน</h3>
+          </div>
+          <div class="proto-screens">
+            <a class="proto-screen link" href="categories.html">
+              <div class="proto-screen-head">
+                <strong>3. หมวดหมู่</strong>
+                <span class="proto-screen-go">เปิด →</span>
+              </div>
+              <p>ยอดใช้รายหมวด · ตั้งงบต่อเดือน · แถบเตือนเมื่อใช้ถึง 80% และ 100% · เพิ่ม แก้ ลบ และจัดลำดับหมวด</p>
+              <div class="proto-chips">
+                <span class="proto-chip must">FR-06<small>งบรายหมวด + เตือน</small></span>
+                <span class="proto-chip should">FR-10<small>จัดการหมวดหมู่</small></span>
+              </div>
+            </a>
+          </div>
+        </section>
+
+        <!-- ───────────────────────────────────────────────────────────── -->
+        <section class="section-panel">
+          <div class="an-head">
+            <h3>เส้นทางที่ 4 — "อยากได้สิ่งนี้ ต้องออมยังไง?"</h3>
+            <span class="pill success">คำถามหลักข้อ 2</span>
+          </div>
+          <div class="proto-screens">
+            <a class="proto-screen link" href="analyze.html">
+              <div class="proto-screen-head">
+                <strong>4. วิเคราะห์</strong>
+                <span class="proto-screen-go">เปิด →</span>
+              </div>
+              <p>ใช้ได้วันละเท่าไหร่ · กำลังออมต่อเดือน · สร้างแผนออมแล้วเลือกจาก 3 ทางเลือก · โอนเข้าแผน · ติดตามความคืบหน้าและระดับความมั่นใจ</p>
+              <div class="proto-chips">
+                <span class="proto-chip must">FR-05<small>safe-to-spend</small></span>
+                <span class="proto-chip must">FR-07<small>แผนออม 3 ทางเลือก</small></span>
+                <span class="proto-chip must">FR-08<small>โอนเข้าแผน + ติดตาม</small></span>
+                <span class="proto-chip could">FR-16<small>จำลองก่อนซื้อ</small></span>
+              </div>
+            </a>
+          </div>
+        </section>
+
+        <!-- ───────────────────────────────────────────────────────────── -->
+        <section class="section-panel">
+          <div class="an-head">
+            <h3>เส้นทางที่ 5 — ตั้งค่าให้ระบบทำงานเอง</h3>
+          </div>
+          <div class="proto-screens">
+            <a class="proto-screen link" href="settings.html">
+              <div class="proto-screen-head">
+                <strong>5. ตั้งค่า</strong>
+                <span class="proto-screen-go">เปิด →</span>
+              </div>
+              <p>ที่อยู่อีเมลสำหรับ forward · สร้าง token ใหม่ · รายการประจำ (เงินเดือน ค่าหอ ค่าเน็ต) · ออกจากระบบ</p>
+              <div class="proto-chips">
+                <span class="proto-chip must">FR-02<small>ที่อยู่ forward</small></span>
+                <span class="proto-chip should">FR-09<small>รายการประจำ</small></span>
+                <span class="proto-chip should">FR-13<small>rotate token</small></span>
+              </div>
+            </a>
+          </div>
+        </section>
+
+        <!-- ───────────────────────────────────────────────────────────── -->
+        <section class="section-panel">
+          <div class="an-head">
+            <h3>ตรวจความครอบคลุม — Must FR ทั้ง 8 ข้อ</h3>
+          </div>
+          <div class="proto-coverage">
+            <div class="proto-cov-row"><span class="proto-chip must">FR-01</span><span>จดจากข้อความแชท</span><strong>แชท LINE</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip must">FR-02</span><span>จดจากอีเมลธนาคาร</span><strong>อีเมล → รายการ · ตั้งค่า</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip must">FR-03</span><span>เพิ่ม / แก้ / ลบ รายการ</span><strong>ภาพรวม · รายการ</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip must">FR-04</span><span>ดูสรุปยอดและกราฟ</span><strong>ภาพรวม · รายการ</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip must">FR-05</span><span>ใช้ได้วันละเท่าไหร่</span><strong>ภาพรวม · วิเคราะห์</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip must">FR-06</span><span>งบรายหมวด + เตือน 80/100%</span><strong>หมวดหมู่</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip must">FR-07</span><span>แผนออม 3 ทางเลือก</span><strong>วิเคราะห์ · ภาพรวม</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip must">FR-08</span><span>โอนเข้าแผน + ติดตาม</span><strong>วิเคราะห์</strong></div>
+          </div>
+          <p class="ai-disclaimer">ครบ 8 จาก 8 — ไม่มี Must FR ข้อไหนที่ไม่มีหน้าจอรองรับ</p>
+        </section>
+
+        <!-- ───────────────────────────────────────────────────────────── -->
+        <section class="section-panel">
+          <div class="an-head">
+            <h3>ทางที่ผิด (empty / error state)</h3>
+          </div>
+          <p class="proto-lead">เกณฑ์ขอให้มีทางที่ผิดด้วย ไม่ใช่แค่ happy path — ทุกสถานะด้านล่างมีอยู่จริงในโค้ด</p>
+          <div class="proto-coverage">
+            <div class="proto-cov-row"><span class="proto-chip could">ว่าง</span><span>ผู้ใช้ใหม่ยังไม่มีรายการ</span><strong>"ยังไม่มีรายการ" ไม่ใช่ ฿0.00</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip could">ว่าง</span><span>ยังไม่ได้ตั้งงบสักหมวด</span><strong>"ยังไม่ได้ตั้งงบ" ไม่ใช่ 0%</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip could">ว่าง</span><span>ยังไม่มีแผนออม</span><strong>ชวนกด "สร้างแผนใหม่"</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>ยังไม่ได้ล็อกอิน</span><strong>แถบเหลือง + ปุ่มเข้าสู่ระบบ</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>เซสชันหมดอายุ</span><strong>แถบแดง + ให้ล็อกอินใหม่</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>กรอกยอดเป็น 0</span><strong>ปฏิเสธ + บอกให้ใส่มากกว่า 0</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>ลบหมวดที่ยังมีรายการอยู่</span><strong>ปฏิเสธ + บอกจำนวนรายการ</strong></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- แถบชี้ requirement สำหรับตรวจ M3 — ไม่ใช่ส่วนหนึ่งของผลิตภัณฑ์ -->
+    <script src="js/prototype-bar.js?v=20260923b"></script>
+  </body>
+</html>
