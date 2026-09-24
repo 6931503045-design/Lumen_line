@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>M2 SRS — JOD tang</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  body { font-family: 'Liberation Serif', 'Times New Roman', serif; font-size: 10.5pt; line-height: 1.35; color: #000; margin: 0; }
+  h1 { font-size: 21pt; margin: 0 0 2pt; font-weight: bold; }
+  .subtitle { font-size: 12.5pt; color: #1a4fbd; font-weight: bold; margin: 0 0 2pt; }
+  .course { font-size: 9.5pt; color: #333; margin: 0 0 10pt; }
+  h2 { font-size: 15pt; margin: 20pt 0 6pt; padding-bottom: 2pt; border-bottom: 1.6pt solid #1a4fbd; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; color: #1a4fbd; margin: 13pt 0 4pt; page-break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 11pt 0 2pt; page-break-after: avoid; }
+  p { margin: 0 0 6pt; text-align: justify; }
+  table { border-collapse: collapse; width: 100%; margin: 5pt 0 9pt; font-size: 9pt; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  table.keep { page-break-inside: avoid; }
+  th { background: #16213e; color: #fff; text-align: left; padding: 4pt 5pt; border: 0.5pt solid #16213e; font-weight: bold; }
+  td { padding: 4pt 5pt; border: 0.5pt solid #999; vertical-align: top; }
+  .note { border-left: 3pt solid #1a4fbd; background: #eef2fb; padding: 6pt 9pt; margin: 8pt 0; font-style: italic; font-size: 9.5pt; }
+  .story { font-style: italic; margin: 1pt 0 3pt; }
+  .pain { color: #666; font-size: 9.5pt; margin: 0 0 4pt; }
+  ol.ac { margin: 3pt 0 8pt 16pt; padding: 0; font-size: 9.5pt; }
+  ol.ac li { margin-bottom: 3pt; }
+  ul { margin: 3pt 0 8pt 16pt; padding: 0; }
+  li { margin-bottom: 2.5pt; }
+  code { font-family: 'Liberation Mono', monospace; font-size: 8.8pt; }
+  .fr { font-family: 'Liberation Mono', monospace; font-weight: bold; }
+  .must { color: #b3261e; font-weight: bold; }
+  .should { color: #a05a00; font-weight: bold; }
+  .could { color: #00695c; font-weight: bold; }
+  .chk { color: #1b7f3b; font-weight: bold; }
+  .wrong { font-weight: bold; }
+  .tiny { font-size: 8.8pt; color: #555; }
+  .avoid { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<h1>Software Requirements Specification</h1>
+<p class="subtitle">JOD tang (จดตัง) — a LINE chat assistant for student money tracking</p>
+<p class="course">Introduction to Software Engineering (15031001) · Milestone 2 — Requirements &amp; Specification</p>
+
+<table class="keep">
+  <tr><th style="width:26%">Field</th><th>Value</th></tr>
+  <tr><td>Team name</td><td>Lumen Line</td></tr>
+  <tr><td>Project title</td><td>JOD tang — log money in one chat message, and know what is safe to spend</td></tr>
+  <tr><td>SDLC chosen in M1 + reason</td><td><b>Incremental</b> — ship the chat-logging MVP first, then add budgets, then saving plans, then AI. Each increment is usable on its own, so a slipped increment never blocks the ones already delivered.</td></tr>
+  <tr><td>Date / version</td><td>v1.0 · 24 September 2026</td></tr>
+  <tr><td>GitHub repo</td><td>https://github.com/6931503045-design/Lumen_line</td></tr>
+  <tr><td>Running demo</td><td>https://lumen-line.onrender.com · screen index at <code>/prototype.html</code></td></tr>
+</table>
+
+<h2>1. Introduction</h2>
+
+<h3>1.1 Purpose and scope</h3>
+<p>University students run out of money before the end of the month without being able to say where it went. Two things cause this. First, logging an expense in a normal finance app takes four steps — open the app, pick a category, type the amount, save — so students stop logging within two or three weeks and the record is never complete enough to act on. Second, even a complete record only answers "where did my money go", which is a report about the past; it does not answer the question a student actually asks, which is "how much can I still spend today without breaking the month".</p>
+<p>JOD tang answers exactly two questions: <b>"How much can I still spend today?"</b> and <b>"I want this thing — how much do I need to save each month to afford it?"</b> It removes the logging friction by living inside LINE, which students already have open: typing <code>กาแฟ 80</code> ("coffee 80") in a chat records an 80-baht expense in about three seconds, and forwarded bank notification emails are parsed into transactions without the student doing anything at all. The MVP is five Must requirements. Success means a student reaches the end of the month knowing what they can spend, because the number was in front of them daily — not because they were disciplined about bookkeeping.</p>
+
+<h3>1.2 Users and stakeholders</h3>
+<table>
+  <tr><th style="width:22%">Name / role</th><th style="width:15%">Kind</th><th style="width:32%">What they need</th><th>What they fear / forbid</th></tr>
+  <tr><td>University student, age 18–24, on a fixed monthly allowance</td><td>primary user</td><td>To log an expense in one message, and to see a single trustworthy number for what is still safe to spend today</td><td>Being told a confident number that turns out to be wrong; having to open a separate app to log a 30-baht snack</td></tr>
+  <tr><td>Course instructor / TA</td><td>secondary stakeholder</td><td>To trace every screen back to a numbered requirement and a test</td><td>A prototype that looks finished but cannot be opened or explained</td></tr>
+  <tr><td>LINE Messaging API</td><td>external supplier</td><td>Webhook signatures verified; push volume kept inside the free tier</td><td>Exceeding 280 push messages per month, which silently stops delivery</td></tr>
+  <tr><td>The student's bank (KBank / K PLUS)</td><td>external data source</td><td>Email notifications consumed read-only, with DKIM verified</td><td>Forged notification emails being accepted as real transactions</td></tr>
+  <tr><td>Google Gemini (AI provider)</td><td>external supplier</td><td>Bounded, non-financial use; personal data removed before any call</td><td>Personal or financial data leaving the system inside a prompt</td></tr>
+</table>
+
+<h2>2. Overall description</h2>
+
+<h3>2.1 Product context — what it does / does not</h3>
+<p>JOD tang keeps one ledger per student and turns it into a daily spending figure and a saving plan. The table below is the whole scope for this term; anything not listed is out.</p>
+<table class="keep">
+  <tr><th style="width:50%">IN SCOPE (MVP this term)</th><th>OUT OF SCOPE (explicit promise)</th></tr>
+  <tr><td>
+    • <span class="fr">FR-1</span> Log an expense from a chat message<br>
+    • <span class="fr">FR-2</span> Import bank notification emails<br>
+    • <span class="fr">FR-3</span> Daily safe-to-spend figure<br>
+    • <span class="fr">FR-4</span> Category budget with 80% / 100% alerts<br>
+    • <span class="fr">FR-5</span> Saving plan with three options<br>
+    • Supporting features <span class="fr">FR-6</span>–<span class="fr">FR-12</span> (see §3.7)
+  </td><td>
+    • Connecting to any bank API / Open Banking<br>
+    • Investment, stock or crypto tracking<br>
+    • Any currency other than Thai baht<br>
+    • Charging users; any payment or subscription<br>
+    • A native mobile app or a separate web app<br>
+    • AI computing any monetary figure or forecast<br>
+    • General-purpose chit-chat with the AI<br>
+    • Statistical forecasting (Monte Carlo, seasonality)
+  </td></tr>
+</table>
+
+<h3>2.2 Assumptions and constraints</h3>
+<ul>
+  <li><b>Assumption:</b> every user already has LINE installed and uses it daily; identity is the LINE account, so there is no separate sign-up.</li>
+  <li><b>Assumption:</b> the student can set up email forwarding from their bank app to the address the system gives them (a written guide is provided).</li>
+  <li><b>Constraint — money arithmetic:</b> all amounts are stored as positive integers in <i>satang</i> (1/100 baht). Floating-point arithmetic is forbidden anywhere on a monetary path.</li>
+  <li><b>Constraint — AI boundary:</b> AI may interpret language only. It must not compute, adjust or forecast any monetary figure, and it must not write to the database without an explicit human confirmation.</li>
+  <li><b>Constraint — AI must be optional:</b> with the AI provider disabled, every Must requirement still works.</li>
+  <li><b>Constraint — LINE free tier:</b> at most 280 push messages per user per month.</li>
+  <li><b>Constraint — data isolation:</b> the database has row-level security enabled with no policies, so every query must filter by the signed-in user's id at the application layer.</li>
+  <li><b>Constraint — schedule:</b> a 10-week build window shared with four other milestones (M1–M5); team of five.</li>
+</ul>
+
+<h2>3. Functional requirements</h2>
+<p>Format: <i>As a &lt;role&gt;, I want &lt;goal&gt;, so that &lt;benefit&gt;.</i> Every story traces back to a pain stated in §1.1, and every acceptance criterion is written Given–When–Then so that it can be executed as a test.</p>
+
+<h3>3.1 Priority summary (MoSCoW)</h3>
+<table>
+  <tr><th style="width:11%">ID</th><th style="width:44%">Requirement</th><th style="width:15%">Priority</th><th>Why this priority</th></tr>
+  <tr><td class="fr">FR-1</td><td>Log an expense from a chat message</td><td class="must">Must</td><td>Without it there is no data at all</td></tr>
+  <tr><td class="fr">FR-2</td><td>Import bank notification emails</td><td class="must">Must</td><td>Covers the spending a student forgets to type</td></tr>
+  <tr><td class="fr">FR-3</td><td>Daily safe-to-spend figure</td><td class="must">Must</td><td>This is question 1 — the product's reason to exist</td></tr>
+  <tr><td class="fr">FR-4</td><td>Category budget with 80% / 100% alerts</td><td class="must">Must</td><td>Turns a passive number into a warning before the money is gone</td></tr>
+  <tr><td class="fr">FR-5</td><td>Saving plan with three options</td><td class="must">Must</td><td>This is question 2</td></tr>
+  <tr><td class="fr">FR-6</td><td>Add / edit / delete a transaction on the web</td><td class="should">Should</td><td>Corrections matter, but a wrong row can also be cancelled from chat</td></tr>
+  <tr><td class="fr">FR-7</td><td>Monthly summary and category breakdown chart</td><td class="should">Should</td><td>Useful context; the safe-to-spend figure already carries the decision</td></tr>
+  <tr><td class="fr">FR-8</td><td>Transfer into a plan and track its progress</td><td class="should">Should</td><td>A plan is still worth having before transfers are wired</td></tr>
+  <tr><td class="fr">FR-9</td><td>Recurring rules (allowance, rent, internet)</td><td class="should">Should</td><td>Saves typing; the same rows can be entered by hand via FR-1</td></tr>
+  <tr><td class="fr">FR-10</td><td>Create, rename and delete categories</td><td class="should">Should</td><td>Twelve sensible categories are seeded on first use</td></tr>
+  <tr><td class="fr">FR-11</td><td>Text commands in chat (summary, remaining, budget, plan)</td><td class="should">Should</td><td>Same information is reachable from the web screens</td></tr>
+  <tr><td class="fr">FR-12</td><td>Push notifications with a monthly quota guard</td><td class="should">Should</td><td>Alerts can ride along in a chat reply, which costs no quota</td></tr>
+  <tr><td class="fr">FR-13</td><td>AI interprets messages the parser cannot read</td><td class="could">Could</td><td>By constraint the product must work without AI at all</td></tr>
+  <tr><td class="fr">FR-14</td><td>Read a transfer slip from a photo</td><td class="could">Could</td><td>Depends on FR-13</td></tr>
+  <tr><td class="fr">FR-15</td><td>Simulate the impact of a purchase before buying</td><td class="could">Could</td><td>Pleasant, not load-bearing</td></tr>
+</table>
+<p class="tiny">Five Must requirements, chosen so that the two questions in §1.1 can both be answered end to end. FR-6 to FR-15 are deliberately not Must: each one can be removed and the system still answers both questions.</p>
+
+<h3>3.2 FR-1 — Log an expense from a chat message <span class="must">[Must]</span></h3>
+<p class="story">User story: As a student on a fixed allowance, I want to log a purchase by typing one short message in LINE, so that logging costs me so little effort that I actually keep doing it past week three.</p>
+<p class="pain">Pain this traces to: logging in a normal finance app takes four steps, so students abandon it within two or three weeks and the record is never complete enough to trust.</p>
+<ol class="ac">
+  <li><b>Given</b> a student sends the message <code>กาแฟ 80</code>, <b>when</b> the system parses it, <b>then</b> an expense of exactly 8000 satang is stored against that student with the category "Food", and the reply states the amount and category.</li>
+  <li><b>Given</b> a student sends <code>เงินเดือน 15000</code> ("salary 15000"), <b>when</b> the system parses it, <b>then</b> the row is stored as income, not as an expense.</li>
+  <li><b>Given</b> a student sends <code>ข้าว 1.2k</code>, <b>when</b> the system parses it, <b>then</b> the amount is read as 1,200 baht (120000 satang).</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> a student sends a message with no number in it, <b>when</b> the system parses it, <b>then</b> nothing is written to the ledger and the reply shows an example of the accepted format.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> a student sends <code>กาแฟ -80</code>, <b>when</b> the system parses it, <b>then</b> the message is rejected and no row is created, because stored amounts are positive integers only.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> a student sends an amount above 10,000,000 baht, <b>when</b> the system parses it, <b>then</b> the message is rejected and the reply states the per-transaction ceiling.</li>
+</ol>
+
+<h3>3.3 FR-2 — Import bank notification emails <span class="must">[Must]</span></h3>
+<p class="story">User story: As a student who pays by bank transfer, I want the notification emails my bank already sends me to become transactions by themselves, so that the spending I forget to type is still on the record.</p>
+<p class="pain">Pain this traces to: the expenses a student forgets are exactly the ones that break the month, and a student who just paid is the least likely person to stop and type it in.</p>
+<ol class="ac">
+  <li><b>Given</b> a K PLUS notification email for a 131.00-baht payment is forwarded to the student's ingest address, <b>when</b> the next poll runs, <b>then</b> an expense of 13100 satang is created for that student within five minutes.</li>
+  <li><b>Given</b> the email reached the system through Gmail forwarding, <b>when</b> its signature is checked, <b>then</b> DKIM still verifies and the email is accepted.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> an email whose DKIM signature does not verify, <b>when</b> it is processed, <b>then</b> it is skipped and no transaction is created, so that a forged notification cannot inject a row.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> an email arriving at an address with no valid ingest token, <b>when</b> it is processed, <b>then</b> it is skipped, because the system cannot tell whose ledger it belongs to.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> an email that has already been imported, <b>when</b> the same email is fetched again, <b>then</b> no duplicate transaction is created.</li>
+</ol>
+
+<h3>3.4 FR-3 — Daily safe-to-spend figure <span class="must">[Must]</span></h3>
+<p class="story">User story: As a student deciding whether to buy something right now, I want one number telling me what I can still spend today, so that I can decide in two seconds instead of reading a report about last month.</p>
+<p class="pain">Pain this traces to: a list of past transactions does not answer "can I afford this today"; the student has to do the arithmetic, which nobody does at the till.</p>
+<p class="tiny">Definition: remaining = income this month + scheduled income not yet posted − expenses this month − scheduled expenses not yet posted − the monthly saving amount of every active plan. Per-day = remaining ÷ days left in the month, counting today, in Asia/Bangkok. Computed fresh on every request; no AI involved.</p>
+<ol class="ac">
+  <li><b>Given</b> a student has 3,000 baht remaining and 10 days left in the month, <b>when</b> they ask how much they can spend, <b>then</b> the answer is 300 baht per day.</li>
+  <li><b>Given</b> the student has an active saving plan of 1,000 baht per month, <b>when</b> the figure is computed, <b>then</b> that 1,000 baht is subtracted before the division, so the plan is not silently spent.</li>
+  <li><b>Given</b> today is the last day of the month, <b>when</b> the figure is computed, <b>then</b> the divisor is 1 and the calculation does not fail.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> the student has already overspent and the remaining amount is negative, <b>when</b> the figure is shown, <b>then</b> the screen states how much they are over by and does not present a negative number as a daily allowance.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> a student with fewer than seven days of history, <b>when</b> the figure is shown, <b>then</b> it carries a low-confidence label, because a number from three days of data is not yet trustworthy.</li>
+</ol>
+
+<h3>3.5 FR-4 — Category budget with 80% / 100% alerts <span class="must">[Must]</span></h3>
+<p class="story">User story: As a student who overspends on food without noticing, I want to be warned while I still have money left, so that I can change what I do this week rather than discover the problem when the month is over.</p>
+<p class="pain">Pain this traces to: overspending is discovered at the end of the month, when nothing can be done about it.</p>
+<ol class="ac">
+  <li><b>Given</b> a 3,000-baht monthly food budget and 2,400 baht already spent, <b>when</b> the next food expense is recorded, <b>then</b> the student is warned that 80% of the budget is used, exactly once for that month.</li>
+  <li><b>Given</b> the 80% warning has already been sent and spending reaches 3,000 baht, <b>when</b> the next expense is recorded, <b>then</b> a 100% warning is sent once and the 80% warning is not repeated.</li>
+  <li><b>Given</b> the student changes the budget amount, <b>when</b> the new amount is saved, <b>then</b> both warnings become available again for that month.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> spending stands at 79.99966% of the budget, <b>when</b> the threshold is evaluated, <b>then</b> no warning is sent, because a rounded percentage must not trigger the alert early and consume the month's single warning.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> a request to set a budget of zero or a negative amount, <b>when</b> it is submitted, <b>then</b> it is rejected.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> a request to set a budget on a category belonging to another student, <b>when</b> it is submitted, <b>then</b> it fails as not found, without revealing that the category exists.</li>
+</ol>
+
+<h3>3.6 FR-5 — Saving plan with three options <span class="must">[Must]</span></h3>
+<p class="story">User story: As a student who wants to buy a 25,000-baht laptop, I want to be shown what saving for it would actually cost me per month, so that I can commit to a plan I can keep instead of guessing and abandoning it.</p>
+<p class="pain">Pain this traces to: students set a savings goal by wishful thinking, miss it in month two, and stop saving entirely.</p>
+<ol class="ac">
+  <li><b>Given</b> a student sets a target of 25,000 baht, <b>when</b> the system builds the plan, <b>then</b> it offers exactly three options, each stating a monthly amount, a finish month and a confidence level, all derived from that student's own recorded income and spending.</li>
+  <li><b>Given</b> the three options are shown, <b>when</b> the student confirms one, <b>then</b> that plan becomes active and the other two are discarded.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> the student has not confirmed any option, <b>when</b> the safe-to-spend figure is computed, <b>then</b> the unconfirmed plan is not subtracted, because nothing was agreed to.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> the student already has three active plans, <b>when</b> they try to create a fourth, <b>then</b> it is refused with the reason stated.</li>
+  <li><span class="wrong">Wrong path.</span> <b>Given</b> the student's recorded spending leaves nothing to save each month, <b>when</b> a plan is requested, <b>then</b> the system says the target is not reachable yet instead of inventing a monthly figure.</li>
+</ol>
+
+<h3>3.7 Should and Could requirements</h3>
+<p>These are specified at story level for this milestone; full acceptance criteria are written when each one is scheduled.</p>
+<table>
+  <tr><th style="width:11%">ID</th><th style="width:15%">Priority</th><th>User story</th></tr>
+  <tr><td class="fr">FR-6</td><td class="should">Should</td><td>As a student, I want to correct or delete a transaction the system read wrongly, so that the figures I rely on stay true.</td></tr>
+  <tr><td class="fr">FR-7</td><td class="should">Should</td><td>As a student, I want to see this month's income, spending and a breakdown by category, so that I can see which habit is draining the month.</td></tr>
+  <tr><td class="fr">FR-8</td><td class="should">Should</td><td>As a student saving for a goal, I want to move money into the plan and see progress, so that I know whether I am still on track.</td></tr>
+  <tr><td class="fr">FR-9</td><td class="should">Should</td><td>As a student with fixed monthly costs, I want rent and allowance recorded automatically each cycle, so that I only type the irregular things.</td></tr>
+  <tr><td class="fr">FR-10</td><td class="should">Should</td><td>As a student whose spending does not fit the default list, I want to create my own categories, so that the breakdown matches my life.</td></tr>
+  <tr><td class="fr">FR-11</td><td class="should">Should</td><td>As a student already in the chat, I want to ask for a summary by typing a word, so that I do not have to open a screen for a one-line answer.</td></tr>
+  <tr><td class="fr">FR-12</td><td class="should">Should</td><td>As a student, I want important warnings pushed to me, so that I hear about a problem without opening the app.</td></tr>
+  <tr><td class="fr">FR-13</td><td class="could">Could</td><td>As a student, I want to type a sentence the way I would to a friend and still have it logged, so that I never have to learn a format.</td></tr>
+  <tr><td class="fr">FR-14</td><td class="could">Could</td><td>As a student, I want to send a photo of a transfer slip and have it logged, so that I do not retype what is already on screen.</td></tr>
+  <tr><td class="fr">FR-15</td><td class="could">Could</td><td>As a student about to buy something, I want to see what it does to the rest of my month first, so that I can decide with the consequence in front of me.</td></tr>
+</table>
+
+<h2>4. Non-functional requirements</h2>
+<p>Every statement below carries a number or a condition that a test can check. NFR-5 and NFR-6 cover security and personal data and are mandatory for this milestone.</p>
+<table>
+  <tr><th style="width:9%">ID</th><th style="width:16%">Kind</th><th style="width:42%">Statement (testable)</th><th>How we will check</th></tr>
+  <tr><td class="fr">NFR-1</td><td>performance</td><td>A chat message shall receive a reply within 3 seconds on university Wi-Fi.</td><td>Stopwatch from send to reply, 10 trials, on campus</td></tr>
+  <tr><td class="fr">NFR-2</td><td>performance</td><td>A forwarded bank email shall appear as a transaction within 5 minutes of arriving.</td><td>Send a real notification, compare its timestamp with the created row</td></tr>
+  <tr><td class="fr">NFR-3</td><td>accuracy</td><td>Every monetary value shall be a positive integer in satang; no floating-point value shall appear on a monetary path, giving 0 satang of rounding error.</td><td>Unit tests over the money utilities; code review of every service that touches an amount</td></tr>
+  <tr><td class="fr">NFR-4</td><td>reliability</td><td>The system shall send at most 280 push messages per user per month, reserving the last 20% for over-budget and plan alerts only.</td><td>Count rows in the push log for one user over a month; unit tests on the quota service</td></tr>
+  <tr><td class="fr">NFR-5</td><td><b>security</b> (required)</td><td>A student shall be able to read and write only their own data; a request naming another student's record shall fail as not found. Zero endpoints may query without filtering on the signed-in user id.</td><td>Call an endpoint with another user's record id and confirm it is refused; review all 23 endpoints</td></tr>
+  <tr><td class="fr">NFR-6</td><td><b>privacy / PDPA</b> (required)</td><td>Personal identifiers shall be removed from any text before it is sent to the AI provider, and no monetary balance shall be included in a prompt. The system shall store only what a transaction needs — amount, category, note, timestamp — and never chat history from other conversations.</td><td>Unit tests on the redaction step; inspect the exact payload sent to the provider</td></tr>
+  <tr><td class="fr">NFR-7</td><td>availability</td><td>With the AI provider switched off, all five Must requirements shall still work.</td><td>Set the AI flag to off with no API key present and run the full test suite</td></tr>
+  <tr><td class="fr">NFR-8</td><td>correctness</td><td>Given the same stored data, a figure shall be identical every time it is requested; no randomness may enter a monetary calculation.</td><td>Call the same endpoint 10 times and compare; grep the money engine for random sources</td></tr>
+  <tr><td class="fr">NFR-9</td><td>usability</td><td>A student who has never seen the system shall log their first expense in under 30 seconds without being shown instructions.</td><td>Timed trial with five students who have not used it</td></tr>
+</table>
+
+<h2>5. Use cases</h2>
+
+<h3>5.1 Use-case list</h3>
+<table>
+  <tr><th style="width:26%">Use case</th><th style="width:20%">Actor</th><th style="width:13%">Related FR</th><th>Brief success story</th></tr>
+  <tr><td>UC-1 Log expense by chat</td><td>Student</td><td class="fr">FR-1</td><td>Student types "coffee 80"; the expense is stored and confirmed in one reply.</td></tr>
+  <tr><td>UC-2 Import bank email</td><td>Bank → System</td><td class="fr">FR-2</td><td>A forwarded K PLUS email becomes a 131-baht expense within five minutes.</td></tr>
+  <tr><td>UC-3 Check safe-to-spend</td><td>Student</td><td class="fr">FR-3</td><td>Student opens the app and sees "300 baht per day" for the rest of the month.</td></tr>
+  <tr><td>UC-4 Set budget and be warned</td><td>Student ← Scheduler</td><td class="fr">FR-4</td><td>Student sets a 3,000-baht food budget and is warned on reaching 80%.</td></tr>
+  <tr><td>UC-5 Create a saving plan</td><td>Student</td><td class="fr">FR-5</td><td>Student enters a 25,000-baht target, is shown three options, and confirms one.</td></tr>
+</table>
+<p class="tiny">One use case per Must requirement. Supporting requirements FR-6 to FR-15 extend these five rather than introducing new actors.</p>
+
+<h3>5.2 Use-case diagram</h3>
+<div class="note">Not drawn in this milestone. M2's task is naming the use cases correctly against the FR list above; the actor / association / &lt;&lt;include&gt;&gt; diagram belongs to M3 Modeling.</div>
+
+<h2>6. Out of scope</h2>
+<ol>
+  <li>Connecting to any bank API or Open Banking service — outside what a student team can be authorised for.</li>
+  <li>Investment, stock or cryptocurrency tracking — does not serve either question in §1.1.</li>
+  <li>Any currency other than Thai baht.</li>
+  <li>Charging users; any payment, subscription or advertising feature.</li>
+  <li>A native mobile app or a standalone web app outside LINE.</li>
+  <li>AI computing, adjusting or forecasting any monetary figure.</li>
+  <li>General-purpose conversation with the AI beyond clarifying questions.</li>
+  <li>Statistical forecasting such as Monte Carlo simulation or seasonality modelling.</li>
+</ol>
+
+<h2>7. Traceability matrix (Golden Thread)</h2>
+<p>Every Must requirement traces backwards to a stated pain and forwards to an executable test. The test column names the file that checks it.</p>
+<table>
+  <tr><th style="width:21%">Problem / pain</th><th style="width:14%">Requirement</th><th style="width:22%">Solution / design</th><th style="width:20%">Feature built</th><th>Test</th></tr>
+  <tr><td>Logging takes four steps, so students quit within three weeks</td><td class="fr">FR-1 chat logging</td><td>Chat gateway → rule-based text parser → ledger write; no AI on this path</td><td>Type "coffee 80" in LINE and it is recorded</td><td><code>regexParser.test.ts</code>, <code>thaiNumber.test.ts</code></td></tr>
+  <tr><td>The spending students forget is what breaks the month</td><td class="fr">FR-2 email import</td><td>Mailbox poll every 5 minutes → DKIM check → bank-format parser → duplicate guard</td><td>Forwarded K PLUS emails appear as transactions</td><td><code>kbankParser.test.ts</code>, <code>emailDkim.test.ts</code>, <code>dedup.service.test.ts</code></td></tr>
+  <tr><td>"Where did it go" does not answer "can I afford this today"</td><td class="fr">FR-3 safe-to-spend</td><td>Money engine, integer satang only, divides remaining by days left in Bangkok time</td><td>Daily figure on the dashboard and via a chat command</td><td><code>safeToSpend.test.ts</code>, <code>thaiDate.test.ts</code></td></tr>
+  <tr><td>Overspending is discovered when it is too late to act</td><td class="fr">FR-4 budget alerts</td><td>Per-category monthly budget with database-level flags so each threshold fires once</td><td>Budget bar per category plus a warning in chat</td><td><code>budget.service.test.ts</code></td></tr>
+  <tr><td>Goals are set by wishful thinking and abandoned in month two</td><td class="fr">FR-5 saving plan</td><td>Capacity computed from the student's own 90-day history, with a safety ratio and an emergency buffer</td><td>Three plan options with confidence labels</td><td><code>plan.service.test.ts</code></td></tr>
+  <tr><td>A wrong number stated confidently is worse than no number</td><td class="fr">NFR-3, NFR-8</td><td>Money engine isolated from the AI module; integers throughout; no randomness</td><td>Every figure on screen comes from the engine</td><td><code>money.test.ts</code>, <code>summary.service.test.ts</code></td></tr>
+  <tr><td>Personal and financial data must not leak to a third party</td><td class="fr">NFR-5, NFR-6</td><td>Per-user filtering at the application layer; redaction before any AI call</td><td>Cross-user requests refused; prompts carry no identifiers</td><td><code>session.test.ts</code>, <code>redact.test.ts</code></td></tr>
+</table>
+
+<h2>8. AI usage log</h2>
+<p>Every prompt that drafted a requirement or a paragraph in this document is recorded here, together with what we had to correct by hand.</p>
+<table>
+  <tr><th style="width:9%">Date</th><th style="width:10%">Tool / model</th><th style="width:20%">What we asked</th><th style="width:20%">What AI produced</th><th style="width:22%">What we changed / verified</th><th>What we learned</th></tr>
+  <tr>
+    <td>14 Sep 2026</td><td>Claude</td>
+    <td>Draft candidate user stories for a student expense-tracking chat bot.</td>
+    <td>Nine stories, most beginning "As a user, I want to track my expenses".</td>
+    <td>Cut to five. Replaced "user" with "student on a fixed allowance". Deleted three stories with no benefit clause, and two that were features we invented rather than pains we had observed.</td>
+    <td>AI drafts pad the list. Anything without a "so that" tied to a real pain is gold-plating.</td>
+  </tr>
+  <tr>
+    <td>17 Sep 2026</td><td>Claude</td>
+    <td>Write the acceptance criteria for the budget alert threshold.</td>
+    <td>Given–When–Then criteria that compared a rounded percentage against 80.</td>
+    <td>Rejected. Rounding makes 79.99966% become 80.0 and fires the alert early, burning the month's only warning. Rewrote the comparison using integer cross-multiplication and added criterion 4 in §3.5 as a regression test.</td>
+    <td>AI-written money logic reads correctly and is still wrong. Criteria have to name the boundary value explicitly.</td>
+  </tr>
+  <tr>
+    <td>18 Sep 2026</td><td>Claude</td>
+    <td>Draft non-functional requirements for the system.</td>
+    <td>"The system should be fast, secure and easy to use."</td>
+    <td>Rejected all three as unmeasurable. Replaced with NFR-1 (3 seconds), NFR-4 (280 messages), NFR-5 (cross-user request refused) and NFR-9 (30 seconds, five students).</td>
+    <td>Unless you supply the number yourself, AI writes the adjective.</td>
+  </tr>
+  <tr>
+    <td>22 Sep 2026</td><td>Claude</td>
+    <td>Why does a forwarded bank email fail to match a student?</td>
+    <td>Suggested the token was missing from the delivery header.</td>
+    <td>Verified against a real forwarded email and the suggestion was right for the wrong reason: Gmail strips the token from one header but preserves it in another. Fixed by reading the forwarding headers first, then confirmed with a real 131-baht transfer.</td>
+    <td>AI cannot know how an external service behaves. Only a real message settles it.</td>
+  </tr>
+  <tr>
+    <td>23 Sep 2026</td><td>Claude</td>
+    <td>Review this SRS against the course rubric.</td>
+    <td>Flagged that all eight requirements were marked Must.</td>
+    <td>Accepted. Re-sorted to five Must and ten Should/Could, and wrote the reason for each priority in §3.1.</td>
+    <td>"Everything is Must" means the prioritising was never done.</td>
+  </tr>
+</table>
+<p class="tiny">Course rule observed: AI may draft, but every requirement here has been verified by the team and each author can explain any FR without notes.</p>
+
+<h2>9. Self-check</h2>
+<table>
+  <tr><th style="width:62%">Scorecard item</th><th style="width:10%">Score</th><th>Evidence</th></tr>
+  <tr><td>1. Scope (in / out) is clear and traces back to the M1 problem</td><td>2</td><td>§2.1 and §6</td></tr>
+  <tr><td>2. All actors that use the system are named</td><td>2</td><td>§1.2 — five roles including external suppliers</td></tr>
+  <tr><td>3. At least 5 FRs, numbered, written as user stories passing the 4 quality gates</td><td>2</td><td>§3 — 15 FRs, 5 detailed in full</td></tr>
+  <tr><td>4. At least 3 NFRs, each with a number</td><td>2</td><td>§4 — 9 NFRs, all measurable</td></tr>
+  <tr><td>5. Given–When–Then for every Must, including a wrong path</td><td>2</td><td>§3.2–§3.6 — 27 criteria, 14 of them wrong paths</td></tr>
+  <tr><td>6. MoSCoW applied, with 3–5 Must</td><td>2</td><td>§3.1 — exactly 5 Must, reason given per row</td></tr>
+  <tr><td>7. No solution or technology mixed into a requirement</td><td>2</td><td>Design detail is confined to §7 and the §3.4 definition note</td></tr>
+  <tr><td>8. Traceability: story ↔ FR ↔ acceptance</td><td>2</td><td>§7 — every Must row reaches a named test file</td></tr>
+  <tr><td>9. No gold-plating; every FR ties to a stated problem</td><td>2</td><td>"Pain this traces to" under each Must FR</td></tr>
+  <tr><td>10. Every FR passes the 4 quality gates (no vague words, no solution)</td><td>2</td><td>Named roles, "so that" clauses, numeric criteria throughout</td></tr>
+  <tr><td><b>Total</b></td><td><b>20 / 20</b></td><td>Target was 14/20</td></tr>
+</table>
+<div class="note">Course rule: you may use AI to draft. You must log it, verify it against a real stakeholder, and be able to explain every FR in the oral exam. Work you cannot explain earns no credit.</div>
+
+</body>
+</html>
