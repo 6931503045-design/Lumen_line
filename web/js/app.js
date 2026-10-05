@@ -2524,9 +2524,68 @@ function openTrendDetail(type) {
 // ---------- จำลองผลกระทบก่อนซื้อ ----------
 // อิงงบเดือนนี้ที่เหลือ + จำนวนวันที่เหลือ: ดูว่าซื้อแล้ว "ใช้ได้เฉลี่ยวันละเท่าไร" เทียบกับก่อนซื้อ
 // (ไม่เอา "เงินที่ใช้ได้วันนี้" มาเทียบราคาโดยตรง เพราะเป็นคนละหน่วยกับราคาก้อนเดียวและทำให้สับสนว่าเกินงบหรือไม่)
+/**
+ * ผลจำลองล่าสุดที่ backend คำนวณให้ — boot.js เป็นคนเติมค่านี้
+ *
+ * ⚖️ G1: เมื่อต่อ backend ได้ ตัวเลขทุกตัวต้องมาจาก Money Engine ไม่ใช่คิดในเบราว์เซอร์
+ * สูตรด้านล่างในไฟล์นี้เหลือไว้สำหรับ "โหมดตัวอย่าง" (ยังไม่ล็อกอิน/ไม่มี backend) เท่านั้น
+ *
+ * เก็บราคาที่ใช้คิดไว้ด้วย เพราะผู้ใช้พิมพ์เร็วกว่า API ตอบ — ถ้าราคาบนจอไม่ตรงกับ
+ * ราคาที่ผลนี้คิดมา ต้องไม่เอามาแสดง ไม่งั้นจะเห็นตัวเลขของราคาเก่าค้างอยู่
+ */
+function readLiveSimulation(priceSatang) {
+  const live = window.__liveSimulation;
+  if (!live || live.priceSatang !== priceSatang) return null;
+  return live;
+}
+
+/** แปลงผลจาก API ให้อยู่ในรูปที่การ์ดและ modal ใช้อยู่แล้ว */
+function fromLiveSimulation(live, ref) {
+  const { perDayBeforeSatang: perDayBefore, perDayAfterSatang: perDayAfter } = live;
+  const saveDate = live.monthsToSave === null
+    ? null
+    : new Intl.DateTimeFormat('th-TH', { month: 'long', year: 'numeric', calendar: 'gregory' })
+      .format(new Date(ref.year, ref.month - 1 + live.monthsToSave, 1));
+
+  let verdict = 'ใส่ราคาที่อยากซื้อ เพื่อดูว่ากระทบงบแค่ไหน';
+  if (!live.hasBudget) {
+    verdict = 'ต้องตั้งงบรายเดือนก่อน ระบบจึงจะบอกได้ว่าการซื้อนี้กระทบงบแค่ไหน';
+  } else if (live.tone === 'over') {
+    verdict = `เกินงบเดือนนี้ ${formatMoney(live.overBySatang)} ไม่เหลืองบให้ใช้รายวันจนสิ้นเดือน${live.monthsToSave === null ? '' : ` · ออมก่อนราว ${live.monthsToSave} เดือนจะไม่กระทบงบ`}`;
+  } else if (live.afterBuySatang === 0) {
+    verdict = 'ซื้อได้ แต่งบที่เหลือจะหมดพอดี ไม่เหลือให้ใช้รายวันจนสิ้นเดือน';
+  } else if (live.tone === 'warn') {
+    verdict = `ซื้อได้ แต่งบที่เหลือจะลดเกินครึ่ง เหลือใช้เฉลี่ยวันละ ${formatMoneyShort(perDayAfter)} (เดิม ${formatMoneyShort(perDayBefore)})`;
+  } else {
+    verdict = `ซื้อได้ และงบยังพอใช้ถึงสิ้นเดือน เฉลี่ยวันละ ${formatMoneyShort(perDayAfter)} (เดิม ${formatMoneyShort(perDayBefore)})`;
+  }
+
+  return {
+    hasBudget: live.hasBudget,
+    price: live.priceSatang,
+    budgetLeft: live.budgetLeftSatang,
+    daysLeft: live.daysLeft,
+    days: Math.max(1, live.daysLeft),
+    monthlySaving: live.monthlyCapacitySatang,
+    afterBuy: live.afterBuySatang,
+    perDayBefore,
+    perDayAfter,
+    dropPercent: perDayBefore > 0 ? Math.round((1 - perDayAfter / perDayBefore) * 100) : null,
+    overBy: live.overBySatang,
+    monthsToSave: live.monthsToSave,
+    saveDate,
+    tone: live.hasBudget ? live.tone : '',
+    verdict,
+  };
+}
+
 function getPurchaseSimulation() {
   const priceInput = document.getElementById('purchasePrice');
   const price = Math.round(Math.max(0, Number(priceInput ? priceInput.value : 0) || 0) * 100);
+
+  // ⚖️ G1: ถ้า backend คิดให้แล้ว ใช้ของ backend เสมอ ห้ามคิดซ้ำในเบราว์เซอร์
+  const live = readLiveSimulation(price);
+  if (live) return fromLiveSimulation(live, getAnalyzeReference());
 
   // 🔴 แก้บั๊ก: ผู้ใช้ที่ยังไม่เคยตั้งงบสักหมวด totalLimitSatang = 0
   // budgetLeft จึงเป็น 0 แล้วทุกราคาถูกตัดสินว่า "เกินงบเดือนนี้" ทั้งที่ระบบไม่รู้งบเลย

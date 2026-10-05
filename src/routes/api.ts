@@ -59,6 +59,7 @@ import { countUnparsedEmails } from '../db/queries/emails';
 import { env } from '../config/env';
 import { toSatang } from '../utils/money';
 import { normalizeMonthIso } from '../utils/thaiDate';
+import { simulatePurchase, SimulateError } from '../services/simulate.service';
 
 export const apiRouter = express.Router();
 
@@ -109,6 +110,20 @@ apiRouter.get(
       // `confidence` มาจาก /api/plans (capacity.confidence) ไม่ได้อยู่ในนี้
       unavailable: [],
     });
+  })
+);
+
+/**
+ * จำลองผลกระทบก่อนซื้อ (S5.7 / FR-15) — body: { priceSatang }
+ *
+ * 🔴 Money Engine: ⚖️ G1 ทุกตัวเลขคิดที่นี่ ห้ามให้หน้าเว็บคิดเอง
+ * เดิมหน้า "วิเคราะห์" คำนวณในเบราว์เซอร์ ทำให้สูตรอยู่สองที่และเพี้ยนจากกันได้
+ */
+apiRouter.post(
+  '/simulate',
+  handle(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    res.json(await simulatePurchase(req.userId!, body.priceSatang));
   })
 );
 

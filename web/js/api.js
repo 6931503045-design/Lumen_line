@@ -42,6 +42,13 @@
     ApiError,
     fetchMe: () => request('/me'),
     fetchSummary: () => request('/summary'),
+    // จำลองก่อนซื้อ — ⚖️ G1 ตัวเลขคิดที่ backend หน้าเว็บแค่เอามาแสดง
+    simulatePurchase: (priceSatang) =>
+      request('/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priceSatang }),
+      }),
     fetchTransactions: () => request('/transactions?limit=100'),
     fetchCategories: () => request('/categories'),
     createCategory: ({ name, type, emoji, isEssential }) =>

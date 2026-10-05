@@ -570,6 +570,66 @@
     box.hidden = false;
   }
 
+  // ---------- จำลองก่อนซื้อ (S5.7 / FR-15) ----------
+  // ⚖️ G1: สูตรอยู่ที่ backend (simulate.service.ts) หน้าเว็บแค่ส่งราคาไปแล้วเอาผลมาแสดง
+  // เดิม app.js คำนวณเองทั้งหมด ซึ่งขัดกับที่ SRS §2.2 เขียนไว้ว่าเงินทุกบาทมาจาก Money Engine
+
+  /** ตัวนับรอบ กันผลของราคาเก่ามาทับผลของราคาใหม่เมื่อ API ตอบสลับลำดับ */
+  let simulateSeq = 0;
+  let simulateTimer = null;
+
+  async function runSimulation(priceSatang) {
+    if (!(priceSatang > 0)) {
+      window.__liveSimulation = null;
+      if (window.renderPurchaseSimulation) window.renderPurchaseSimulation();
+      return;
+    }
+
+    const seq = ++simulateSeq;
+    try {
+      const result = await api.simulatePurchase(priceSatang);
+      if (seq !== simulateSeq) return; // มีคำขอใหม่กว่าตามมาแล้ว ทิ้งผลนี้
+      window.__liveSimulation = result;
+    } catch (err) {
+      if (seq !== simulateSeq) return;
+      // คิดไม่ได้ก็อย่าแสดงเลขเก่าค้างไว้ ปล่อยให้ตกไปใช้ข้อความ "ใส่ราคา..." แทน
+      console.error('[boot] จำลองการซื้อไม่สำเร็จ', err);
+      window.__liveSimulation = null;
+    }
+    if (window.renderPurchaseSimulation) window.renderPurchaseSimulation();
+  }
+
+  function installPurchaseSimulation() {
+    const priceInput = document.getElementById('purchasePrice');
+    if (!priceInput) return;
+
+    const schedule = () => {
+      const priceSatang = Math.round(Math.max(0, Number(priceInput.value) || 0) * 100);
+      // หน่วงไว้ 350ms ระหว่างผู้ใช้พิมพ์ ไม่งั้นยิง API ทุกตัวอักษร
+      if (simulateTimer) clearTimeout(simulateTimer);
+      simulateTimer = setTimeout(() => runSimulation(priceSatang), 350);
+    };
+
+    priceInput.addEventListener('input', schedule);
+    // กด "จำลอง" หรือ Enter = ต้องได้ผลทันที ไม่ต้องรอหน่วง
+    const immediate = () => {
+      if (simulateTimer) clearTimeout(simulateTimer);
+      runSimulation(Math.round(Math.max(0, Number(priceInput.value) || 0) * 100));
+    };
+    priceInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') immediate();
+    });
+    const simSection = document.querySelector('.an-sim');
+    if (simSection) {
+      simSection.addEventListener('click', (event) => {
+        if (event.target.closest('#simulatePurchaseBtn')) immediate();
+      });
+    }
+
+    // คิดรอบแรกจากค่าตั้งต้นในช่อง
+    schedule();
+  }
+
   function installPlanCapacity() {
     const openOriginal = window.openPlanWizard;
     const stepOriginal = window.renderPlanWizardStep;
@@ -807,6 +867,7 @@
 
     applyProfile(me);
     installPlanCapacity();
+    installPurchaseSimulation();
     hideUnsupported();
     unsupportedObserver.observe(document.body, { childList: true, subtree: true });
 

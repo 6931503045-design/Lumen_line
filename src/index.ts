@@ -20,6 +20,7 @@ import { RecurringError } from './services/recurring.service';
 import { PlanError } from './services/plan.service';
 import { TransactionError } from './services/transaction.service';
 import { CategoryError } from './services/category.service';
+import { SimulateError } from './services/simulate.service';
 import { MoneyError } from './utils/money';
 
 const app = express();
@@ -73,7 +74,8 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     err instanceof RecurringError ||
     err instanceof PlanError ||
     err instanceof TransactionError ||
-    err instanceof CategoryError
+    err instanceof CategoryError ||
+    err instanceof SimulateError
   ) {
     res.status(err.status).json({ ok: false, error: err.message });
     return;
