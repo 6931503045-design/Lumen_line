@@ -20,11 +20,11 @@
 
 | # | ชื่อ–นามสกุล | รหัสนักศึกษา | GitHub | บทบาทหลัก |
 |---|---|---|---|---|
-| 1 | ⬜ | 6931503045 | `6931503045-design` | เจ้าของ repo · เอกสาร · SPEC |
-| 2 | ⬜ | 6931503088 | `88coder-1` | Frontend · UI/UX · LINE integration |
-| 3 | ⬜ | ⬜ | `BeginPython01` | โครงสร้างโปรเจกต์เริ่มต้น · service layer |
-| 4 | ⬜ | ⬜ | ⬜ | ⬜ |
-| 5 | ⬜ | ⬜ | ⬜ | ⬜ |
+| 1 | Teerat Wongpanti | 6931503045 | `6931503045-design` | เจ้าของ repo · เอกสาร · SPEC |
+| 2 | Aitthiphat Kanyathuean | 6931503088 | `88coder-1` | Frontend · UI/UX · LINE integration |
+| 3 | Thapanapat Pumulna | 6931503032 | `BeginPython01` | โครงสร้างโปรเจกต์เริ่มต้น · service layer |
+| 4 | Sorrawis Chumpheng | 6931503076 | `so4598` | จัดการเอกสาร Docs |
+| 5 | Teerapat Palee | 6931503044 | `6931503044-hub` | ออกแบบ Logo และ วาด UI |
 
 ---
 
@@ -409,9 +409,9 @@ users ──┬──< categories ──┬──< transactions >── (self re
 |---|---|---|---|
 | `88coder-1` (6931503088) | **21** | 11–23 ก.ย. | UI ทั้ง 5 หน้า · `style.css` · `app.js` · เชื่อม LINE + ฐานข้อมูล · Flex message |
 | `6931503045-design` (6931503045) | **11** | 11–22 ก.ย. | เจ้าของ repo · `SPEC.md` · `AIDO.md` · `README.md` · `Prompt_AI_Agent_v3.md` |
-| `BeginPython01` | **4** | 11–13 ก.ย. | โครงสร้างโปรเจกต์เริ่มต้น · `tsconfig.json` · service layer ชุดแรก |
-| ⬜ สมาชิกคนที่ 4 | ⬜ | ⬜ | ⬜ |
-| ⬜ สมาชิกคนที่ 5 | ⬜ | ⬜ | ⬜ |
+| `BeginPython01` (6931503032) | **4** | 11–13 ก.ย. | โครงสร้างโปรเจกต์เริ่มต้น · `tsconfig.json` · service layer ชุดแรก |
+| `so4598` | ⬜ | ⬜ | ⬜ |
+| `6931503044-hub` | ⬜ | ⬜ | ⬜ |
 
 ### 8.2 ⚠️ หมายเหตุสำคัญเรื่องการนับ commit
 
