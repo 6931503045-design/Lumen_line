@@ -1,0 +1,311 @@
+{
+  "type": "bubble",
+  "size": "mega",
+  "body": {
+    "type": "box",
+    "layout": "vertical",
+    "paddingAll": "24px",
+    "contents": [
+      {
+        "type": "box",
+        "layout": "horizontal",
+        "contents": [
+          {
+            "type": "text",
+            "text": "รายงานประจำเดือน",
+            "weight": "bold",
+            "size": "xl",
+            "color": "#c6ff3d",
+            "wrap": true,
+            "flex": 4
+          },
+          {
+            "type": "text",
+            "text": "📊",
+            "size": "xl",
+            "align": "end",
+            "flex": 1
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "text": "1 Aug - 31 Aug 2026",
+        "size": "xs",
+        "color": "#ffffff",
+        "margin": "sm"
+      },
+      {
+        "type": "separator",
+        "margin": "xl",
+        "color": "#333333"
+      },
+      {
+        "type": "box",
+        "layout": "vertical",
+        "margin": "xl",
+        "spacing": "sm",
+        "contents": [
+          {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+              {
+                "type": "text",
+                "text": "INCOME",
+                "size": "xxs",
+                "color": "#14170f",
+                "weight": "bold",
+                "align": "center"
+              }
+            ],
+            "backgroundColor": "#c6ff3d",
+            "cornerRadius": "6px",
+            "width": "65px",
+            "paddingTop": "4px",
+            "paddingBottom": "4px"
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "sm",
+            "contents": [
+              {
+                "type": "text",
+                "text": "งานพิเศษ",
+                "size": "sm",
+                "color": "#ffffff"
+              },
+              {
+                "type": "text",
+                "text": "฿67676767",
+                "size": "sm",
+                "color": "#ffffff",
+                "align": "end"
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "Others",
+                "size": "sm",
+                "color": "#ffffff"
+              },
+              {
+                "type": "text",
+                "text": "฿123",
+                "size": "sm",
+                "color": "#ffffff",
+                "align": "end"
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "md",
+            "contents": [
+              {
+                "type": "text",
+                "text": "Total Income",
+                "size": "sm",
+                "color": "#ffffff",
+                "weight": "bold"
+              },
+              {
+                "type": "text",
+                "text": "฿5555",
+                "size": "sm",
+                "color": "#c6ff3d",
+                "align": "end",
+                "weight": "bold"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "separator",
+        "margin": "xl",
+        "color": "#333333"
+      },
+      {
+        "type": "box",
+        "layout": "vertical",
+        "margin": "xl",
+        "spacing": "sm",
+        "contents": [
+          {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+              {
+                "type": "text",
+                "text": "EXPENSE",
+                "size": "xxs",
+                "color": "#c6ff3d",
+                "weight": "bold",
+                "align": "center"
+              }
+            ],
+            "backgroundColor": "#c6ff3d",
+            "cornerRadius": "6px",
+            "width": "65px",
+            "paddingTop": "4px",
+            "paddingBottom": "4px"
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "sm",
+            "contents": [
+              {
+                "type": "text",
+                "text": "Food",
+                "size": "sm",
+                "color": "#ffffff"
+              },
+              {
+                "type": "text",
+                "text": "฿676767",
+                "size": "sm",
+                "color": "#ffffff",
+                "align": "end"
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "Internet",
+                "size": "sm",
+                "color": "#ffffff"
+              },
+              {
+                "type": "text",
+                "text": "฿0",
+                "size": "sm",
+                "color": "#ffffff",
+                "align": "end"
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "margin": "md",
+            "contents": [
+              {
+                "type": "text",
+                "text": "Total Expense",
+                "size": "sm",
+                "color": "#ffffff",
+                "weight": "bold"
+              },
+              {
+                "type": "text",
+                "text": "฿9999",
+                "size": "sm",
+                "color": "#ffffff",
+                "align": "end",
+                "weight": "bold"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "separator",
+        "margin": "xl",
+        "color": "#333333"
+      },
+      {
+        "type": "box",
+        "layout": "horizontal",
+        "margin": "xl",
+        "alignItems": "center",
+        "contents": [
+          {
+            "type": "text",
+            "text": "Savings",
+            "size": "lg",
+            "color": "#ffffff",
+            "weight": "bold",
+            "flex": 1
+          },
+          {
+            "type": "text",
+            "text": "฿99999",
+            "size": "xxl",
+            "color": "#c6ff3d",
+            "align": "end",
+            "weight": "bold",
+            "flex": 2,
+            "adjustMode": "shrink-to-fit"
+          }
+        ]
+      },
+      {
+        "type": "box",
+        "layout": "horizontal",
+        "margin": "sm",
+        "contents": [
+          {
+            "type": "text",
+            "text": "Savings Rate",
+            "size": "xxs",
+            "color": "#ffffff"
+          },
+          {
+            "type": "text",
+            "text": "100%",
+            "size": "xxs",
+            "color": "#c6ff3d",
+            "align": "end",
+            "weight": "bold"
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "type": "box",
+    "layout": "vertical",
+    "paddingStart": "24px",
+    "paddingEnd": "24px",
+    "paddingBottom": "24px",
+    "paddingTop": "0px",
+    "backgroundColor": "#14170f",
+    "contents": [
+      {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+          {
+            "type": "text",
+            "text": "Jod Tang Analysis",
+            "color": "#14170f",
+            "weight": "bold",
+            "align": "center",
+            "size": "md"
+          }
+        ],
+        "backgroundColor": "#c6ff3d",
+        "paddingAll": "14px",
+        "cornerRadius": "30px",
+        "action": {
+          "type": "uri",
+          "label": "action",
+          "uri": "http://linecorp.com/"
+        }
+      }
+    ]
+  }
+}
