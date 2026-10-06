@@ -14,17 +14,19 @@
             "type": "text",
             "text": "รายงานประจำเดือน",
             "weight": "bold",
-            "size": "xl",
-            "color": "#c6ff3d",
+            "size": "lg",
+            "color": "#14170f",
             "wrap": true,
             "flex": 4
           },
           {
-            "type": "text",
-            "text": "📊",
-            "size": "xl",
-            "align": "end",
-            "flex": 1
+            "type": "image",
+            "url": "https://ibb.co/XkbvnDkk",
+            "flex": 2,
+            "size": "full",
+            "aspectRatio": "2:1",
+            "aspectMode": "fit",
+            "backgroundColor": "#14170f"
           }
         ]
       },
@@ -59,7 +61,7 @@
                 "align": "center"
               }
             ],
-            "backgroundColor": "#c6ff3d",
+            "backgroundColor": "#6DB33F",
             "cornerRadius": "6px",
             "width": "65px",
             "paddingTop": "4px",
@@ -74,13 +76,13 @@
                 "type": "text",
                 "text": "งานพิเศษ",
                 "size": "sm",
-                "color": "#ffffff"
+                "color": "#14170f"
               },
               {
                 "type": "text",
                 "text": "฿67676767",
                 "size": "sm",
-                "color": "#ffffff",
+                "color": "#14170f",
                 "align": "end"
               }
             ]
@@ -93,13 +95,13 @@
                 "type": "text",
                 "text": "Others",
                 "size": "sm",
-                "color": "#ffffff"
+                "color": "#14170f"
               },
               {
                 "type": "text",
                 "text": "฿123",
                 "size": "sm",
-                "color": "#ffffff",
+                "color": "#14170f",
                 "align": "end"
               }
             ]
@@ -113,14 +115,14 @@
                 "type": "text",
                 "text": "Total Income",
                 "size": "sm",
-                "color": "#ffffff",
+                "color": "#14170f",
                 "weight": "bold"
               },
               {
                 "type": "text",
                 "text": "฿5555",
                 "size": "sm",
-                "color": "#c6ff3d",
+                "color": "#14170f",
                 "align": "end",
                 "weight": "bold"
               }
@@ -147,12 +149,12 @@
                 "type": "text",
                 "text": "EXPENSE",
                 "size": "xxs",
-                "color": "#c6ff3d",
+                "color": "#14170f",
                 "weight": "bold",
                 "align": "center"
               }
             ],
-            "backgroundColor": "#c6ff3d",
+            "backgroundColor": "#6DB33F",
             "cornerRadius": "6px",
             "width": "65px",
             "paddingTop": "4px",
@@ -167,13 +169,13 @@
                 "type": "text",
                 "text": "Food",
                 "size": "sm",
-                "color": "#ffffff"
+                "color": "#14170f"
               },
               {
                 "type": "text",
                 "text": "฿676767",
                 "size": "sm",
-                "color": "#ffffff",
+                "color": "#14170f",
                 "align": "end"
               }
             ]
@@ -186,13 +188,13 @@
                 "type": "text",
                 "text": "Internet",
                 "size": "sm",
-                "color": "#ffffff"
+                "color": "#14170f"
               },
               {
                 "type": "text",
                 "text": "฿0",
                 "size": "sm",
-                "color": "#ffffff",
+                "color": "#14170f",
                 "align": "end"
               }
             ]
@@ -206,14 +208,14 @@
                 "type": "text",
                 "text": "Total Expense",
                 "size": "sm",
-                "color": "#ffffff",
+                "color": "#14170f",
                 "weight": "bold"
               },
               {
                 "type": "text",
                 "text": "฿9999",
                 "size": "sm",
-                "color": "#ffffff",
+                "color": "#14170f",
                 "align": "end",
                 "weight": "bold"
               }
@@ -236,7 +238,7 @@
             "type": "text",
             "text": "Savings",
             "size": "lg",
-            "color": "#ffffff",
+            "color": "#14170f",
             "weight": "bold",
             "flex": 1
           },
@@ -244,7 +246,7 @@
             "type": "text",
             "text": "฿99999",
             "size": "xxl",
-            "color": "#c6ff3d",
+            "color": "#14170f",
             "align": "end",
             "weight": "bold",
             "flex": 2,
@@ -261,13 +263,13 @@
             "type": "text",
             "text": "Savings Rate",
             "size": "xxs",
-            "color": "#ffffff"
+            "color": "#14170f"
           },
           {
             "type": "text",
             "text": "100%",
             "size": "xxs",
-            "color": "#c6ff3d",
+            "color": "#14170f",
             "align": "end",
             "weight": "bold"
           }
