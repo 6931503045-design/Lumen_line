@@ -301,9 +301,13 @@ async function runToolCall(
 // ที่นี่จึงจับคู่กับหมวดที่ผู้ใช้ "มีอยู่แล้ว" เท่านั้น ไม่เจอก็ปล่อยให้ระบบเลือกค่าเริ่มต้น
 
 /** หมวดสำรองของรายจ่ายเมื่อจับคู่ไม่ได้ (SPEC §S11.2 "ไม่เจอ = อื่นๆ") */
-const FALLBACK_EXPENSE_CATEGORY = 'อื่นๆ';
+export const FALLBACK_EXPENSE_CATEGORY = 'อื่นๆ';
 
-async function resolveCategoryName(
+/**
+ * export ออกมาเพราะ imageHandler (สลิป) ต้องเดาหมวดจากชื่อผู้รับโอนด้วยกฎเดียวกัน
+ * ถ้าปล่อยให้แต่ละที่เขียนเอง กฎ "ห้ามสร้างหมวดใหม่ตามคำที่ AI เดามา" จะหลุดที่ใดที่หนึ่ง
+ */
+export async function resolveCategoryName(
   userId: string,
   hint: string | null,
   type: 'income' | 'expense'

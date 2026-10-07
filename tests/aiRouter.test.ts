@@ -645,8 +645,13 @@ describe('⚖️ G5 — log ตอนสำเร็จต้องไม่ม�
 });
 
 describe('เทสต์เชิงโครงสร้าง — ไม่มีทางเลี่ยง guard', () => {
-  it('🔴 มีแค่ services/ai/gemini.ts ที่ import @google/genai ได้ (SPEC §S11)', () => {
+  it('🔴 มีแค่ไฟล์ใน services/ai/ ที่ import @google/genai ได้ (SPEC §S11)', () => {
     // ถ้าเทสต์นี้ล้ม แปลว่ามีไฟล์ใหม่เรียก AI ตรงโดยไม่ผ่าน guard + โควตา + log
+    //
+    // ไฟล์ที่อยู่ในรายการนี้ได้ต้องเข้าเงื่อนไขทั้งสองข้อ:
+    //   - gemini.ts (T1 ข้อความ) และ vision.ts (T2 สลิป) เรียก checkAiAllowed เองก่อนยิง
+    //   - tools.ts ใช้แค่ type Schema กับ enum Type ไม่ได้เรียก provider เลย
+    // เพิ่มชื่อลงรายการนี้ได้ต่อเมื่อไฟล์นั้นผ่าน guard เองจริง ไม่ใช่เพื่อให้เทสต์เขียว
     const srcDir = join(__dirname, '..', 'src');
     const offenders: string[] = [];
 
@@ -664,6 +669,10 @@ describe('เทสต์เชิงโครงสร้าง — ไม่�
     };
     walk(srcDir);
 
-    expect(offenders.sort()).toEqual(['services/ai/gemini.ts', 'services/ai/tools.ts']);
+    expect(offenders.sort()).toEqual([
+      'services/ai/gemini.ts',
+      'services/ai/tools.ts',
+      'services/ai/vision.ts',
+    ]);
   });
 });

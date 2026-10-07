@@ -49,8 +49,19 @@ const entryPayloadSchema = z.object({
   totalSatang: z.number().int().positive(),
   splitCount: z.number().int().min(1),
   item: z.string().min(1),
+  /**
+   * วันที่หรือเวลาที่เกิดรายการ — รับได้ 2 รูป (ดู payloadOccurredAt ด้านล่าง)
+   *   - "YYYY-MM-DD" จากแชท (ผู้ใช้บอกแต่วัน ไม่ได้บอกเวลา)
+   *   - ISO timestamp เต็มจากสลิป (สลิปมีเวลาแม่น ๆ ติดมาด้วย)
+   */
   occurredAtIso: z.string().nullable(),
   categoryName: z.string().nullable(),
+  /**
+   * เลขอ้างอิงจากสลิป — ออปชันเพราะรายการจากแชทไม่มี (ผู้ใช้พิมพ์เองไม่มีเลขอ้างอิง)
+   * ⚖️ S10: คอลัมน์ ref_number มี unique index อยู่ จึงกันสลิปใบเดิมซ้ำได้ถึงระดับ DB
+   * ไม่ต้องเชื่อแค่การตรวจในโค้ด
+   */
+  refNumber: z.string().min(1).nullable().optional(),
 });
 
 export type EntryPayload = z.infer<typeof entryPayloadSchema>;
@@ -220,7 +231,7 @@ async function executePending(
   switch (row.action) {
     case 'create_transaction': {
       const entry = parsed.data as EntryPayload;
-      const tx = await saveEntry(userId, entry);
+      const tx = await saveEntry(userId, entry, row.source);
       return {
         kind: 'done',
         transactionId: tx.id,
@@ -236,7 +247,7 @@ async function executePending(
       // จะค้างอยู่ — จึงบอกผู้ใช้ตรง ๆ ว่าบันทึกได้กี่รายการ แล้วให้กดยืนยันซ้ำได้
       const saved: string[] = [];
       for (const entry of entries) {
-        const tx = await saveEntry(userId, entry);
+        const tx = await saveEntry(userId, entry, row.source);
         saved.push(`${entry.item} ${formatBaht(entry.amountSatang)}`);
         void tx;
       }
@@ -292,18 +303,50 @@ async function executePending(
   }
 }
 
-/** บันทึกรายการเงิน 1 ก้อนจาก payload — parsedBy เป็น 'ai' เสมอ เพราะมาจาก AI */
-async function saveEntry(userId: string, entry: EntryPayload) {
+/**
+ * บันทึกรายการเงิน 1 ก้อนจาก payload — parsedBy เป็น 'ai' เสมอ เพราะมาจาก AI
+ *
+ * source มาจากคอลัมน์ของแถว pending ไม่ได้ fix เป็น 'chat'
+ * สลิปที่อ่านด้วย Vision ต้องลงเป็น source='image' ไม่ใช่ 'chat' (SPEC §S9)
+ * ไม่งั้นสถิติแยกช่องทางจะผิด และคำสั่ง `ยกเลิก` ที่กรอง source='chat'
+ * จะไปลบรายการที่มาจากสลิปได้ ซึ่งไม่ใช่สิ่งที่ผู้ใช้สั่ง
+ */
+async function saveEntry(userId: string, entry: EntryPayload, source: PendingActionSource) {
   return createTransaction({
     userId,
     type: entry.type,
     amountSatang: entry.amountSatang,
     ...(entry.categoryName ? { categoryName: entry.categoryName } : {}),
     note: entry.item,
-    ...(entry.occurredAtIso ? { occurredAt: isoDateToBangkokNoon(entry.occurredAtIso) } : {}),
-    source: 'chat',
+    ...(entry.occurredAtIso ? { occurredAt: payloadOccurredAt(entry.occurredAtIso) } : {}),
+    ...(entry.refNumber ? { refNumber: entry.refNumber } : {}),
+    source,
     parsedBy: 'ai',
   });
+}
+
+/**
+ * แปลงค่า occurredAtIso ใน payload เป็น Date
+ *
+ * รองรับ 2 รูปเพราะต้นทางต่างกันจริง:
+ *   "2026-10-06"            ← จากแชท ผู้ใช้บอกแค่วัน ลงเป็นเที่ยงวันไทย (กันวันเลื่อนข้ามเขตเวลา)
+ *   "2026-10-06T14:32:00Z"  ← จากสลิป มีเวลาแม่นติดมา ใช้เวลานั้นตรง ๆ
+ *
+ * ทำไมเวลาจากสลิปต้องเก็บให้ตรง: กฎ S10 ตัดสินว่า "ซ้ำ" จากยอดที่เท่ากัน
+ * และเวลาที่ห่างกันไม่เกิน 30 นาที ถ้าปัดเวลาสลิปเป็นเที่ยงวันทุกใบ
+ * สลิป 2 ใบที่ยอดเท่ากันแต่โอนห่างกันหลายชั่วโมงจะถูกมองว่าซ้ำกันทันที
+ */
+function payloadOccurredAt(iso: string): Date {
+  // ยาวเท่ากับ "YYYY-MM-DD" พอดี = วันที่ไม่มีเวลา
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    return isoDateToBangkokNoon(iso);
+  }
+
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new PendingError(`payload มีเวลาที่อ่านไม่ออก: "${iso}"`);
+  }
+  return parsed;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -385,9 +428,30 @@ function describeEntry(entry: EntryPayload): string {
     parts.push(`หมวด ${entry.categoryName}`);
   }
   if (entry.occurredAtIso) {
-    parts.push(`วันที่ ${entry.occurredAtIso}`);
+    parts.push(`วันที่ ${formatPayloadDate(entry.occurredAtIso)}`);
+  }
+  if (entry.refNumber) {
+    parts.push(`เลขอ้างอิง ${entry.refNumber}`);
   }
   return parts.join(' ');
+}
+
+/**
+ * ทำ occurredAtIso ให้อ่านรู้เรื่องในการ์ดยืนยัน
+ *
+ * ผู้ใช้ต้องอ่านแล้วตัดสินใจได้ว่าถูกหรือผิด การโชว์ "2026-10-06T14:32:00.000Z"
+ * ไม่ได้ช่วยอะไรเลย — แย่กว่านั้นคือ Z เป็นเวลา UTC ซึ่งไม่ตรงกับเวลาบนสลิป
+ * ที่ผู้ใช้เพิ่งเห็นมา จึงต้องแปลงกลับเป็นเวลาไทยก่อนแสดง
+ */
+function formatPayloadDate(iso: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+
+  // แปลงเป็นเวลาไทยแล้วตัดเอา "YYYY-MM-DD HH:MM"
+  const bangkok = new Date(parsed.getTime() + 7 * 60 * 60 * 1000);
+  return `${bangkok.toISOString().slice(0, 10)} ${bangkok.toISOString().slice(11, 16)}`;
 }
 
 const WEEKDAY_NAMES = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
