@@ -135,7 +135,16 @@ export async function interpretUserMessage(input: InterpretInput): Promise<AiRep
   }
 
   try {
-    return await runToolCall(input.userId, validated.call, todayIso, now);
+    const reply = await runToolCall(input.userId, validated.call, todayIso, now);
+
+    // ⚖️ G5: log ได้แค่ชื่อ tool กับผลลัพธ์ปลายทาง ห้ามใส่เนื้อหาคำตอบ
+    // (คำตอบของ tool อ่านข้อมูลมียอดเงินจริงของผู้ใช้อยู่)
+    //
+    // ทำไมต้องมีบรรทัดนี้: ทางที่ล้มเหลวมี log ครบอยู่แล้ว แต่ทางที่สำเร็จเงียบสนิท
+    // ทำให้แยกไม่ออกระหว่าง "ไม่มีใครส่งข้อความมา" กับ "ทำงานได้ปกติ"
+    // ซึ่งตอนไล่ปัญหาบน Render เสียเวลามาก
+    console.info(`[ai/router] ✅ tool "${validated.call.name}" → ${reply.kind}`);
+    return reply;
   } catch (err) {
     console.error('[ai/router] ทำงานตาม tool ไม่สำเร็จ:', err);
     return { kind: 'unavailable' };

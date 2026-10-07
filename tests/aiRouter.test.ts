@@ -595,6 +595,55 @@ describe('ประวัติแชท (SPEC §S11.2 — 3 turn ล่าส�
   });
 });
 
+describe('⚖️ G5 — log ตอนสำเร็จต้องไม่มีข้อมูลของผู้ใช้', () => {
+  it('🔴 log บอกแค่ชื่อ tool กับผลลัพธ์ ไม่มีข้อความ ยอดเงิน หรือชื่อรายการของผู้ใช้', async () => {
+    // log ของ host ไม่ได้กรอง user_id ใครเข้าถึงได้ก็อ่านได้หมด
+    // ข้อมูลที่ระบุตัวผู้ใช้หรือยอดเงินต้องอยู่ใน DB เท่านั้น ไม่ใช่ใน log
+    const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'create_transaction',
+      args: { type: 'expense', amount: 1234, item: 'ยาสีฟันยี่ห้อแปลก', category_hint: 'สุขภาพ' },
+    });
+
+    await ask('เมื่อกี้ซื้อยาสีฟันยี่ห้อแปลกมา 1234 บาท');
+
+    const logged = spy.mock.calls.flat().join(' | ');
+    spy.mockRestore();
+
+    // ต้องมีข้อมูลที่ช่วย debug ได้
+    expect(logged).toContain('create_transaction');
+    expect(logged).toContain('pending');
+
+    // แต่ต้องไม่มีของพวกนี้
+    expect(logged).not.toContain('ยาสีฟัน');
+    expect(logged).not.toContain('1234');
+    expect(logged).not.toContain('u1');
+  });
+
+  it('ทางที่สำเร็จมี log ไม่ใช่เงียบสนิท (เหตุผลที่เพิ่มบรรทัดนี้มา)', async () => {
+    const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    vi.mocked(runCommand).mockResolvedValue('สรุปเดือนนี้: ...');
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'get_summary',
+      args: { period: 'this_month' },
+    });
+
+    await ask('เดือนนี้ใช้ไปเท่าไหร่');
+
+    const logged = spy.mock.calls.flat().join(' | ');
+    spy.mockRestore();
+
+    expect(logged).toContain('get_summary');
+    expect(logged).toContain('text');
+    // ตัวเลขเงินจริงจาก S5 ต้องไม่หลุดลง log
+    expect(logged).not.toContain('สรุปเดือนนี้');
+  });
+});
+
 describe('เทสต์เชิงโครงสร้าง — ไม่มีทางเลี่ยง guard', () => {
   it('🔴 มีแค่ services/ai/gemini.ts ที่ import @google/genai ได้ (SPEC §S11)', () => {
     // ถ้าเทสต์นี้ล้ม แปลว่ามีไฟล์ใหม่เรียก AI ตรงโดยไม่ผ่าน guard + โควตา + log

@@ -66,7 +66,7 @@ const envSchema = z.object({
   GEMINI_MODEL: z.string().default('gemini-3.5-flash-lite'),
   AI_ENABLED: booleanFromString(true),
   AI_DAILY_LIMIT_PER_USER: intFromString(30),
-  AI_DAILY_LIMIT_GLOBAL: intFromString(0),
+  AI_DAILY_LIMIT_GLOBAL: intFromString(200),
   AI_TIMEOUT_MS: intFromString(8000),
 
   // ── งานที่ยังไม่ได้ทำ แต่ .env.example ประกาศไว้แล้ว ───────────────────────
