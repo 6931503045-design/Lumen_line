@@ -17,6 +17,7 @@ import {
   restoreTransaction,
 } from '../db/queries/transactions';
 import { replyText, replyTextWithQuickReply } from '../line/reply';
+import { cancelPending, confirmPending } from '../services/pending.service';
 
 type LinePostbackEvent = {
   replyToken?: string;
@@ -59,6 +60,12 @@ export async function handlePostback(event: LinePostbackEvent): Promise<void> {
       break;
     case 'save_to_plan':
       await handleSaveToPlan(replyToken, userId, id, params.get('amt'));
+      break;
+    case 'ai_confirm':
+      await handleAiConfirm(replyToken, userId, id);
+      break;
+    case 'ai_cancel':
+      await handleAiCancel(replyToken, userId, id);
       break;
     case 'edit_category':
       // TODO W2: ต้องมี db/queries/categories.ts::listCategoriesByUser() ก่อน แล้วส่ง quick reply
@@ -161,5 +168,61 @@ async function handleSaveToPlan(
     // PlanError มีข้อความไทยที่ผู้ใช้อ่านรู้เรื่องอยู่แล้ว ส่งต่อได้เลย
     const message = err instanceof PlanError ? err.message : 'โอนเข้าแผนไม่สำเร็จ ลองใหม่อีกครั้งนะครับ 🙏';
     await replyText(replyToken, message);
+  }
+}
+
+/**
+ * ผู้ใช้กดปุ่ม "ยืนยัน" บนคำขอที่ AI สร้างไว้ (⚖️ G2, SPEC §S12)
+ *
+ * 🔴 นี่คือจุดเดียวในระบบที่คำขอของ AI กลายเป็นข้อมูลจริง
+ * ก่อนถึงบรรทัดนี้ AI เขียนได้แค่แถวใน pending_actions ซึ่งไม่กระทบยอดเงินใด ๆ
+ *
+ * ⚖️ G6: confirmPending จองแถวโดยเช็ค user_id ไปพร้อมกันในคำสั่ง UPDATE เดียว
+ * id ของคนอื่นจะจองไม่ได้และได้คำตอบเดียวกับ "ดำเนินการไปแล้ว" (ไม่บอกว่ามีอยู่จริง)
+ */
+async function handleAiConfirm(
+  replyToken: string,
+  userId: string,
+  pendingId: string
+): Promise<void> {
+  try {
+    const outcome = await confirmPending(userId, pendingId);
+
+    // บันทึกสำเร็จแล้วให้ปุ่ม "ยกเลิก" ติดไปด้วย เพื่อให้ผู้ใช้ถอนได้ทันที
+    // ถ้าเพิ่งเห็นว่า AI อ่านผิดตอนเห็นผลลัพธ์จริง (ปุ่มนี้ใช้ flow undo เดิม)
+    if (outcome.kind === 'done' && outcome.transactionId) {
+      await replyTextWithQuickReply(replyToken, outcome.text, [
+        {
+          type: 'action',
+          action: {
+            type: 'postback',
+            label: 'ยกเลิกรายการนี้',
+            data: `action=undo&id=${outcome.transactionId}`,
+            displayText: 'ยกเลิกรายการนี้',
+          },
+        },
+      ]);
+      return;
+    }
+
+    await replyText(replyToken, outcome.text);
+  } catch (err) {
+    console.error('[postbackHandler] ai_confirm error:', err);
+    await replyText(replyToken, 'ยืนยันไม่สำเร็จ ลองกดอีกครั้งนะครับ 🙏');
+  }
+}
+
+/** ผู้ใช้กดปุ่ม "ไม่ใช่" — ทิ้งคำขอไปโดยไม่เขียนอะไรลงฐานข้อมูล (G2) */
+async function handleAiCancel(
+  replyToken: string,
+  userId: string,
+  pendingId: string
+): Promise<void> {
+  try {
+    const outcome = await cancelPending(userId, pendingId);
+    await replyText(replyToken, outcome.text);
+  } catch (err) {
+    console.error('[postbackHandler] ai_cancel error:', err);
+    await replyText(replyToken, 'ยกเลิกไม่สำเร็จ ลองกดอีกครั้งนะครับ 🙏');
   }
 }

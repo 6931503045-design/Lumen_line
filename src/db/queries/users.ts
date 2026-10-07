@@ -120,3 +120,23 @@ export async function getLineUserId(userId: string): Promise<string | null> {
   if (!data || !data.is_active) return null;
   return data.line_user_id ?? null;
 }
+
+/**
+ * ผู้ใช้คนนี้เปิดให้ใช้ AI อยู่ไหม (users.ai_enabled) — ด่านที่ 1 ของ guard (SPEC §S11.1)
+ *
+ * คืน false เมื่อหาผู้ใช้ไม่เจอด้วย ไม่ใช่ throw: guard ต้องตอบ "ไม่ให้ใช้" ได้เสมอ
+ * โดยไม่ทำให้ flow ของผู้ใช้พัง — ⚖️ G4 ปิด AI แล้วแอปต้องยังใช้ได้
+ */
+export async function isAiEnabledForUser(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('ai_enabled')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[queries/users] isAiEnabledForUser error:', error.message);
+    return false;
+  }
+  return data?.ai_enabled === true;
+}

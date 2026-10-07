@@ -1,7 +1,13 @@
-// ไฟล์นี้ทำหน้าที่อะไร: จัดการข้อความจาก LINE — W1 มีแค่ทางด่วน L1 (regex) เท่านั้น
+// ไฟล์นี้ทำหน้าที่อะไร: จัดการข้อความจาก LINE — คำสั่งตายตัว → ทางด่วน L1 (regex) → L4 (AI)
 // ใครรับผิดชอบ: ① Bot Core / ③ AI
-// เขียนในสัปดาห์: W1
+// เขียนในสัปดาห์: W1 (ทางด่วน) / W2 (L4 AI)
 // ⚖️ กฎเหล็ก G1, G2, G3, G4
+//
+// ลำดับด่านตาม SPEC §S4 และเหตุผลที่สลับกันไม่ได้:
+//   1. คำสั่งตายตัว — ถูกที่สุด แม่นที่สุด ไม่งั้น "สรุป" จะถูกอ่านเป็นชื่อรายการ
+//   2. ทางด่วน regex (L1) — ครอบข้อความส่วนใหญ่ ฟรี ไม่ต้องรอ network
+//   3. AI (L4) — เฉพาะที่สองด่านบนอ่านไม่ออก มีค่าใช้จ่ายและมีโควตา
+// ⚖️ G4: ด่าน 3 ล้มเหลวหรือปิดอยู่ ต้องยังตอบผู้ใช้ได้ด้วยคำแนะนำของด่าน 1-2
 //
 // 🆕 regexParser.ts เสียบ thaiNumber.ts เข้าไปแล้ว จึงคืน `amountSatang` (สตางค์) มาตรงๆ
 // ไฟล์นี้ไม่ต้องเรียก money.toSatang() เองอีกต่อไป — จุดแปลงหน่วยยังอยู่ใน money.ts ที่เดียว
@@ -23,6 +29,8 @@ import {
   runUndoLatest,
 } from '../services/command.service';
 import { buildConfirmCard } from '../line/flex/confirmCard';
+import { interpretUserMessage } from '../services/ai/router';
+import { AI_UNAVAILABLE_FALLBACK } from '../services/ai/prompt';
 
 type LineTextMessageEvent = {
   replyToken?: string;
@@ -61,10 +69,10 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
 
   // parsed.amountSatang = จำนวนที่ผู้ใช้พิมพ์ แปลงเป็นสตางค์แล้ว (G1: ดึงตรงๆ ไม่ประมาณ)
   if (parsed.confidence !== 'high' || parsed.amountSatang === undefined || !parsed.category) {
-    await replyText(
-      replyToken,
-      'ตอนนี้บอทยังจดได้แค่รูปแบบ "ชื่อ จำนวนเงิน" เช่น "กาแฟ 80", "กาแฟ ห้าสิบ" หรือ "+เงินเดือน 35000" นะครับ'
-    );
+    // ── ด่าน 3: L4 AI (SRS FR-13) ────────────────────────────────────────────
+    // ทางด่วนอ่านไม่ออก ไม่ได้แปลว่าผู้ใช้พิมพ์ผิด — อาจเล่าเป็นประโยคยาว
+    // ถามคำถาม หรือสั่งแก้/ลบ ซึ่งเป็นงานของ AI
+    await handleWithAi(replyToken, userId, text);
     return;
   }
 
@@ -158,4 +166,48 @@ async function handleCommands(
 
   await replyText(replyToken, await runCommand(userId, command));
   return true;
+}
+
+/**
+ * ด่านสุดท้าย — ให้ AI ตีความข้อความที่ regex อ่านไม่ออก (SRS FR-13, SPEC §S4 L4)
+ *
+ * ⚖️ G2: คำขอที่เขียนข้อมูลจะไม่ถูกบันทึกที่นี่ มันมาเป็น kind='pending'
+ * พร้อมปุ่มให้ผู้ใช้กดยืนยัน การกดปุ่มคือการยืนยันของมนุษย์ (ดู postbackHandler)
+ *
+ * ⚖️ G4: kind='unavailable' คือเส้นทางที่ AI ปิด โควตาหมด หรือล่ม
+ * ตอบด้วยคำแนะนำทางด่วนเสมอ ผู้ใช้ยังจดเงินได้ไม่ว่า AI จะเป็นอย่างไร
+ */
+async function handleWithAi(replyToken: string, userId: string, text: string): Promise<void> {
+  const reply = await interpretUserMessage({ userId, text });
+
+  if (reply.kind === 'text') {
+    await replyText(replyToken, reply.text);
+    return;
+  }
+
+  if (reply.kind === 'pending') {
+    await replyTextWithQuickReply(replyToken, reply.text, [
+      {
+        type: 'action',
+        action: {
+          type: 'postback',
+          label: 'ยืนยัน',
+          data: `action=ai_confirm&id=${reply.pendingId}`,
+          displayText: 'ยืนยัน',
+        },
+      },
+      {
+        type: 'action',
+        action: {
+          type: 'postback',
+          label: 'ไม่ใช่',
+          data: `action=ai_cancel&id=${reply.pendingId}`,
+          displayText: 'ไม่ใช่',
+        },
+      },
+    ]);
+    return;
+  }
+
+  await replyText(replyToken, AI_UNAVAILABLE_FALLBACK);
 }
