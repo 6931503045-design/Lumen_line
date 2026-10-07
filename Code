@@ -14,7 +14,7 @@
             "type": "text",
             "text": "รายงานประจำเดือน",
             "weight": "bold",
-            "size": "lg",
+            "size": "xl",
             "color": "#14170f",
             "wrap": true,
             "flex": 4
@@ -26,7 +26,8 @@
             "size": "full",
             "aspectRatio": "2:1",
             "aspectMode": "fit",
-            "backgroundColor": "#14170f"
+            "backgroundColor": "#14170f",
+            "position": "absolute"
           }
         ]
       },
@@ -56,7 +57,7 @@
                 "type": "text",
                 "text": "INCOME",
                 "size": "xxs",
-                "color": "#14170f",
+                "color": "#FFFFFF",
                 "weight": "bold",
                 "align": "center"
               }
@@ -149,12 +150,12 @@
                 "type": "text",
                 "text": "EXPENSE",
                 "size": "xxs",
-                "color": "#14170f",
+                "color": "#FFFFFF",
                 "weight": "bold",
                 "align": "center"
               }
             ],
-            "backgroundColor": "#6DB33F",
+            "backgroundColor": "#FF0033",
             "cornerRadius": "6px",
             "width": "65px",
             "paddingTop": "4px",
@@ -271,7 +272,8 @@
             "size": "xxs",
             "color": "#14170f",
             "align": "end",
-            "weight": "bold"
+            "weight": "bold",
+            "contents": []
           }
         ]
       }
@@ -280,10 +282,10 @@
   "footer": {
     "type": "box",
     "layout": "vertical",
-    "paddingStart": "24px",
-    "paddingEnd": "24px",
-    "paddingBottom": "24px",
-    "paddingTop": "0px",
+    "paddingStart": "20px",
+    "paddingEnd": "20px",
+    "paddingBottom": "20px",
+    "paddingTop": "20px",
     "backgroundColor": "#14170f",
     "contents": [
       {
@@ -300,14 +302,18 @@
           }
         ],
         "backgroundColor": "#c6ff3d",
-        "paddingAll": "14px",
+        "paddingAll": "20px",
         "cornerRadius": "30px",
         "action": {
           "type": "uri",
           "label": "action",
           "uri": "http://linecorp.com/"
-        }
+        },
+        "paddingTop": "20px",
+        "paddingBottom": "20px",
+        "position": "relative"
       }
-    ]
+    ],
+    "alignItems": "center"
   }
 }
