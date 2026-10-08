@@ -189,7 +189,7 @@ Intro to Software Engineering — ปีการศึกษา 2569 — Milest
 | **NFR-07** | ไม่นับรายการซ้ำ | รายการเดียวกันจาก 2 ช่องทางภายใน **30 นาที** นับ **1 ครั้ง** | `tests/dedup.service.test.ts` |
 | **NFR-08** | การแยกข้อมูลระหว่างผู้ใช้ (⚖️ G6) | **0 endpoint** ที่อ่าน/เขียนโดยไม่กรอง `user_id` | ทุกตารางเปิด RLS · ทุก query มี `.eq('user_id', …)` |
 | **NFR-09** | เพดานจำนวนเงินต่อรายการ | ≤ **10,000,000 บาท** (1,000,000,000 สตางค์) | `CHECK` ใน DB + `assertTransactionAmount()` |
-| **NFR-10** | ความลับของข้อมูล | **0 secret** ใน repo · ข้อมูลส่วนตัวถูกลบก่อนส่ง AI (⚖️ G5) | `.gitignore` + `tests/redact.test.ts` |
+| **NFR-10** | ความลับของข้อมูล | **0 secret** ใน repo · ข้อมูลส่วนตัวถูกลบก่อนส่ง AI (⚖️ G5) · ผู้ใช้ได้รับแจ้งและปิด AI เองได้ | `.gitignore` · `tests/redact.test.ts` · `tests/privacy.test.ts` · `tests/aiOptOut.test.ts` |
 | **NFR-11** | ความครอบคลุมของการทดสอบ | **433 tests ผ่าน 433** (ณ 23 ก.ย. 2026) | `npm test` |
 
 ---
@@ -421,4 +421,4 @@ Intro to Software Engineering — ปีการศึกษา 2569 — Milest
 | **Must (FR-01…FR-08)** | **8 / 8** ✅ | prototype ครอบครบทุกตัว |
 | **Should (FR-09…FR-14)** | **6 / 6** ✅ | FR-14 (AI ตีความข้อความ + flow กดยืนยัน) เสร็จ 7 ต.ค. |
 | **Could (FR-15…FR-20)** | 3 / 6 | FR-15 (อ่านสลิปด้วย Vision) เสร็จ 7 ต.ค. · เหลือ FR-17 (สรุปรายวัน), FR-18 (Rich Menu), FR-19 (กราฟแนวโน้ม) |
-| **NFR** | 11 / 11 ✅ | `npm test` — 659 ผ่าน 659 |
+| **NFR** | 11 / 11 ✅ | `npm test` — 683 ผ่าน 683 |

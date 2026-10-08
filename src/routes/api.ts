@@ -54,7 +54,12 @@ import {
   removeCategory,
   updateCategory,
 } from '../services/category.service';
-import { ensureEmailIngestToken, rotateEmailIngestToken } from '../db/queries/users';
+import {
+  ensureEmailIngestToken,
+  isAiEnabledForUser,
+  rotateEmailIngestToken,
+  setAiEnabledForUser,
+} from '../db/queries/users';
 import { countUnparsedEmails } from '../db/queries/emails';
 import { env } from '../config/env';
 import { toSatang } from '../utils/money';
@@ -552,6 +557,8 @@ apiRouter.get(
     const token = await ensureEmailIngestToken(req.userId!);
     const unparsedEmails = await countUnparsedEmails(req.userId!);
 
+    const userAiEnabled = await isAiEnabledForUser(req.userId!);
+
     res.json({
       emailIngest: {
         // ไม่ได้ตั้ง GMAIL_USER = ระบบรับอีเมลยังไม่พร้อม บอกตรงๆ ไม่ต้องแสดงที่อยู่ครึ่งๆ
@@ -559,8 +566,43 @@ apiRouter.get(
         available: Boolean(env.gmailUser),
         unparsedCount: unparsedEmails,
       },
-      aiEnabled: env.aiEnabled,
+      /**
+       * 🔴 แยก 2 ชั้นโดยเจตนา เพราะหน้าเว็บต้องรู้ว่า "ปิดเพราะใคร"
+       *   aiSystemEnabled — ผู้ดูแลระบบปิดทั้งระบบไว้ ผู้ใช้เปลี่ยนไม่ได้ (⚖️ G4)
+       *   aiUserEnabled   — ผู้ใช้ปิดเอง เปลี่ยนได้ (NFR-6 สิทธิถอนความยินยอม)
+       * ถ้ารวมเป็นค่าเดียว ผู้ใช้จะเห็นสวิตช์ปิดอยู่แล้วกดเปิดไม่ขึ้น โดยไม่รู้สาเหตุ
+       */
+      aiSystemEnabled: env.aiEnabled,
+      aiUserEnabled: userAiEnabled,
+      /** ผลรวมที่ใช้จริง — คงชื่อเดิมไว้เพื่อไม่ให้หน้าเว็บเวอร์ชันเก่าพัง */
+      aiEnabled: env.aiEnabled && userAiEnabled,
     });
+  })
+);
+
+/**
+ * ผู้ใช้เปิด/ปิดผู้ช่วย AI ของตัวเอง — body: { aiEnabled: boolean }
+ *
+ * ⚖️ NFR-6 (PDPA): นี่คือทางถอนความยินยอมให้ส่งข้อความและรูปสลิปออกไปให้ Gemini
+ * ประกาศความเป็นส่วนตัว (config/privacy.ts) สัญญากับผู้ใช้ว่าปิดได้ที่หน้านี้
+ *
+ * ⚖️ G4: ปิดแล้วทางด่วน regex และคำสั่งตายตัวต้องยังใช้ได้ครบ ซึ่งเป็นจริงอยู่แล้ว
+ * เพราะ guard ด่านที่ 2 อ่านค่านี้แล้วตอบ ok:false ให้ผู้เรียกไปใช้ทางอื่นต่อ
+ */
+apiRouter.patch(
+  '/settings',
+  handle(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    // รับเฉพาะ boolean แท้ ๆ ไม่แปลง "false" หรือ 0 ให้เอง —
+    // การเดาใจตรงนี้เสี่ยงเปิด AI ให้คนที่สั่งปิด ซึ่งเป็นการละเมิดความยินยอม
+    if (typeof body.aiEnabled !== 'boolean') {
+      res.status(400).json({ ok: false, error: 'ต้องส่ง aiEnabled เป็น true หรือ false' });
+      return;
+    }
+
+    await setAiEnabledForUser(req.userId!, body.aiEnabled);
+    res.json({ ok: true, aiUserEnabled: body.aiEnabled });
   })
 );
 
