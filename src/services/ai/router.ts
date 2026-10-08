@@ -135,7 +135,16 @@ export async function interpretUserMessage(input: InterpretInput): Promise<AiRep
   }
 
   try {
-    return await runToolCall(input.userId, validated.call, todayIso, now);
+    const reply = await runToolCall(input.userId, validated.call, todayIso, now);
+
+    // ⚖️ G5: log ได้แค่ชื่อ tool กับผลลัพธ์ปลายทาง ห้ามใส่เนื้อหาคำตอบ
+    // (คำตอบของ tool อ่านข้อมูลมียอดเงินจริงของผู้ใช้อยู่)
+    //
+    // ทำไมต้องมีบรรทัดนี้: ทางที่ล้มเหลวมี log ครบอยู่แล้ว แต่ทางที่สำเร็จเงียบสนิท
+    // ทำให้แยกไม่ออกระหว่าง "ไม่มีใครส่งข้อความมา" กับ "ทำงานได้ปกติ"
+    // ซึ่งตอนไล่ปัญหาบน Render เสียเวลามาก
+    console.info(`[ai/router] ✅ tool "${validated.call.name}" → ${reply.kind}`);
+    return reply;
   } catch (err) {
     console.error('[ai/router] ทำงานตาม tool ไม่สำเร็จ:', err);
     return { kind: 'unavailable' };
@@ -292,9 +301,13 @@ async function runToolCall(
 // ที่นี่จึงจับคู่กับหมวดที่ผู้ใช้ "มีอยู่แล้ว" เท่านั้น ไม่เจอก็ปล่อยให้ระบบเลือกค่าเริ่มต้น
 
 /** หมวดสำรองของรายจ่ายเมื่อจับคู่ไม่ได้ (SPEC §S11.2 "ไม่เจอ = อื่นๆ") */
-const FALLBACK_EXPENSE_CATEGORY = 'อื่นๆ';
+export const FALLBACK_EXPENSE_CATEGORY = 'อื่นๆ';
 
-async function resolveCategoryName(
+/**
+ * export ออกมาเพราะ imageHandler (สลิป) ต้องเดาหมวดจากชื่อผู้รับโอนด้วยกฎเดียวกัน
+ * ถ้าปล่อยให้แต่ละที่เขียนเอง กฎ "ห้ามสร้างหมวดใหม่ตามคำที่ AI เดามา" จะหลุดที่ใดที่หนึ่ง
+ */
+export async function resolveCategoryName(
   userId: string,
   hint: string | null,
   type: 'income' | 'expense'
