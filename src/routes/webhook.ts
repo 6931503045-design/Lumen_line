@@ -16,6 +16,7 @@ import { supabase } from '../db/supabase';
 import { handleFollow, handleUnfollow } from '../handlers/followHandler';
 import { handleText } from '../handlers/textHandler';
 import { handlePostback } from '../handlers/postbackHandler';
+import { handleImage } from '../handlers/imageHandler';
 
 export const webhookRouter = express.Router();
 
@@ -35,7 +36,8 @@ type LineWebhookEvent = {
   webhookEventId?: string;
   replyToken?: string;
   source?: { userId?: string; type?: string };
-  message?: { type: string; text?: string };
+  // id มีเฉพาะข้อความที่มีเนื้อไฟล์ (รูป/วิดีโอ/เสียง) ใช้ดึงรูปจาก Content API
+  message?: { type: string; text?: string; id?: string };
   postback?: { data?: string };
 };
 
@@ -104,7 +106,12 @@ async function dispatchEvent(event: LineWebhookEvent): Promise<void> {
     case 'message':
       if (event.message?.type === 'text') {
         await handleText(event);
+      } else if (event.message?.type === 'image') {
+        // SRS FR-15 — อ่านสลิปจากรูป (SPEC §S9)
+        await handleImage(event);
       }
+      // ข้อความชนิดอื่น (สติกเกอร์ เสียง วิดีโอ ตำแหน่ง) ยังไม่มีความหมายในระบบ
+      // ปล่อยเงียบดีกว่าตอบว่า "ไม่เข้าใจ" ทุกครั้งที่ผู้ใช้ส่งสติกเกอร์ทักทาย
       break;
     case 'postback':
       await handlePostback(event);
