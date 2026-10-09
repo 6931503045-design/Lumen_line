@@ -12,6 +12,7 @@
 // จับแบบตรงทั้งข้อความโดยตั้งใจ ไม่ใช่ includes() — ไม่งั้น "จ่ายค่าสรุปโครงการ 200"
 // จะถูกมองว่าเป็นคำสั่ง `สรุป` แทนที่จะเป็นการบันทึกเงิน
 
+import { PRIVACY_NOTICE } from '../config/privacy';
 import { formatBaht, toSatang } from '../utils/money';
 import { getTodayIso } from '../utils/thaiDate';
 import { AI_DISCLAIMER } from '../config/constants';
@@ -21,7 +22,7 @@ import { listPlansWithProgress, transferToPlan } from './plan.service';
 import { parseThaiNumber } from '../utils/thaiNumber';
 import { findLatestChatTransaction, softDeleteTransaction } from '../db/queries/transactions';
 
-export type CommandName = 'summary' | 'remaining' | 'plans' | 'budget' | 'help';
+export type CommandName = 'summary' | 'remaining' | 'plans' | 'budget' | 'help' | 'privacy';
 
 /**
  * คำสั่งที่รองรับ — คีย์คือข้อความที่ผู้ใช้พิมพ์
@@ -35,6 +36,11 @@ const COMMANDS: Record<string, CommandName> = {
   'งบ': 'budget',
   'ช่วยเหลือ': 'help',
   'help': 'help',
+  // SPEC §S11.4 / NFR-6: ผู้ใช้ต้องอ่านประกาศความเป็นส่วนตัวซ้ำได้
+  // ข้อความต้อนรับเลื่อนหายไปในแชทภายในไม่กี่วัน ถ้าไม่มีทางเรียกอ่านอีก
+  // การแจ้งครั้งแรกก็เท่ากับแจ้งแล้วหายไป
+  'ความเป็นส่วนตัว': 'privacy',
+  'privacy': 'privacy',
 };
 
 /** คำสั่งนี้คืออะไร — null ถ้าไม่ใช่คำสั่ง (ให้ไปเข้าทางด่วนบันทึกเงินแทน) */
@@ -55,7 +61,9 @@ const HELP_TEXT = [
   '   แผน — แผนออมและความคืบหน้า',
   '   งบ — งบรายหมวดเดือนนี้',
   '   ช่วยเหลือ — ข้อความนี้',
+  '   ความเป็นส่วนตัว — ข้อมูลของคุณถูกใช้อย่างไร',
   '',
+  '🧾 ส่งรูปสลิปมาได้ ระบบอ่านยอดให้แล้วถามยืนยันก่อนบันทึก',
   '📧 อีเมลธนาคารเข้าระบบเองอัตโนมัติ ตั้งค่าได้ในหน้าเว็บ',
 ].join('\n');
 
@@ -169,6 +177,8 @@ export async function runCommand(userId: string, command: CommandName): Promise<
       return buildBudget(userId);
     case 'help':
       return HELP_TEXT;
+    case 'privacy':
+      return PRIVACY_NOTICE;
   }
 }
 

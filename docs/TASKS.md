@@ -92,23 +92,25 @@ git push origin main
 
 **วิธีทำ:** GitHub → repo → แท็บ **Issues** → **New issue** → กรอก → **Assignees** เลือกคนรับผิดชอบ → **Submit**
 
-**เปิดตามนี้ 13 อัน:**
+**เปิดตามนี้ 12 อัน** — 3 อันเสร็จไปแล้ว เหลือต้องเปิดจริง **9 อัน**:
 
-| # | หัวข้อ | Assign |
-|---|---|---|
-| 1 | `[Frontend] Build the summary Flex card` | Teerapat |
-| 2 | `[Frontend] Build the saving plan Flex card` | Teerapat |
-| 3 | `[Frontend] Build the error and pending Flex cards` | Teerapat |
-| 4 | `[Frontend] Create the LINE rich menu` | Teerapat |
-| 5 | `[Docs] Write the AI use statement` | Sorrawis |
-| 6 | `[Docs] Replace the SRS PDF with the corrected team name` | Sorrawis |
-| 7 | `[Docs] Fill in team members and contributions in the final report` | Sorrawis |
-| 8 | `[Docs] Align SPEC.md priorities with the SRS` | Sorrawis |
-| 9 | `[Full-stack] Move purchase simulation into the money engine` | Aitthiphat |
-| 10 | `[Full-stack] Export the use case and sequence diagrams as images` | Aitthiphat |
-| 11 | `[Backend] Rotate the Supabase database password` | Teerat |
-| 12 | `[PM] Write the M1 team charter` | Thapanapat |
-| 13 | `[PM] Prepare the demo slides` | Thapanapat |
+| # | ชื่อ issue | เจ้าของ | สถานะ |
+|---|---|---|---|
+| 1 | `[Frontend] Build the summary Flex card` | Teerapat | |
+| 2 | `[Frontend] Build the saving plan Flex card` | Teerapat | |
+| 3 | `[Frontend] Build the error and pending Flex cards` | Teerapat | |
+| 4 | `[Frontend] Create the LINE rich menu` | Teerapat | |
+| 5 | `[Docs] Write the AI use statement` | Sorrawis | |
+| 6 | `[Docs] Replace the SRS PDF with the corrected team name` | Sorrawis | |
+| 7 | `[Docs] Fill in team members and contributions in the final report` | Sorrawis | |
+| 8 | `[Docs] Align SPEC.md priorities with the SRS` | Sorrawis | |
+| 9 | `[Full-stack] Move purchase simulation into the money engine` | Aitthiphat | ✅ เสร็จ (`5b3ad3c`) |
+| 10 | `[Full-stack] Export the use case and sequence diagrams as images` | Aitthiphat | |
+| 11 | `[PM] Write the M1 team charter` | Thapanapat | ✅ เสร็จ (`31071f3`) |
+| 12 | `[PM] Prepare the demo slides` | Thapanapat | ✅ เสร็จ (`ead1c1a`) |
+
+> ~~`[Backend] Rotate the Supabase database password`~~ — **ถอนออกจากลิสต์แล้ว ไม่ต้องทำ**
+> เหตุผลอยู่ในหัวข้อของ Teerat ด้านล่าง ถ้าเปิด issue นี้ไปแล้วให้ปิดได้เลย
 
 **เนื้อใน issue** เขียน 3 บรรทัดพอ:
 ```
@@ -461,19 +463,51 @@ tone:  ไม่มีงบ → 'unknown'  ·  price > budgetLeft → 'over'
 
 # 5️⃣ Teerat Wongpanti — Backend
 
-## งาน A — 🔴 เปลี่ยนรหัสผ่าน Supabase *(ค้างมา 23 วัน)*
+## ~~งาน A — เปลี่ยนรหัสผ่าน Supabase~~ ❌ ยกเลิก ไม่ต้องทำ
 
-รหัสผ่านฐานข้อมูลอยู่ใน git history ตั้งแต่ 12 กันยายน **ใครโคลน repo ได้ = เข้าฐานข้อมูลได้**
+**งานนี้เกิดจากการแจ้งเตือนที่ผิดพลาด** ตอนเขียนเอกสารฉบับแรกมีการสรุปว่ารหัสผ่าน
+ฐานข้อมูลหลุดอยู่ใน git history ซึ่ง **ไม่จริง**
+
+ตรวจ history ทุก commit แล้ว สิ่งที่พบคือ:
+
+| ที่คิดว่าเจอ | ของจริง |
+|---|---|
+| รหัสผ่าน Supabase ใน git history | `postgresql://postgres:postgres@localhost:5432/jod_tang` ใน `.env.example` เก่า |
+| | = **ค่า placeholder ของ localhost** ไม่ใช่รหัสจริง ไม่ใช่โฮสต์ของ Supabase |
+| | ไม่มี JWT · ไม่มี service role key · ไม่มี URL ของ project จริงในทุก blob ของทุก commit |
+| | `.env` ไม่เคยถูก commit และ `.gitignore` คลุมไว้ตั้งแต่ commit แรก |
+
+**สรุป: ไม่มีความลับรั่ว ไม่ต้องเปลี่ยนรหัส** ถ้าเปิด GitHub issue ไว้แล้วให้ปิดได้เลย
+
+> บันทึกไว้เพื่อไม่ให้ใครอ่านเอกสารฉบับเก่าแล้วไปเปลี่ยนรหัสโดยไม่จำเป็น —
+> การเปลี่ยนรหัสฐานข้อมูลโดยไม่อัปเดต Render ให้ครบจะทำให้เว็บล่มทันที
+
+---
+
+## งาน A (ใหม่) — FR-17 สรุปรายวันส่งเข้า LINE *(ถ้ามีเวลา)*
+
+**ไฟล์:** `src/jobs/dailySummary.ts` (ยังว่าง) · `src/jobs/index.ts`
+
+เป็น FR เดียวในฝั่ง backend ที่ยังเหลือ และของที่ต้องใช้มีพร้อมหมดแล้ว:
+
+| ต้องใช้ | มีแล้วที่ |
+|---|---|
+| ตัวเลขสรุป | `summary.service.ts` — `getUserSummary` / `getSafeToSpend` |
+| ส่งข้อความ | `line/push.ts` |
+| กันโควตาเกิน 280/เดือน | `quota.service.ts` |
+| รู้ว่าใครเปิดรับ | คอลัมน์ `users.daily_summary_enabled` |
+| ตัวรันตามเวลา | GitHub Actions เรียก `POST /jobs/run?job=...` |
 
 ```
-1. Supabase → Settings → Database → Reset database password
-2. อัปเดตค่าใน Render → Environment
-3. เช็คว่าเว็บยังใช้ได้: https://lumen-line.onrender.com
+เสร็จเมื่อ:
+1. runDailySummary() ส่งเฉพาะคนที่ daily_summary_enabled = true
+2. เช็คโควตาก่อนส่งทุกครั้ง (quota.service) — เกินแล้วข้าม ไม่ throw
+3. เพิ่ม 'dailySummary' เข้า JOBS registry ใน jobs/index.ts
+4. งานต้อง idempotent — รันซ้ำวันเดียวกันต้องไม่ส่งซ้ำ
+5. มีเทสต์ครอบ: ปิดรับ → ไม่ส่ง · โควตาเต็ม → ไม่ส่ง · รันซ้ำ → ส่งครั้งเดียว
 ```
 
-> ทำได้เฉพาะเจ้าของ account — ไม่มีใครทำแทนได้
-
-**ไม่ใช่ commit แต่เร่งด่วนที่สุดในเอกสารนี้**
+> ⚖️ G4: งานนี้ไม่พึ่ง AI เลย ปิด AI แล้วต้องยังทำงานได้
 
 ---
 
