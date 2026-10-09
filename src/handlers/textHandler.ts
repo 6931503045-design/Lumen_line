@@ -25,12 +25,14 @@ import {
   matchCommand,
   matchSaveCommand,
   runCommand,
+  runCommandCard,
   runSaveCommand,
   runUndoLatest,
 } from '../services/command.service';
 import { buildConfirmCard } from '../line/flex/confirmCard';
+import { buildPendingCard } from '../line/flex/pendingCard';
+import { buildAiUnavailableCard, buildSaveFailedCard } from '../line/flex/errorCard';
 import { interpretUserMessage } from '../services/ai/router';
-import { AI_UNAVAILABLE_FALLBACK } from '../services/ai/prompt';
 
 type LineTextMessageEvent = {
   replyToken?: string;
@@ -99,7 +101,7 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
     await replyFlex(replyToken, confirmCard, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
   } catch (err) {
     console.error('[textHandler] createTransaction error:', err);
-    await replyText(replyToken, 'บันทึกไม่สำเร็จ ลองพิมพ์ใหม่อีกครั้งนะครับ 🙏');
+    await replyFlex(replyToken, buildSaveFailedCard());
   }
 }
 /**
@@ -164,6 +166,15 @@ async function handleCommands(
   const command = matchCommand(trimmed);
   if (!command) return false;
 
+  // คำสั่งที่มีการ์ด (สรุป/แผน) ตอบเป็น Flex — ที่เหลือยังเป็นข้อความล้วน
+  // ถ้าการ์ดคืน null แปลว่ายังไม่มีข้อมูลพอ (เช่นยังไม่มีแผน) ให้ถอยไปใช้ข้อความเดิม
+  // ซึ่งเขียนกรณี "ยังไม่มี..." ไว้ครบแล้ว
+  const card = await runCommandCard(userId, command);
+  if (card) {
+    await replyFlex(replyToken, card);
+    return true;
+  }
+
   await replyText(replyToken, await runCommand(userId, command));
   return true;
 }
@@ -186,28 +197,13 @@ async function handleWithAi(replyToken: string, userId: string, text: string): P
   }
 
   if (reply.kind === 'pending') {
-    await replyTextWithQuickReply(replyToken, reply.text, [
-      {
-        type: 'action',
-        action: {
-          type: 'postback',
-          label: 'ยืนยัน',
-          data: `action=ai_confirm&id=${reply.pendingId}`,
-          displayText: 'ยืนยัน',
-        },
-      },
-      {
-        type: 'action',
-        action: {
-          type: 'postback',
-          label: 'ไม่ใช่',
-          data: `action=ai_cancel&id=${reply.pendingId}`,
-          displayText: 'ไม่ใช่',
-        },
-      },
-    ]);
+    // ⚖️ G2: ปุ่มในการ์ดคือจุดที่ "คน" ยืนยัน ก่อนหน้านี้ยังไม่มีอะไรถูกเขียนลงฐาน
+    await replyFlex(
+      replyToken,
+      buildPendingCard({ pendingId: reply.pendingId, summary: reply.text })
+    );
     return;
   }
 
-  await replyText(replyToken, AI_UNAVAILABLE_FALLBACK);
+  await replyFlex(replyToken, buildAiUnavailableCard());
 }
