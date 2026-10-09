@@ -130,6 +130,17 @@ describe('planCard', () => {
     expect(widths).toContain('20%');
   });
 
+  it('🔴 กล่องในของแถบต้องมี height ของตัวเอง ไม่งั้นแถบหายบนมือถือจริง', () => {
+    // เคยพลาดมาแล้ว: กล่องที่ contents ว่างและไม่กำหนด height จะสูง 0 บนแอป LINE
+    // แต่ Flex Simulator บนเดสก์ท็อปยังวาดให้เห็น บั๊กจึงหลุดไปถึงเครื่องจริง
+    const json = JSON.stringify(buildPlanCard(planInput));
+    const inner = JSON.parse(json).contents.body.contents.find(
+      (c: { backgroundColor?: string }) => c.backgroundColor === '#EEEEEE'
+    );
+    expect(inner.height).toBeTruthy();
+    expect(inner.contents[0].height).toBe(inner.height);
+  });
+
   it('percent 0 ยังวาดแถบได้ ไม่ใช่ 0% ที่ LINE ไม่รับ', () => {
     const widths = collect(buildPlanCard({ ...planInput, percentComplete: 0 }), 'width');
     expect(widths).toContain('1%');

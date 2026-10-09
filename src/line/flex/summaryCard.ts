@@ -101,6 +101,10 @@ function categoryRow(item: SummaryTopCategory) {
             layout: 'vertical',
             contents: [],
             // width เป็น 0% ไม่ได้ใน LINE — ใช้ 1% แทนเพื่อให้ยังเห็นว่ามีแถบอยู่
+            // 🔴 ต้องกำหนด height ซ้ำที่กล่องใน ไม่ใช่พึ่งความสูงของกล่องนอก
+            // กล่องที่ contents ว่างและไม่มี height ของตัวเองจะสูง 0 แล้วแถบหายทั้งแถบ
+            // บนแอป LINE จริง (Flex Simulator บนเดสก์ท็อปยังวาดให้เห็น จึงหลุดรอดตอนทดสอบ)
+            height: '6px',
             width: `${width === 0 ? 1 : width}%`,
             backgroundColor: COLOR_BAR,
             cornerRadius: '3px',
