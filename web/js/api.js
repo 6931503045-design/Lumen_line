@@ -85,6 +85,16 @@
     restoreTransaction: (transactionId) =>
       request(`/transactions/${encodeURIComponent(transactionId)}/restore`, { method: 'POST' }),
     fetchSettings: () => request('/settings'),
+
+    /**
+     * เปิด/ปิดผู้ช่วย AI ของผู้ใช้คนนี้ (NFR-6 — สิทธิถอนความยินยอม)
+     * ต้องส่ง boolean แท้ backend ปฏิเสธค่าอื่นทั้งหมด
+     */
+    updateSettings: (patch) =>
+      request('/settings', {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
     // month = 'YYYY-MM' ถ้าไม่ส่ง backend จะใช้เดือนปัจจุบัน (ดู docs/UI_CONTRACT.md)
     fetchBudgets: (month) =>
       request(month ? `/budgets?month=${encodeURIComponent(month)}` : '/budgets'),

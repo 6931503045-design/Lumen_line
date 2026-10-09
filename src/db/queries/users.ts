@@ -140,3 +140,22 @@ export async function isAiEnabledForUser(userId: string): Promise<boolean> {
   }
   return data?.ai_enabled === true;
 }
+
+/**
+ * ผู้ใช้เปิด/ปิด AI ของตัวเอง (users.ai_enabled) — SPEC §S11.1 ด่านที่ 1 ของ guard
+ *
+ * ⚖️ G6: กรอง id ของผู้ใช้คนนี้เท่านั้น
+ * ⚖️ G5 / NFR-6: นี่คือทางที่ผู้ใช้ถอนความยินยอมให้ส่งข้อมูลออกไปให้ AI
+ * ประกาศความเป็นส่วนตัวใน config/privacy.ts บอกผู้ใช้ว่าปิดได้ ถ้าฟังก์ชันนี้
+ * ไม่ทำงานจริง ข้อความนั้นจะกลายเป็นคำโฆษณาที่เป็นเท็จ
+ */
+export async function setAiEnabledForUser(userId: string, enabled: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ ai_enabled: enabled })
+    .eq('id', userId);
+
+  if (error) {
+    throw error;
+  }
+}
