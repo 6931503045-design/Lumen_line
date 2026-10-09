@@ -5,8 +5,7 @@ name: Cron
 #   recurring  06:00 ไทย = 23:00 UTC ของวันก่อนหน้า (0 23 * * *)
 #   cleanup    03:00 ไทย = 20:00 UTC ของวันก่อนหน้า (0 20 * * *)
 #   planCheck  09:00 ไทย = 02:00 UTC (0 2 * * *)
-# งานอื่น (dailySummary) ยังไม่ได้เขียน
-# เพิ่ม schedule + job ที่นี่เมื่อเขียนเสร็จ — ตอนนี้เรียกไปก็ได้ 404 เปล่าๆ
+#   dailySummary 21:00 ไทย = 14:00 UTC (0 14 * * *)
 #
 # ต้องตั้ง 2 secrets ในหน้า Settings > Secrets and variables > Actions ของ repo:
 #   BACKEND_URL  - URL ของ backend ที่ deploy แล้ว เช่น https://lumen-line.onrender.com
@@ -19,6 +18,7 @@ name: Cron
 # ⚠️ GitHub Actions ไม่รับประกันเวลาของ schedule โดยเฉพาะ */5 ที่อาจถูกเลื่อนหรือรวบรอบได้
 # ทุกงานจึงต้อง idempotent: emailPoll กันซ้ำด้วย Message-ID + S10 dedup
 # ส่วน recurring กันซ้ำด้วย unique (recurring_rule_id, recurring_run_date)
+# planCheck กับ dailySummary กันซ้ำด้วย dedup_key ของ push_log
 
 on:
   schedule:
@@ -26,6 +26,7 @@ on:
     - cron: '0 23 * * *'
     - cron: '0 20 * * *'
     - cron: '0 2 * * *'
+    - cron: '0 14 * * *'
   workflow_dispatch:
 
 jobs:
@@ -35,7 +36,8 @@ jobs:
     if: >-
       github.event.schedule != '0 23 * * *' &&
       github.event.schedule != '0 20 * * *' &&
-      github.event.schedule != '0 2 * * *'
+      github.event.schedule != '0 2 * * *' &&
+      github.event.schedule != '0 14 * * *'
     runs-on: ubuntu-latest
     steps:
       - name: เรียก emailPoll
@@ -136,6 +138,38 @@ jobs:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           JOB_NAME: planCheck
+        run: |
+          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
+            exit 0
+          fi
+
+          status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
+            -X POST "$BACKEND_URL/jobs/run?job=$JOB_NAME" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            --max-time 120)
+
+          echo "HTTP $status"
+          cat /tmp/jobs-response.json
+          echo
+
+          if [ "$status" != "200" ]; then
+            echo "::error::เรียก $JOB_NAME ไม่สำเร็จ (HTTP $status)"
+            exit 1
+          fi
+
+  daily-summary:
+    # ยิงเฉพาะรอบ 14:00 UTC (21:00 ไทย) — ไม่รวมตอนกดรันเองต่างจากงานอื่น
+    # เพราะ dedup_key ผูกกับวันที่: ถ้ากดรันตอนเช้าเพื่อทดสอบงานอื่น ผู้ใช้จะได้ "สรุปวันนี้"
+    # ตั้งแต่เช้าทั้งที่วันยังไม่จบ แล้วรอบ 21:00 จริงจะถูกมองว่าส่งไปแล้วและข้ามไป
+    if: github.event.schedule == '0 14 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: เรียก dailySummary
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          JOB_NAME: dailySummary
         run: |
           if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
             echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
