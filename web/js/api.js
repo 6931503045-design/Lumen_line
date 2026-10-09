@@ -93,6 +93,7 @@
     updateSettings: (patch) =>
       request('/settings', {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       }),
     // month = 'YYYY-MM' ถ้าไม่ส่ง backend จะใช้เดือนปัจจุบัน (ดู docs/UI_CONTRACT.md)

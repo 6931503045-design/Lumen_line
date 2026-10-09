@@ -199,6 +199,13 @@
       const heading = document.querySelector('.profile-meta h1');
       if (heading) heading.textContent = name;
     }
+    if (document.body.dataset.page === 'settings') {
+      const heading = document.querySelector('.an-profile h3');
+      if (heading) heading.textContent = name;
+      // ชั้นปี/มหาลัยใน HTML เป็นของนักศึกษาตัวอย่าง /api/me ไม่มีข้อมูลนี้ จึงซ่อนไว้แทนที่จะโชว์ของคนอื่น
+      const subtitle = document.querySelector('.an-profile .profile-row span');
+      if (subtitle) subtitle.hidden = true;
+    }
   }
 
   // ---------- แปลงข้อมูล API → รูปที่ app.js ใช้ ----------
