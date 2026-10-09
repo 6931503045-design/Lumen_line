@@ -93,6 +93,10 @@ function planBubble(input: PlanCardInput) {
           type: 'box',
           layout: 'vertical',
           contents: [],
+          // 🔴 ต้องกำหนด height ซ้ำที่กล่องใน ไม่ใช่พึ่งความสูงของกล่องนอก
+          // กล่องที่ contents ว่างและไม่มี height ของตัวเองจะสูง 0 แล้วแถบหายทั้งแถบ
+          // บนแอป LINE จริง (Flex Simulator บนเดสก์ท็อปยังวาดให้เห็น จึงหลุดรอดตอนทดสอบ)
+          height: '8px',
           width: `${width === 0 ? 1 : width}%`,
           backgroundColor: barColor,
           cornerRadius: '4px',
