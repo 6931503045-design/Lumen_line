@@ -159,3 +159,54 @@ export async function setAiEnabledForUser(userId: string, enabled: boolean): Pro
     throw error;
   }
 }
+
+/**
+ * ผู้ใช้เปิดรับสรุปรายวันไว้ไหม (users.daily_summary_enabled) — ค่าเริ่มต้นปิด (opt-in, SPEC §S13)
+ *
+ * ต่างจาก isAiEnabledForUser ตรงที่ throw เมื่อ DB ล่ม เพราะผู้เรียกคือหน้าตั้งค่า
+ * ถ้าเดาเป็น false แล้วหน้าเว็บโชว์ว่า "ปิดอยู่" ผู้ใช้ที่เปิดไว้จะเข้าใจผิด
+ */
+export async function isDailySummaryEnabledForUser(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('daily_summary_enabled')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data?.daily_summary_enabled === true;
+}
+
+/**
+ * ผู้ใช้เปิด/ปิดสรุปรายวันของตัวเอง
+ * ⚖️ G6: กรอง id ของผู้ใช้คนนี้เท่านั้น
+ */
+export async function setDailySummaryEnabledForUser(userId: string, enabled: boolean): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ daily_summary_enabled: enabled })
+    .eq('id', userId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
+ * ผู้ใช้ทุกคนที่เปิดรับสรุปรายวันและยังไม่บล็อกบอท — ใช้โดย job dailySummary
+ * คนที่บล็อกบอทแล้ว (is_active=false) push ไปก็ไม่ถึง เปลืองโควตาเปล่าๆ
+ */
+export async function listDailySummaryUserIds(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id')
+    .eq('daily_summary_enabled', true)
+    .eq('is_active', true);
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? []).map((row: { id: string }) => row.id);
+}
