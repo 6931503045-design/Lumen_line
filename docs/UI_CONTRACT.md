@@ -105,7 +105,8 @@ UI ชุดเดิมเคยคิด `target * 0.18` เองเพื่
 | GET | `/api/recurring` | รายการประจำ |
 | POST | `/api/recurring` | เพิ่มรายการประจำ |
 | DELETE | `/api/recurring/:ruleId` | ลบรายการประจำ |
-| GET | `/api/settings` | ที่อยู่อีเมล forward |
+| GET | `/api/settings` | ที่อยู่อีเมล forward, สถานะ AI, สรุปรายวัน |
+| PATCH | `/api/settings` | เปิด/ปิด AI และสรุปรายวัน |
 | POST | `/api/settings/email-token/rotate` | สร้าง token ใหม่ |
 | GET | `/health` | สถานะระบบ (ไม่ต้องล็อกอิน) |
 
@@ -446,11 +447,21 @@ UI ชุดเดิมเคยคิด `target * 0.18` เองเพื่
     "available": true,
     "unparsedCount": 0
   },
-  "aiEnabled": false
+  "aiSystemEnabled": true,
+  "aiUserEnabled": false,
+  "aiEnabled": false,
+  "dailySummaryEnabled": false
 }
 ```
 `available: false` = ระบบอีเมลยังไม่เปิด → `address` เป็น `null` แสดงว่ายังใช้ไม่ได้
 `unparsedCount` = อีเมลที่เก็บไว้แล้วแต่อ่านตัวเลขไม่ออก
+`aiSystemEnabled: false` = ผู้ดูแลปิด AI ทั้งระบบ ผู้ใช้เปลี่ยนไม่ได้ · `aiUserEnabled` = ผู้ใช้เปิด/ปิดเอง
+`dailySummaryEnabled` = รับสรุปรายวันเข้า LINE ตอน 21:00 (ค่าเริ่มต้นปิด)
+
+### `PATCH /api/settings`
+body: `{ "aiEnabled"?: boolean, "dailySummaryEnabled"?: boolean }` — ต้องมีอย่างน้อยหนึ่งค่า
+→ `{ "ok": true, "aiUserEnabled"?: boolean, "dailySummaryEnabled"?: boolean }` เฉพาะค่าที่ส่งมา
+ต้องส่ง header `Content-Type: application/json` ไม่งั้น backend อ่าน body ไม่ได้และตอบ 400
 
 ### `POST /api/settings/email-token/rotate`
 → `{ "ok": true, "address": "…" }` — ที่อยู่เดิมใช้ไม่ได้ทันที ต้องเตือนผู้ใช้ก่อนกด

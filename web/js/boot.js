@@ -391,22 +391,8 @@
       }
     }
 
-    // สวิตช์ที่ยังไม่มี endpoint ให้กด — แสดงสถานะจริงแล้วล็อกไว้
-    // ดีกว่าปล่อยให้กดได้แต่ไม่มีผลอะไร ซึ่งผู้ใช้จะเข้าใจผิดว่าตั้งค่าสำเร็จแล้ว
-    const lock = (key, isOn, note) => {
-      const toggle = document.querySelector(`[data-setting="${key}"]`);
-      if (!toggle) return;
-      toggle.classList.toggle('on', Boolean(isOn));
-      toggle.setAttribute('aria-checked', String(Boolean(isOn)));
-      toggle.disabled = true;
-      toggle.style.opacity = '0.5';
-      toggle.style.cursor = 'not-allowed';
-      const text = toggle.closest('.an-setting-row')?.querySelector('.an-action-text small');
-      if (text) text.textContent = note;
-    };
-    lock('dailySummary', false, 'ยังไม่มี API สำหรับเปิด/ปิดรายคน');
-
     wireAiToggle(settings, api);
+    wireDailySummaryToggle(settings, api);
 
     const logout = document.getElementById('logoutBtn');
     if (logout) {
@@ -918,6 +904,44 @@
   // app.js ผูก DOMContentLoaded ไว้ก่อน ตัวนี้จึงทำงานหลัง render ด้วย mock เสร็จแล้ว
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
+
+  /**
+   * สวิตช์สรุปรายวัน (FR-17) — job dailySummary ส่งเข้า LINE ตอน 21:00 เฉพาะคนที่เปิดไว้
+   * ค่าเริ่มต้นปิด เพราะโควตา push ของ LINE ใช้ร่วมกันทั้งช่องทาง (SPEC §S13)
+   */
+  function wireDailySummaryToggle(settings, api) {
+    const toggle = document.querySelector('[data-setting="dailySummary"]');
+    if (!toggle) return;
+
+    const note = toggle.closest('.an-setting-row')?.querySelector('.an-action-text small');
+    const paint = (isOn) => {
+      toggle.classList.toggle('on', isOn);
+      toggle.setAttribute('aria-checked', String(isOn));
+      if (note) note.textContent = isOn ? 'ส่งสรุปเข้า LINE ทุกวันเวลา 21:00' : 'ปิดอยู่ — เปิดเพื่อรับสรุปทุกวันเวลา 21:00';
+    };
+
+    paint(settings.dailySummaryEnabled === true);
+
+    toggle.addEventListener('click', async () => {
+      if (toggle.dataset.busy === '1') return;
+
+      // วาดผลทันที แต่ถ้าบันทึกไม่สำเร็จต้องย้อนกลับ เหมือนสวิตช์ AI
+      const before = toggle.classList.contains('on');
+      const next = !before;
+      toggle.dataset.busy = '1';
+      paint(next);
+
+      try {
+        await api.updateSettings({ dailySummaryEnabled: next });
+      } catch (err) {
+        console.error('[boot] บันทึกการตั้งค่าสรุปรายวันไม่สำเร็จ:', err);
+        paint(before);
+        if (note) note.textContent = 'บันทึกไม่สำเร็จ ลองอีกครั้ง';
+      } finally {
+        delete toggle.dataset.busy;
+      }
+    });
+  }
 
   /**
    * สวิตช์ "ผู้ช่วย AI" — ทางถอนความยินยอมของผู้ใช้ (⚖️ NFR-6 / PDPA)
