@@ -68,6 +68,10 @@ function categoryRow(item: SummaryTopCategory) {
   // จำกัด 0–100 ก่อนเอาไปทำความกว้าง เพราะ LINE ไม่รับค่านอกช่วงนี้
   // (ไม่ใช่การคำนวณเงิน เป็นการกันค่าเพี้ยนของ UI ล้วนๆ)
   const width = Math.max(0, Math.min(100, Math.round(item.percent)));
+  // เหตุผลเดียวกับ planCard: แถบที่สั้นมากต้องยังอ่านออกว่าเป็น "ขีด" ไม่ใช่จุดกลม
+  // ยกพื้นขั้นต่ำ 5% แล้วลดความมนลงเมื่อสั้น — ตัวเลขจริงพิมพ์อยู่ข้างแถบแล้ว
+  const barWidth = Math.max(5, width);
+  const barRadius = barWidth < 14 ? '2px' : '3px';
   return {
     type: 'box',
     layout: 'vertical',
@@ -100,14 +104,13 @@ function categoryRow(item: SummaryTopCategory) {
             type: 'box',
             layout: 'vertical',
             contents: [],
-            // width เป็น 0% ไม่ได้ใน LINE — ใช้ 1% แทนเพื่อให้ยังเห็นว่ามีแถบอยู่
             // 🔴 ต้องกำหนด height ซ้ำที่กล่องใน ไม่ใช่พึ่งความสูงของกล่องนอก
             // กล่องที่ contents ว่างและไม่มี height ของตัวเองจะสูง 0 แล้วแถบหายทั้งแถบ
             // บนแอป LINE จริง (Flex Simulator บนเดสก์ท็อปยังวาดให้เห็น จึงหลุดรอดตอนทดสอบ)
             height: '6px',
-            width: `${width === 0 ? 1 : width}%`,
+            width: `${barWidth}%`,
             backgroundColor: COLOR_BAR,
-            cornerRadius: '3px',
+            cornerRadius: barRadius,
           },
         ],
       },

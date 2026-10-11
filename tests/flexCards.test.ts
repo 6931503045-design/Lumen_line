@@ -141,9 +141,15 @@ describe('planCard', () => {
     expect(inner.contents[0].height).toBe(inner.height);
   });
 
-  it('percent 0 ยังวาดแถบได้ ไม่ใช่ 0% ที่ LINE ไม่รับ', () => {
-    const widths = collect(buildPlanCard({ ...planInput, percentComplete: 0 }), 'width');
-    expect(widths).toContain('1%');
+  it('แถบสั้นมากต้องยังอ่านออกว่าเป็นขีด ไม่ใช่จุดกลม', () => {
+    // ทดสอบบนมือถือจริงแล้วพบว่า 1–2% บนรางสูง 8–10px กว้างราว 6px
+    // พอใส่ cornerRadius 4px เลยกลมจนดูเหมือนจุด ไม่ใช่แถบที่เพิ่งเริ่ม
+    // จึงยกพื้นขั้นต่ำเป็น 5% และลดความมนลงเมื่อสั้น
+    const card = buildPlanCard({ ...planInput, percentComplete: 0 });
+    const widths = collect(card, 'width') as string[];
+    expect(widths).toContain('5%');
+    const radii = collect(card, 'cornerRadius') as string[];
+    expect(radii).toContain('2px');
   });
 
   it('แผนที่หลุดเป้ามีคำเตือนและเปลี่ยนสีแถบ', () => {

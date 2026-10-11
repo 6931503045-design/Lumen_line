@@ -62,6 +62,11 @@ function infoRow(label: string, value: string) {
 /** bubble เดียว ใช้ทั้งเดี่ยวและใน carousel */
 function planBubble(input: PlanCardInput) {
   const width = Math.max(0, Math.min(100, Math.round(input.percentComplete)));
+  // แถบสั้นมากต้องยังอ่านออกว่าเป็น "ขีด" ไม่ใช่จุดกลม: ยกพื้นขั้นต่ำ 5%
+  // แล้วลดความมนลงเมื่อสั้น เพราะ cornerRadius 4px บนแถบกว้าง 6px กลายเป็นวงกลม
+  // (ทดสอบบนมือถือจริงแล้วเจอ — ตัวเลขจริงพิมพ์อยู่ข้างบนแถบอยู่แล้ว จึงไม่ทำให้เข้าใจผิด)
+  const barWidth = Math.max(5, width);
+  const barRadius = barWidth < 14 ? '2px' : '4px';
   const barColor = input.offTrack ? COLOR_BAR_OFFTRACK : COLOR_BAR;
 
   const bodyContents: Record<string, unknown>[] = [
@@ -97,9 +102,9 @@ function planBubble(input: PlanCardInput) {
           // กล่องที่ contents ว่างและไม่มี height ของตัวเองจะสูง 0 แล้วแถบหายทั้งแถบ
           // บนแอป LINE จริง (Flex Simulator บนเดสก์ท็อปยังวาดให้เห็น จึงหลุดรอดตอนทดสอบ)
           height: '8px',
-          width: `${width === 0 ? 1 : width}%`,
+          width: `${barWidth}%`,
           backgroundColor: barColor,
-          cornerRadius: '4px',
+          cornerRadius: barRadius,
         },
       ],
     },
