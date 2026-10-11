@@ -17,6 +17,7 @@ import {
   roundDownToTenBaht,
   roundHalfUpToSatang,
   splitEvenly,
+  formatBahtNoSatang,
   toSatang,
 } from '../src/utils/money';
 import { MAX_AMOUNT_SATANG } from '../src/config/constants';
@@ -187,5 +188,21 @@ describe('ความสม่ำเสมอ: เรียกซ้ำด้�
   it('splitEvenly ไม่มี state ค้างระหว่างการเรียก', () => {
     const results = Array.from({ length: 100 }, () => JSON.stringify(splitEvenly(10000, 3)));
     expect(new Set(results).size).toBe(1);
+  });
+});
+describe('formatBahtNoSatang — สำหรับพื้นที่แคบบนการ์ด', () => {
+  it.each([
+    [12850050, '฿128,501'],   // ปัดขึ้นจาก .50
+    [12850049, '฿128,500'],   // ปัดลง
+    [400000, '฿4,000'],
+    [500, '฿5'],
+    [0, '฿0'],
+    [-250000, '-฿2,500'],
+  ])('%d สตางค์ -> %s', (satang, expected) => {
+    expect(formatBahtNoSatang(satang)).toBe(expected);
+  });
+
+  it('ยังบังคับว่าอินพุตต้องเป็นจำนวนเต็มสตางค์ (G3)', () => {
+    expect(() => formatBahtNoSatang(10.5)).toThrow();
   });
 });

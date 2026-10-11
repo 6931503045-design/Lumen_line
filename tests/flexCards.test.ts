@@ -17,6 +17,7 @@ import {
   buildAmountTooLargeCard,
 } from '../src/line/flex/errorCard';
 import { buildPendingCard } from '../src/line/flex/pendingCard';
+import { buildRecordedCard } from '../src/line/flex/recordedCard';
 import { buildRichMenu, RICH_MENU_SIZE } from '../src/line/richmenu';
 
 /** เดินทั้ง object หาค่าทุกตัวของ key ที่สนใจ — ใช้ตรวจโครง Flex ที่ซ้อนกันหลายชั้น */
@@ -262,5 +263,100 @@ describe('richmenu', () => {
   it('ช่องเปิดเว็บใช้ uri ที่ส่งเข้ามา', () => {
     const uri = menu.areas.find((area) => area.action.type === 'uri');
     expect(uri?.action.uri).toBe('https://example.test');
+  });
+});
+
+describe('recordedCard', () => {
+  const base = 'https://example.test';
+  const input = {
+    groups: [
+      {
+        type: 'expense' as const,
+        categoryName: 'อาหาร',
+        items: [
+          {
+            transactionId: 't1',
+            occurredLabel: '8 ต.ค. 2569 19:55',
+            title: 'กาแฟเย็น',
+            formattedAmount: '฿80',
+          },
+        ],
+      },
+    ],
+    budgets: [
+      { categoryName: 'อาหาร', formattedSpent: '฿3,280', formattedLimit: '฿4,000', percentUsed: 82 },
+    ],
+    periodNote: 'รอบงบ: รายเดือน (เริ่มวันที่ 1)',
+    assetBaseUrl: base,
+  };
+
+  it('🔴 กล่องในของแถบมี height เท่ากล่องนอก (บั๊กที่เคยทำแถบหายบนมือถือ)', () => {
+    const card = buildRecordedCard(input);
+    const heights = collect(card, 'height') as string[];
+    // ราง + แถบใน ต้องสูงเท่ากันทั้งคู่ ไม่ใช่มีแค่รางอันเดียว
+    expect(heights.filter((h) => h === '10px')).toHaveLength(2);
+  });
+
+  it('🔴 ป้ายหมวดต้องเป็น vertical ไม่ใช่ baseline ไม่งั้นยุบเป็นวงกลม', () => {
+    const json = JSON.parse(JSON.stringify(buildRecordedCard(input)));
+    const header = json.contents.body.contents[0];
+    expect(header.contents[0].layout).toBe('vertical');
+    expect(header.contents[0].flex).toBe(0);
+  });
+
+  it('🔴 ไอคอนเป็น child ตรงของแถว ไม่ถูกห่อ box (ไม่งั้นหายบนมือถือ)', () => {
+    const json = JSON.parse(JSON.stringify(buildRecordedCard(input)));
+    const row = json.contents.body.contents[1].contents[1];
+    const icons = row.contents.filter((c: { type: string }) => c.type === 'image');
+    expect(icons).toHaveLength(2);
+    expect(icons[0].url).toBe(`${base}/img/icon/pencil.png`);
+    expect(icons[1].url).toBe(`${base}/img/icon/trash-2.png`);
+  });
+
+  it('ปุ่มไอคอนยิง postback ที่ postbackHandler รับอยู่', () => {
+    const data = collect(buildRecordedCard(input), 'data') as string[];
+    expect(data).toContain('action=edit&id=t1');
+    expect(data).toContain('action=undo&id=t1');
+  });
+
+  it('แถบเปลี่ยนสีตามระดับ ไม่ใช่สีเดียวตลอด', () => {
+    const at = (p: number) =>
+      JSON.stringify(buildRecordedCard({ ...input, budgets: [{ ...input.budgets[0]!, percentUsed: p }] }));
+    expect(at(20)).toContain('#8fbf18');
+    expect(at(85)).toContain('#f5a524');
+    expect(at(120)).toContain('#e5484d');
+  });
+
+  it('หมวดที่ยังไม่ได้ตั้งงบ ไม่วาดส่วนแถบเลย ดีกว่าโชว์แถบเปล่า', () => {
+    const card = buildRecordedCard({ ...input, budgets: [] });
+    expect(JSON.stringify(card)).not.toContain('รอบงบ');
+  });
+
+  it('หลายรายการนับรวมในหัวการ์ด', () => {
+    const card = buildRecordedCard({
+      ...input,
+      groups: [
+        input.groups[0]!,
+        { type: 'expense' as const, categoryName: 'เครื่องดื่ม', items: [
+          { transactionId: 't2', occurredLabel: 'x', title: 'เป๊ปซี่', formattedAmount: '฿10' },
+          { transactionId: 't3', occurredLabel: 'x', title: 'โค้ก', formattedAmount: '฿15' }]},
+      ],
+    });
+    expect(collect(card, 'text')).toContain('บันทึกแล้ว 3 รายการ');
+  });
+
+  it('ไม่มีชื่อรายการก็ยังสร้างการ์ดได้ และ altText ใช้ชื่อหมวดแทน', () => {
+    const card = buildRecordedCard({
+      ...input,
+      groups: [{ ...input.groups[0]!, items: [{ ...input.groups[0]!.items[0]!, title: undefined }] }],
+    });
+    expect(card.altText).toContain('อาหาร');
+    expect(card.altText).toContain('฿80');
+  });
+
+  it('assetBaseUrl ที่มี / ต่อท้าย ต้องไม่ทำให้ URL มี // ซ้อน', () => {
+    const card = buildRecordedCard({ ...input, assetBaseUrl: 'https://example.test/' });
+    const urls = collect(card, 'url') as string[];
+    expect(urls.every((u) => !u.replace('https://', '').includes('//'))).toBe(true);
   });
 });

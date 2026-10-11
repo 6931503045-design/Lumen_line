@@ -19,7 +19,7 @@ import { getUserIdByLineUserId } from '../db/queries/users';
 import { parseQuickExpenseText } from '../utils/regexParser';
 import { createTransaction } from '../services/transaction.service';
 import { formatBudgetAlert } from '../services/budget.service';
-import { formatBaht } from '../utils/money';
+import { formatBaht, formatBahtNoSatang } from '../utils/money';
 import { replyFlex, replyText, replyTextWithQuickReply } from '../line/reply';
 import {
   matchCommand,
@@ -29,10 +29,12 @@ import {
   runSaveCommand,
   runUndoLatest,
 } from '../services/command.service';
-import { buildConfirmCard } from '../line/flex/confirmCard';
+import { buildRecordedCard } from '../line/flex/recordedCard';
 import { buildPendingCard } from '../line/flex/pendingCard';
 import { buildAiUnavailableCard, buildSaveFailedCard } from '../line/flex/errorCard';
 import { interpretUserMessage } from '../services/ai/router';
+import { formatThaiDateTime } from '../utils/thaiDate';
+import { env } from '../config/env';
 
 type LineTextMessageEvent = {
   replyToken?: string;
@@ -88,17 +90,40 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
       parsedBy: 'regex',
     });
 
-    const confirmCard = buildConfirmCard({
-      transactionId: tx.id,
-      type: tx.type === 'income' ? 'income' : 'expense',
-      categoryName: parsed.category,
-      formattedAmount: formatBaht(tx.amountSatang),
+    const card = buildRecordedCard({
+      groups: [
+        {
+          type: tx.type === 'income' ? 'income' : 'expense',
+          categoryName: parsed.category,
+          items: [
+            {
+              transactionId: tx.id,
+              occurredLabel: formatThaiDateTime(new Date(tx.occurredAt)),
+              formattedAmount: formatBaht(tx.amountSatang),
+            },
+          ],
+        },
+      ],
+      // หมวดที่ยังไม่ได้ตั้งงบจะไม่มี budgetStatus ซึ่งปกติ — การ์ดจะไม่วาดส่วนแถบเลย
+      // ดีกว่าโชว์แถบเปล่าที่สื่อว่า "งบ 0 บาท"
+      budgets: tx.budgetStatus
+        ? [
+            {
+              categoryName: tx.budgetStatus.categoryName,
+              formattedSpent: formatBahtNoSatang(tx.budgetStatus.spentSatang),
+              formattedLimit: formatBahtNoSatang(tx.budgetStatus.limitSatang),
+              percentUsed: tx.budgetStatus.percentUsed,
+            },
+          ]
+        : [],
+      periodNote: 'รอบงบ: รายเดือน (เริ่มวันที่ 1)',
+      assetBaseUrl: env.appBaseUrl,
     });
 
     // S5.8: รายการนี้ทำให้ข้ามเกณฑ์งบพอดี — แนบไปกับ reply เดียวกัน
     // reply มี quota แยกจาก push และไม่จำกัดจำนวน จึงเตือนตรงนี้ได้ฟรี
     // ถ้าปล่อยไปเตือนทีหลังต้องใช้ push ซึ่งมีแค่ 280 ครั้งต่อเดือนทั้งระบบ
-    await replyFlex(replyToken, confirmCard, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
+    await replyFlex(replyToken, card, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
   } catch (err) {
     console.error('[textHandler] createTransaction error:', err);
     await replyFlex(replyToken, buildSaveFailedCard());
