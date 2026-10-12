@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildSummaryCard } from '../src/line/flex/summaryCard';
+import { FLEX_THEME } from '../src/line/flex/theme';
 import { buildPlanCard, buildPlanCarousel } from '../src/line/flex/planCard';
 import {
   buildErrorCard,
@@ -81,8 +82,8 @@ describe('summaryCard', () => {
   it('ส่วนต่างติดลบใช้สีแดง บวกใช้สีเขียว — ผู้เรียกเป็นคนบอกว่าติดลบ ไม่ใช่การ์ดเดา', () => {
     const minus = buildSummaryCard({ ...summaryInput, balanceIsNegative: true });
     const plus = buildSummaryCard(summaryInput);
-    expect(JSON.stringify(minus)).toContain('#E74C3C');
-    expect(collect(plus, 'color')).toContain('#1DB446');
+    expect(JSON.stringify(minus)).toContain(FLEX_THEME.danger);
+    expect(collect(plus, 'color')).toContain(FLEX_THEME.income);
   });
 
   it('ความกว้างแถบอยู่ใน 1–100% เสมอ แม้ percent จะเพี้ยนมาจากต้นทาง', () => {
@@ -139,7 +140,7 @@ describe('planCard', () => {
     // แต่ Flex Simulator บนเดสก์ท็อปยังวาดให้เห็น บั๊กจึงหลุดไปถึงเครื่องจริง
     const json = JSON.stringify(buildPlanCard(planInput));
     const inner = JSON.parse(json).contents.body.contents.find(
-      (c: { backgroundColor?: string }) => c.backgroundColor === '#EEEEEE'
+      (c: { backgroundColor?: string }) => c.backgroundColor === FLEX_THEME.track
     );
     expect(inner.height).toBeTruthy();
     expect(inner.contents[0].height).toBe(inner.height);
@@ -159,7 +160,7 @@ describe('planCard', () => {
   it('แผนที่หลุดเป้ามีคำเตือนและเปลี่ยนสีแถบ', () => {
     const json = JSON.stringify(buildPlanCard({ ...planInput, offTrack: true }));
     expect(json).toContain('ออมช้ากว่าเป้า');
-    expect(json).toContain('#E67E22');
+    expect(json).toContain(FLEX_THEME.warn);
   });
 
   it('แผนเดียวได้ bubble ไม่ใช่ carousel', () => {

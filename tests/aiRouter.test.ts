@@ -547,6 +547,21 @@ describe('args ที่ไม่ผ่านด่าน Zod → ถามก�
   });
 });
 
+describe('get_summary period=tomorrow', () => {
+  it('ถาม "พรุ่งนี้" ด้วยภาษาคน → ใช้คำสั่ง remaining_tomorrow ตัวเดียวกับที่พิมพ์ตรง ๆ', async () => {
+    vi.mocked(runCommand).mockResolvedValue('💸 พรุ่งนี้ใช้ได้ ...');
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'get_summary',
+      args: { period: 'tomorrow' },
+    });
+
+    await ask('ถ้าพรุ่งนี้ไปเที่ยวจะมีเงินใช้แค่ไหน');
+
+    expect(runCommand).toHaveBeenCalledWith('u1', 'remaining_tomorrow');
+  });
+});
+
 describe('explain_feature — AI เลือกหัวข้อ เนื้อหามาจากคู่มือของทีม', () => {
   it('ตอบด้วยข้อความจากคู่มือ ไม่ใช่ข้อความที่ AI แต่ง', async () => {
     vi.mocked(understandText).mockResolvedValue({

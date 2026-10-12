@@ -443,7 +443,8 @@
   // app.js เรียกผ่าน window.jodtangPersist แทนการแก้ข้อมูลในเครื่อง แล้วโหลดใหม่ทั้งชุด
   // เพื่อให้ทุกยอดบนหน้าเป็นตัวเลขที่ backend คำนวณ ไม่ใช่ที่หน้าเว็บเดาต่อเอง (G1)
 
-  async function runWrite(action, successText) {
+  // failTitle: หัวข้อของกล่องแจ้งเมื่อทำไม่สำเร็จ — การลบต้องไม่ขึ้นว่า "บันทึกไม่สำเร็จ"
+  async function runWrite(action, successText, failTitle = 'บันทึกไม่สำเร็จ') {
     try {
       const result = await action();
       closeModal();
@@ -452,7 +453,7 @@
       return result;
     } catch (err) {
       closeModal();
-      showAlertModal((err && err.message) || 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง', 'บันทึกไม่สำเร็จ');
+      showAlertModal((err && err.message) || 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง', failTitle);
       return null;
     }
   }
@@ -505,7 +506,7 @@
     deleteTransaction: async (id) => {
       // สัญญาแนะนำให้ทำปุ่ม "เลิกทำ" ค้างไว้แทนการถามยืนยันก่อนลบทุกครั้ง
       // backend ลบแบบ soft delete จึงกู้คืนได้จริงด้วย /restore
-      const result = await runWrite(() => api.deleteTransaction(id), null);
+      const result = await runWrite(() => api.deleteTransaction(id), null, 'ลบไม่สำเร็จ');
       if (!result) return;
       openModal(`
         <div class="modal-card success-modal">
@@ -531,15 +532,15 @@
     createCategory: (body) => runWrite(() => api.createCategory(body), 'เพิ่มหมวดหมู่สำเร็จ'),
     updateCategory: (categoryId, patch) => runWrite(() => api.updateCategory(categoryId, patch), 'แก้หมวดหมู่สำเร็จ'),
     // backend ตอบ 409 พร้อมบอกจำนวนรายการที่ยังผูกอยู่ ถ้าลบไม่ได้ — runWrite โชว์ข้อความนั้นให้เอง
-    deleteCategory: (categoryId) => runWrite(() => api.deleteCategory(categoryId), 'ลบหมวดหมู่สำเร็จ'),
+    deleteCategory: (categoryId) => runWrite(() => api.deleteCategory(categoryId), 'ลบหมวดหมู่สำเร็จ', 'ลบไม่สำเร็จ'),
 
     setBudget: (categoryId, limitSatang) => runWrite(() => api.saveBudget(categoryId, limitSatang), 'ตั้งงบสำเร็จ'),
-    clearBudget: (categoryId) => runWrite(() => api.deleteBudget(categoryId), 'ยกเลิกงบหมวดนี้แล้ว'),
+    clearBudget: (categoryId) => runWrite(() => api.deleteBudget(categoryId), 'ยกเลิกงบหมวดนี้แล้ว', 'ยกเลิกงบไม่สำเร็จ'),
     transferToPlan: (planId, amountSatang) => runWrite(
       () => api.transferToPlan(planId, amountSatang),
       (res) => (res && res.justCompleted ? 'ยินดีด้วย ออมครบเป้าแล้ว' : 'โอนเงินเข้าแผนสำเร็จ')
     ),
-    cancelPlan: (planId) => runWrite(() => api.cancelPlan(planId), 'ยกเลิกแผนแล้ว'),
+    cancelPlan: (planId) => runWrite(() => api.cancelPlan(planId), 'ยกเลิกแผนแล้ว', 'ยกเลิกแผนไม่สำเร็จ'),
     createPlan: async (body) => {
       try {
         const result = await api.createPlan(body.title, body.targetSatang, body.months);

@@ -195,9 +195,10 @@ export const geminiToolDeclarations: FunctionDeclaration[] = [
       properties: {
         period: {
           type: Type.STRING,
-          enum: ['this_month', 'remaining', 'budget', 'plans'],
+          enum: ['this_month', 'remaining', 'tomorrow', 'budget', 'plans'],
           description:
             'remaining = เงินที่ใช้ได้ต่อวัน ใช้กับคำถามแนว "วันนี้เหลือเท่าไหร่" "ใช้ได้อีกเท่าไหร่" "พอใช้ไหม"; '
+            + 'tomorrow = เงินที่ใช้ได้ของพรุ่งนี้ ใช้เมื่อผู้ใช้ถามถึง "พรุ่งนี้"; '
             + 'this_month = ยอดรายรับกับรายจ่ายรวมของเดือน ใช้เฉพาะเมื่อถามถึงยอดรวมหรือใช้ไปแล้วเท่าไหร่; '
             + 'budget = งบรายหมวด; plans = แผนออม',
         },
@@ -317,7 +318,7 @@ const schemas = {
   }),
   delete_transaction: z.object({ target: z.string().trim().min(1) }),
   get_summary: z.object({
-    period: z.enum(['this_month', 'remaining', 'budget', 'plans']),
+    period: z.enum(['this_month', 'remaining', 'tomorrow', 'budget', 'plans']),
   }),
   query_transactions: z.object({
     category_hint: z.string().trim().max(50).optional(),
@@ -367,7 +368,7 @@ export type ValidatedToolCall =
       };
     }
   | { name: 'delete_transaction'; target: string }
-  | { name: 'get_summary'; period: 'this_month' | 'remaining' | 'budget' | 'plans' }
+  | { name: 'get_summary'; period: 'this_month' | 'remaining' | 'tomorrow' | 'budget' | 'plans' }
   | {
       name: 'query_transactions';
       categoryHint: string | null;

@@ -282,7 +282,8 @@ function renderMonthlyBudgetSummary() {
 
   const legendRows = rows
     .map((item) => {
-      const itemPercent = clamp(((item.used || 0) / (item.limit || 1)) * 100);
+      // ไม่มีงบ = ไม่มีอะไรให้เทียบ ห้ามหารด้วย 1 (แถบจะเต็มทุกหมวดที่มียอด)
+      const itemPercent = Number(item.limit) > 0 ? clamp(((item.used || 0) / item.limit) * 100) : 0;
       return `
         <div class="budget-legend-row" data-budget-category="${item.id}">
           <div class="budget-legend-head">
@@ -1695,7 +1696,9 @@ function renderCategoriesPage() {
 
   categoryList.innerHTML = (isSorting ? '<p class="sort-hint">ลากการ์ด หรือกดลูกศรขึ้น/ลง เรียงได้หลายรายการ แล้วกด "ยืนยัน" ตอนเสร็จ</p>' : '') + items
     .map((item, index) => {
-      const percent = Math.round(((item.used || 0) / (item.limit || 1)) * 100);
+      // หมวดที่ยังไม่ตั้งงบไม่มีอะไรให้เทียบ — เดิมหารด้วย 1 แทน ทำให้ใช้ไป ฿2,500 ขึ้นเป็น 250000%
+      const hasLimit = Number(item.limit) > 0;
+      const percent = hasLimit ? Math.round(((item.used || 0) / item.limit) * 100) : 0;
       const iconBadge = `<span class="category-badge" style="background: ${item.color}26; color: ${item.color}">${renderCategoryIcon(item.icon)}</span>`;
 
       if (isSorting) {
@@ -1724,14 +1727,14 @@ function renderCategoriesPage() {
             <span>${escapeHtml(item.name)}</span>
           </div>
           <div class="category-top-right">
-            <span class="pill ${getProgressTone(percent)}">${percent}%</span>
+            ${hasLimit ? `<span class="pill ${getProgressTone(percent)}">${percent}%</span>` : '<span class="pill muted">ยังไม่ตั้งงบ</span>'}
             <button class="row-more" type="button" data-category-menu="${item.id}">${renderIcon('more-vertical')}</button>
           </div>
         </div>
         <div class="progress-bar"><span style="width: ${clamp(percent)}%; background: ${item.color}"></span></div>
         <div class="card-row">
           <span>ใช้ไปแล้ว</span>
-          <strong>${formatMoney(item.used)} <span class="budget-breakdown-limit">/ ${formatMoney(item.limit)}</span></strong>
+          <strong>${formatMoney(item.used)}${hasLimit ? ` <span class="budget-breakdown-limit">/ ${formatMoney(item.limit)}</span>` : ''}</strong>
         </div>
       </div>
     `;

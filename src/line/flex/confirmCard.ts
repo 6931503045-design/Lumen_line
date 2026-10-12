@@ -10,6 +10,8 @@
 // ⚠️ ไม่ import type FlexMessage เต็มจาก @line/bot-sdk เพราะ namespace เปลี่ยนบ่อยระหว่างเวอร์ชัน (เหมือน
 // webhook.ts) — ส่งเป็น object ดิบตรงตาม Flex Message JSON schema ของ LINE แทน ซึ่ง replyMessage ยอมรับได้เสมอ
 
+import { FLEX_THEME } from './theme';
+
 export type ConfirmCardInput = {
   transactionId: string;
   type: 'income' | 'expense';
@@ -21,7 +23,7 @@ export type ConfirmCardInput = {
 export function buildConfirmCard(input: ConfirmCardInput) {
   const isIncome = input.type === 'income';
   const label = isIncome ? 'รายรับ' : 'รายจ่าย';
-  const headerColor = isIncome ? '#1DB446' : '#E74C3C';
+  const headerColor = isIncome ? FLEX_THEME.income : FLEX_THEME.strong;
 
   const bodyContents: Record<string, unknown>[] = [
     {
@@ -36,7 +38,7 @@ export function buildConfirmCard(input: ConfirmCardInput) {
       layout: 'horizontal',
       margin: 'md',
       contents: [
-        { type: 'text', text: 'หมวด', size: 'sm', color: '#888888', flex: 2 },
+        { type: 'text', text: 'หมวด', size: 'sm', color: FLEX_THEME.muted, flex: 2 },
         { type: 'text', text: input.categoryName, size: 'sm', flex: 4, wrap: true },
       ],
     },
@@ -44,7 +46,7 @@ export function buildConfirmCard(input: ConfirmCardInput) {
       type: 'box',
       layout: 'horizontal',
       contents: [
-        { type: 'text', text: 'ยอด', size: 'sm', color: '#888888', flex: 2 },
+        { type: 'text', text: 'ยอด', size: 'sm', color: FLEX_THEME.muted, flex: 2 },
         { type: 'text', text: input.formattedAmount, size: 'sm', weight: 'bold', flex: 4 },
       ],
     },
@@ -55,7 +57,7 @@ export function buildConfirmCard(input: ConfirmCardInput) {
       type: 'text',
       text: input.budgetWarning,
       size: 'xs',
-      color: '#E67E22',
+      color: FLEX_THEME.warnText,
       wrap: true,
       margin: 'md',
     });

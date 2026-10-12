@@ -10,6 +10,8 @@
 // 🔴 ป้ายระดับความมั่นใจเป็นของบังคับ ไม่ใช่ของตกแต่ง: SRS §3.6 กำหนดว่าทุกทางเลือกของแผน
 // ต้องบอก "ระดับความมั่นใจ" เพราะแผนที่คำนวณจากข้อมูล 3 วันไม่ควรถูกนำเสนอเท่ากับ 3 เดือน
 
+import { FLEX_THEME } from './theme';
+
 export type PlanConfidence = 'low' | 'medium' | 'high';
 
 export type PlanCardInput = {
@@ -26,12 +28,12 @@ export type PlanCardInput = {
   offTrack?: boolean;
 };
 
-const COLOR_MUTED = '#888888';
-const COLOR_TRACK = '#EEEEEE';
-const COLOR_BAR = '#1DB446';
-const COLOR_BAR_OFFTRACK = '#E67E22';
-const COLOR_WARN = '#E67E22';
-const COLOR_TITLE = '#1a3a6b';
+const COLOR_MUTED = FLEX_THEME.muted;
+const COLOR_TRACK = FLEX_THEME.track;
+const COLOR_BAR = FLEX_THEME.bar;
+const COLOR_BAR_OFFTRACK = FLEX_THEME.warn;
+const COLOR_WARN = FLEX_THEME.warnText;
+const COLOR_TITLE = FLEX_THEME.strong;
 
 /** LINE ให้ carousel สูงสุด 12 bubble */
 const MAX_BUBBLES = 12;
@@ -43,9 +45,9 @@ const CONFIDENCE_LABEL: Record<PlanConfidence, string> = {
 };
 
 const CONFIDENCE_COLOR: Record<PlanConfidence, string> = {
-  low: '#E74C3C',
-  medium: '#E67E22',
-  high: '#1DB446',
+  low: FLEX_THEME.danger,
+  medium: FLEX_THEME.warnText,
+  high: FLEX_THEME.income,
 };
 
 function infoRow(label: string, value: string) {

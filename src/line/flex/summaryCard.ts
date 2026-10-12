@@ -13,6 +13,8 @@
 // ⚠️ ไม่ import type FlexMessage เต็มจาก @line/bot-sdk ด้วยเหตุผลเดียวกับ confirmCard.ts
 // (namespace เปลี่ยนบ่อยระหว่างเวอร์ชัน) — ส่งเป็น object ดิบตาม Flex Message JSON schema
 
+import { FLEX_THEME } from './theme';
+
 export type SummaryTopCategory = {
   name: string;
   /** format แล้ว เช่น "฿3,200.00" */
@@ -35,19 +37,19 @@ export type SummaryCardInput = {
   footnote?: string;
 };
 
-const COLOR_INCOME = '#1DB446';
-const COLOR_EXPENSE = '#E74C3C';
-const COLOR_MUTED = '#888888';
-const COLOR_TRACK = '#EEEEEE';
-const COLOR_BAR = '#1a3a6b';
+const COLOR_INCOME = FLEX_THEME.income;
+const COLOR_EXPENSE = FLEX_THEME.danger;
+const COLOR_MUTED = FLEX_THEME.muted;
+const COLOR_TRACK = FLEX_THEME.track;
+const COLOR_BAR = FLEX_THEME.strong;
 
 const MAX_TOP_CATEGORIES = 3;
 
 // สเกลสีของแถบ: เขียว (0%) → เหลืองอำพัน (50%) → แดง (100%)
 // ไล่ผ่านเหลืองแทนการไล่เขียว→แดงตรงๆ เพราะจุดกึ่งกลางแบบตรงจะเป็นสีน้ำตาลขุ่น
-const GRADIENT_START = '#1DB446';
-const GRADIENT_MID = '#F5A524';
-const GRADIENT_END = '#E74C3C';
+const GRADIENT_START: string = FLEX_THEME.bar;
+const GRADIENT_MID: string = FLEX_THEME.warn;
+const GRADIENT_END: string = FLEX_THEME.danger;
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);

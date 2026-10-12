@@ -15,11 +15,13 @@ vi.mock('../src/db/queries/categories', () => ({
   findCategoryOwnedByUser: vi.fn(),
   countTransactionsUsingCategory: vi.fn(),
   countCategoryUsage: vi.fn(),
+  detachDeletedTransactionsFromCategory: vi.fn(),
 }));
 
 import {
   countCategoryUsage,
   deleteCategoryForUser,
+  detachDeletedTransactionsFromCategory,
   findCategoryOwnedByUser,
   insertCategory,
   updateCategoryForUser,
@@ -177,23 +179,35 @@ describe('removeCategory', () => {
     expect(deleteCategoryForUser).not.toHaveBeenCalled();
   });
 
-  it('🔴 หมวดที่ลบรายการไปหมดแล้ว แต่แถวยังค้างอยู่ (soft delete) ต้องอธิบายให้ถูก', async () => {
-    // นี่คือบั๊กที่เจอตอนส่ง prototype: หน้าจอเห็นหมวดว่าง ผู้ใช้กดลบแล้วลบไม่ได้
-    // เดิมโค้ดนับเฉพาะรายการที่ยังไม่ถูกลบ จึงคิดว่าหมวดว่างแล้วสั่ง DELETE
-    // พอ Postgres ปฏิเสธ (FK ไม่มี ON DELETE) ผู้ใช้ได้ข้อความว่า
-    // "มีรายการประจำหรืองบผูกอยู่" ทั้งที่ไม่มีสักอัน — ชี้สาเหตุผิดสนิท
+  it('🔴 หมวดที่ลบรายการไปหมดแล้ว (soft delete ค้างอยู่) ต้องลบได้ — ปลดรายการที่ลบแล้วออกก่อน', async () => {
+    // บั๊กที่ผู้ใช้ทดสอบเจอ: หน้าจอเห็นหมวดว่าง กดลบแล้วได้ "แจ้งทีมผู้พัฒนาให้ล้างให้"
+    // ซึ่งผู้ใช้ทำต่อเองไม่ได้ — FK ไม่มี ON DELETE จึงต้องปลด category_id ของแถวที่ลบแล้วก่อน
     vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
     vi.mocked(countCategoryUsage).mockResolvedValue({ ...FREE, deletedTransactions: 5 });
+    vi.mocked(detachDeletedTransactionsFromCategory).mockResolvedValue(5);
+    vi.mocked(deleteCategoryForUser).mockResolvedValue(true);
 
-    await expect(removeCategory(USER, CAT)).rejects.toThrow(/ถูกลบไปแล้ว/);
-    expect(deleteCategoryForUser).not.toHaveBeenCalled();
+    await expect(removeCategory(USER, CAT)).resolves.toBeUndefined();
+    expect(detachDeletedTransactionsFromCategory).toHaveBeenCalledWith(USER, CAT);
+    expect(deleteCategoryForUser).toHaveBeenCalledWith(USER, CAT);
+    // ต้องปลดก่อนลบ ไม่งั้น DELETE ตาย FK
+    expect(vi.mocked(detachDeletedTransactionsFromCategory).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(deleteCategoryForUser).mock.invocationCallOrder[0]!
+    );
   });
 
-  it('ข้อความของเคส soft delete ต้องบอกทางไปต่อ ไม่ใช่บอกแค่ว่าทำไม่ได้', async () => {
+  it('🔴 ยังมีรายการที่ใช้อยู่ = ไม่ปลดอะไรเลย แม้จะมีรายการที่ลบแล้วด้วย', async () => {
+    // การปลด category_id ของรายการที่ยังใช้อยู่ = ลบยอดรายหมวดย้อนหลังของผู้ใช้เงียบ ๆ
     vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
-    vi.mocked(countCategoryUsage).mockResolvedValue({ ...FREE, deletedTransactions: 5 });
+    vi.mocked(countCategoryUsage).mockResolvedValue({
+      ...FREE,
+      activeTransactions: 1,
+      deletedTransactions: 5,
+    });
 
-    await expect(removeCategory(USER, CAT)).rejects.toThrow(/เปลี่ยนชื่อหมวด|แจ้งทีม/);
+    await expect(removeCategory(USER, CAT)).rejects.toThrow(/มี 1 รายการ/);
+    expect(detachDeletedTransactionsFromCategory).not.toHaveBeenCalled();
+    expect(deleteCategoryForUser).not.toHaveBeenCalled();
   });
 
   it('มีรายการประจำผูกอยู่ = ปฏิเสธโดยบอกว่าเป็นรายการประจำ', async () => {

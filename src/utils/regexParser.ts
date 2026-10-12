@@ -93,6 +93,19 @@ function hasSeveralNumbers(text: string): boolean {
   return (text.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).length > 1;
 }
 
+/**
+ * คำบอกวันที่ที่ทางด่วนแยกออกมาได้เอง — ตัวเลขไม่อยู่ในนี้ ("1 ต.ค." มีตัวเลขจึงไป AI อยู่แล้ว)
+ *
+ * 🔴 ผู้ใช้ทดสอบพิมพ์ "ค่าข้าวเมื่อวาน30บาท" แล้วได้รายการชื่อ "ค่าข้าวเมื่อวาน" ลงวันนี้
+ * วันที่ผิดแบบเงียบ ๆ ทำให้ยอดของทั้งสองวันเพี้ยน และผู้ใช้ไม่มีทางรู้
+ * ที่นี่แค่ "ตัดคำ" ออกมา การแปลงเป็นวันที่จริงเป็นงานของ thaiDateText (ผู้เรียกทำ)
+ *
+ * ⚠️ เรียงคำยาวก่อน ไม่งั้น "เมื่อวาน" จะกิน "เมื่อวานซืน" ไปครึ่งเดียว
+ * ⚠️ ไม่มี "พรุ่งนี้" — รายจ่ายในอนาคตไม่ใช่การจด ให้ AI ถามกลับ
+ */
+const DATE_WORD =
+  /(?:เมื่อ)?วัน(?:จันทร์|อังคาร|พุธ|พฤหัสบดี|พฤหัส|ศุกร์|เสาร์|อาทิตย์)(?:ที่แล้ว|ก่อน)?|เมื่อวานซืน|วานซืน|เมื่อวานนี้|เมื่อวาน|วานนี้|วันนี้/;
+
 export type ParseConfidence = 'high' | 'none';
 
 export type ParseResult = {
@@ -100,6 +113,8 @@ export type ParseResult = {
   amountSatang?: number;
   category?: string;
   type?: 'income' | 'expense';
+  /** คำบอกวันที่ที่ตัดออกจากชื่อรายการแล้ว เช่น "เมื่อวาน" — ผู้เรียกต้องแปลงเอง ไม่มี = วันนี้ */
+  dateText?: string;
   rawText: string;
   confidence: ParseConfidence;
 };
@@ -116,6 +131,16 @@ export function parseQuickExpenseText(input: string): ParseResult {
 
   if (!text) {
     return { rawText, confidence: 'none' };
+  }
+
+  // ตัดคำบอกวันที่ออกก่อน ไม่งั้น "เมื่อวานได้เงิน 500" จะไม่ขึ้นต้นด้วยคำของรายรับ
+  // แล้วถูกจดเป็นรายจ่าย
+  const dateText = DATE_WORD.exec(text)?.[0];
+  if (dateText) {
+    text = text.replace(dateText, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) {
+      return { rawText, confidence: 'none' };
+    }
   }
 
   // "+" นำหน้า = รายรับ ตาม SPEC · หรือขึ้นต้นด้วยคำที่บอกว่าเงินเข้า
@@ -145,6 +170,7 @@ export function parseQuickExpenseText(input: string): ParseResult {
     amountSatang: found.amountSatang,
     category: found.category,
     type,
+    ...(dateText ? { dateText } : {}),
     rawText,
     confidence: 'high',
   };

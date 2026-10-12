@@ -14,7 +14,7 @@
 
 import { PRIVACY_NOTICE } from '../config/privacy';
 import { formatBaht, toSatang, formatBahtNoSatang } from '../utils/money';
-import { getTodayIso, formatThaiMonthLabel } from '../utils/thaiDate';
+import { addDaysIso, getTodayIso, formatThaiMonthLabel } from '../utils/thaiDate';
 import { buildSummaryCard } from '../line/flex/summaryCard';
 import { buildPlanCarousel, type PlanCardInput } from '../line/flex/planCard';
 import { buildBudgetCard, type BudgetCardRow } from '../line/flex/budgetCard';
@@ -26,7 +26,14 @@ import { listPlansWithProgress, transferToPlan } from './plan.service';
 import { parseThaiNumber } from '../utils/thaiNumber';
 import { findLatestChatTransaction, softDeleteTransaction } from '../db/queries/transactions';
 
-export type CommandName = 'summary' | 'remaining' | 'plans' | 'budget' | 'help' | 'privacy';
+export type CommandName =
+  | 'summary'
+  | 'remaining'
+  | 'remaining_tomorrow'
+  | 'plans'
+  | 'budget'
+  | 'help'
+  | 'privacy';
 
 /**
  * คำสั่งที่รองรับ — คีย์คือข้อความที่ผู้ใช้พิมพ์
@@ -61,6 +68,13 @@ const COMMANDS: Record<string, CommandName> = {
   'วันนี้ใช้ได้อีกเท่าไหร่': 'remaining',
   'เหลือเงินเท่าไหร่': 'remaining',
   'ใช้ได้อีกเท่าไหร่': 'remaining',
+
+  // ผู้ใช้ทดสอบถาม "พรุ่งนี้จะใช้เงินได้กี่บาท" แล้วได้ยอดของวันนี้กลับไป
+  // (normalizeCommandText ตัดคำ "จะ" "เงิน" "อีก" และแปลง "กี่บาท" ให้แล้ว)
+  'พรุ่งนี้ใช้ได้เท่าไหร่': 'remaining_tomorrow',
+  'พรุ่งนี้เหลือเท่าไหร่': 'remaining_tomorrow',
+  'พรุ่งนี้ใช้ได้วันละเท่าไหร่': 'remaining_tomorrow',
+  'พรุ่งนี้มีใช้เท่าไหร่': 'remaining_tomorrow',
   // SPEC §S11.4 / NFR-6: ผู้ใช้ต้องอ่านประกาศความเป็นส่วนตัวซ้ำได้
   // ข้อความต้อนรับเลื่อนหายไปในแชทภายในไม่กี่วัน ถ้าไม่มีทางเรียกอ่านอีก
   // การแจ้งครั้งแรกก็เท่ากับแจ้งแล้วหายไป
@@ -70,7 +84,10 @@ const COMMANDS: Record<string, CommandName> = {
 
 /** คำสั่งนี้คืออะไร — null ถ้าไม่ใช่คำสั่ง (ให้ไปเข้าทางด่วนบันทึกเงินแทน) */
 export function matchCommand(text: string): CommandName | null {
-  return COMMANDS[text.trim()] ?? COMMANDS[normalizeCommandText(text)] ?? null;
+  const exact = COMMANDS[text.trim()];
+  if (exact) return exact;
+  const normalized = normalizeCommandText(text);
+  return normalized ? (NORMALIZED_COMMANDS.get(normalized) ?? null) : null;
 }
 
 /**
@@ -87,9 +104,16 @@ function normalizeCommandText(text: string): string {
     .replace(/\s+/g, '')
     .replace(/[?？!.ๆ]+$/u, '')
     .replace(/(ครับ|คับ|ค่ะ|คะ|ค่า|จ้า|จ้ะ|จ๊ะ|นะ|ล่ะ|อะ)+$/u, '')
-    .replace(/เท่าไร่|เท่าไร|เท่าไหร/g, 'เท่าไหร่')
-    .replace(/เท่าไหร่่/g, 'เท่าไหร่');
+    .replace(/กี่บาท|เท่าไร่|เท่าไร|เท่าไหร/g, 'เท่าไหร่')
+    .replace(/เท่าไหร่่/g, 'เท่าไหร่')
+    // คำเสริมที่ไม่เปลี่ยนความหมายของคำถาม — "วันนี้จะใช้เงินได้อีกกี่บาท" = "วันนี้ใช้ได้เท่าไหร่"
+    .replace(/จะ|เงิน|อีก/g, '');
 }
+
+/** ตารางคำสั่งที่ผ่าน normalizeCommandText แล้ว — ให้ทั้งสองฝั่งของการเทียบผ่านกฎเดียวกัน */
+const NORMALIZED_COMMANDS = new Map<string, CommandName>(
+  Object.entries(COMMANDS).map(([text, command]) => [normalizeCommandText(text), command])
+);
 
 const HELP_TEXT = [
   '📖 วิธีใช้ JOD tang',
@@ -134,6 +158,50 @@ async function buildSummary(userId: string): Promise<string> {
     lines.push('', 'ยังไม่มีรายการเลย — ลองพิมพ์ "กาแฟ 80" ดูครับ');
   }
   return lines.join('\n');
+}
+
+/**
+ * "พรุ่งนี้ใช้ได้เท่าไหร่" — ยอดต่อวันนับจากพรุ่งนี้ ถ้าวันนี้ไม่ใช้เพิ่มแล้ว
+ *
+ * ⚖️ G1: ให้ S5.2 คำนวณเหมือนเดิมทุกอย่าง แค่ส่งวันที่เป็นพรุ่งนี้เข้าไป
+ * ผลคือรายการทั้งเดือนรวมของวันนี้ หารด้วยวันที่เหลือนับจากพรุ่งนี้
+ *
+ * ⚠️ พรุ่งนี้ขึ้นเดือนใหม่ = ยอดเริ่มนับใหม่จากรายรับเดือนหน้า ซึ่งยังไม่เข้า
+ * คิดตอนนี้จะได้ตัวเลขที่ไม่มีความหมาย จึงบอกตรง ๆ แทนการตอบตัวเลข
+ */
+async function buildRemainingTomorrow(userId: string): Promise<string> {
+  const todayIso = getTodayIso();
+  const tomorrowIso = addDaysIso(todayIso, 1);
+
+  if (tomorrowIso.slice(0, 7) !== todayIso.slice(0, 7)) {
+    return [
+      '📅 พรุ่งนี้ขึ้นเดือนใหม่แล้วครับ',
+      'ยอดใช้ได้ต่อวันจะเริ่มนับใหม่จากรายรับของเดือนหน้า',
+      'พิมพ์ "เหลือ" อีกทีพรุ่งนี้ได้เลย',
+    ].join('\n');
+  }
+
+  const safe = await getSafeToSpend(userId, tomorrowIso);
+  if (safe.overspentSatang > 0) {
+    return [
+      `💸 พรุ่งนี้ใช้ได้ ${formatBaht(0)}`,
+      `⚠️ เงินเดือนนี้ขาดอยู่ ${formatBaht(safe.overspentSatang)}`,
+      'พิมพ์ "เหลือ" เพื่อดูว่าขาดเพราะอะไร',
+      '',
+      AI_DISCLAIMER,
+    ].join('\n');
+  }
+
+  return [
+    `💸 พรุ่งนี้ใช้ได้ ${formatBaht(safe.perDaySatang)}`,
+    '(ถ้าวันนี้ไม่ใช้เพิ่มแล้ว)',
+    '',
+    'คิดมาจาก',
+    `  เงินเหลือทั้งเดือน ${formatBaht(safe.monthRemainingSatang)}`,
+    `  หาร ${safe.daysLeft} วัน นับจากพรุ่งนี้`,
+    '',
+    AI_DISCLAIMER,
+  ].join('\n');
 }
 
 async function buildRemaining(userId: string): Promise<string> {
@@ -355,6 +423,8 @@ export async function runCommand(userId: string, command: CommandName): Promise<
       return buildSummary(userId);
     case 'remaining':
       return buildRemaining(userId);
+    case 'remaining_tomorrow':
+      return buildRemainingTomorrow(userId);
     case 'plans':
       return buildPlans(userId);
     case 'budget':

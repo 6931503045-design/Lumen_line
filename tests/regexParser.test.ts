@@ -250,3 +250,34 @@ describe('parseQuickExpenseText — ข้อความที่ทางด�
     expect(result.category).toBe(category);
   });
 });
+
+// ผู้ใช้ทดสอบพิมพ์ "ค่าข้าวเมื่อวาน30บาท" แล้วได้รายการชื่อ "ค่าข้าวเมื่อวาน" ลงวันนี้
+describe('parseQuickExpenseText — แยกคำบอกวันที่ออกจากชื่อรายการ', () => {
+  it.each([
+    ['ค่าข้าวเมื่อวาน30บาท', 'ค่าข้าว', 'เมื่อวาน', 3000],
+    ['ค่าข้าว เมื่อวาน 30', 'ค่าข้าว', 'เมื่อวาน', 3000],
+    ['เมื่อวาน ค่าข้าว 30', 'ค่าข้าว', 'เมื่อวาน', 3000],
+    ['กาแฟเมื่อวานซืน 45', 'กาแฟ', 'เมื่อวานซืน', 4500],
+    ['ค่ารถวันจันทร์ 40', 'ค่ารถ', 'วันจันทร์', 4000],
+  ])('"%s" → %s / %s', (text, category, dateText, amountSatang) => {
+    const result = parseQuickExpenseText(text);
+    expect(result.confidence).toBe('high');
+    expect(result.category).toBe(category);
+    expect(result.dateText).toBe(dateText);
+    expect(result.amountSatang).toBe(amountSatang);
+  });
+
+  it('ไม่มีคำบอกวันที่ = ไม่มี dateText (บันทึกเป็นวันนี้)', () => {
+    expect(parseQuickExpenseText('กาแฟ 80').dateText).toBeUndefined();
+  });
+
+  it('🔴 ตัดวันที่ก่อนดูคำของรายรับ — "เมื่อวานได้เงิน 500" ต้องเป็นรายรับ', () => {
+    const result = parseQuickExpenseText('เมื่อวานได้เงิน 500');
+    expect(result.type).toBe('income');
+    expect(result.dateText).toBe('เมื่อวาน');
+  });
+
+  it('มีแต่คำบอกวันที่กับตัวเลข ไม่มีชื่อรายการ → none', () => {
+    expect(parseQuickExpenseText('เมื่อวาน').confidence).toBe('none');
+  });
+});

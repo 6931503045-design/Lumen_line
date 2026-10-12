@@ -11,6 +11,7 @@
 
 import {
   countCategoryUsage,
+  detachDeletedTransactionsFromCategory,
   countTransactionsUsingCategory,
   type CategoryUsage,
   deleteCategoryForUser,
@@ -181,6 +182,14 @@ export async function removeCategory(userId: string, categoryId: string): Promis
     throw new CategoryError(blocker, 409);
   }
 
+  // 🔴 รายการที่ผู้ใช้ลบไปแล้ว (soft delete) ยังผูก category_id อยู่ และ FK ไม่มี ON DELETE
+  // เดิมจึงบล็อกการลบหมวดด้วยข้อความ "แจ้งทีมผู้พัฒนาให้ล้างให้" — ผู้ใช้ทดสอบเจอแล้วทำต่อไม่ได้
+  // ปลดเฉพาะรายการที่ถูกลบแล้วออกจากหมวดก่อน รายการที่ยังใช้อยู่ยังบล็อกเหมือนเดิม (ด้านบน)
+  // ผลที่ยอมรับ: ถ้าผู้ใช้กู้รายการนั้นคืนภายหลัง จะกลับมาแบบไม่มีหมวด
+  if (usage.deletedTransactions > 0) {
+    await detachDeletedTransactionsFromCategory(userId, categoryId);
+  }
+
   try {
     const removed = await deleteCategoryForUser(userId, categoryId);
     if (!removed) {
@@ -220,14 +229,6 @@ function describeBlocker(usage: CategoryUsage): string | null {
     return `ลบไม่ได้ — ${parts.join(' และ ')} ย้ายไปหมวดอื่นก่อนแล้วค่อยลบครับ`;
   }
 
-  // ถึงตรงนี้แปลว่าหมวดดู "ว่าง" บนหน้าจอ แต่ยังมีรายการที่ถูกลบค้างอยู่ใน DB
-  if (usage.deletedTransactions > 0) {
-    return (
-      `ลบไม่ได้ — หมวดนี้ยังมี ${usage.deletedTransactions} รายการที่ถูกลบไปแล้วผูกอยู่ ` +
-      'ระบบเก็บรายการที่ลบไว้ให้กู้คืนได้ จึงยังลบหมวดทิ้งไม่ได้ ' +
-      'เปลี่ยนชื่อหมวดแทนได้ หรือแจ้งทีมผู้พัฒนาให้ล้างให้'
-    );
-  }
-
+  // รายการที่ถูกลบไปแล้วไม่บล็อก — removeCategory ปลดออกจากหมวดให้ก่อนลบ
   return null;
 }

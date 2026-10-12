@@ -9,6 +9,8 @@
 // มีโอกาสสูงที่จะเป็นข้อความที่ผู้ใช้ส่งผิดห้อง เช่น เลขบัญชี เลขบัตร หรือเบอร์โทร
 // การสะท้อนกลับจะทำให้ข้อมูลนั้นถูกบันทึกลง log ของเราโดยไม่จำเป็น
 
+import { FLEX_THEME } from './theme';
+
 export type ErrorCardInput = {
   /** หัวเรื่องสั้นๆ เช่น "อ่านข้อความไม่ออก" */
   title: string;
@@ -18,9 +20,9 @@ export type ErrorCardInput = {
   examples?: string[];
 };
 
-const COLOR_WARN = '#E67E22';
-const COLOR_MUTED = '#888888';
-const COLOR_EXAMPLE_BG = '#F7F7F7';
+const COLOR_WARN = FLEX_THEME.warnText;
+const COLOR_MUTED = FLEX_THEME.muted;
+const COLOR_EXAMPLE_BG = FLEX_THEME.soft;
 
 export function buildErrorCard(input: ErrorCardInput) {
   const bodyContents: Record<string, unknown>[] = [

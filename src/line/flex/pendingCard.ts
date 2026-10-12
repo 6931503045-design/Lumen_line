@@ -11,6 +11,8 @@
 // ⚠️ ค่า data ของปุ่มต้องตรงกับที่ postbackHandler รับอยู่ (action=ai_confirm / ai_cancel)
 // ถ้าจะเปลี่ยนชื่อ action ต้องแก้ทั้งสองที่พร้อมกัน ไม่งั้นปุ่มจะกดแล้วเงียบ
 
+import { FLEX_THEME } from './theme';
+
 export type PendingCardInput = {
   /** id ของ pending_action ที่ service สร้างไว้ */
   pendingId: string;
@@ -18,9 +20,10 @@ export type PendingCardInput = {
   summary: string;
 };
 
-const COLOR_AI = '#6B4FBB';
-const COLOR_MUTED = '#888888';
-const COLOR_SUMMARY_BG = '#F4F1FB';
+const COLOR_HEADING = FLEX_THEME.strong;
+const COLOR_BUTTON = FLEX_THEME.dark;
+const COLOR_MUTED = FLEX_THEME.muted;
+const COLOR_SUMMARY_BG = FLEX_THEME.soft;
 
 export function buildPendingCard(input: PendingCardInput) {
   return {
@@ -39,7 +42,7 @@ export function buildPendingCard(input: PendingCardInput) {
             text: '🤖 เข้าใจแบบนี้ถูกไหมครับ',
             weight: 'bold',
             size: 'md',
-            color: COLOR_AI,
+            color: COLOR_HEADING,
             wrap: true,
           },
           {
@@ -49,7 +52,9 @@ export function buildPendingCard(input: PendingCardInput) {
             paddingAll: '10px',
             backgroundColor: COLOR_SUMMARY_BG,
             cornerRadius: '4px',
-            contents: [{ type: 'text', text: input.summary, size: 'sm', wrap: true }],
+            contents: [
+              { type: 'text', text: input.summary, size: 'sm', color: FLEX_THEME.text, wrap: true },
+            ],
           },
           {
             type: 'text',
@@ -81,7 +86,7 @@ export function buildPendingCard(input: PendingCardInput) {
             type: 'button',
             style: 'primary',
             height: 'sm',
-            color: COLOR_AI,
+            color: COLOR_BUTTON,
             action: {
               type: 'postback',
               label: '✅ ยืนยัน',

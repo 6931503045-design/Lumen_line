@@ -337,9 +337,11 @@ async function runToolCall(
           ? 'summary'
           : call.period === 'remaining'
             ? 'remaining'
-            : call.period === 'budget'
-              ? 'budget'
-              : 'plans';
+            : call.period === 'tomorrow'
+              ? 'remaining_tomorrow'
+              : call.period === 'budget'
+                ? 'budget'
+                : 'plans';
       return { kind: 'text', text: await runCommand(userId, command) };
     }
 

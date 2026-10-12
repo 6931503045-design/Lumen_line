@@ -17,6 +17,8 @@
 
 import { getUserIdByLineUserId } from '../db/queries/users';
 import { parseQuickExpenseText } from '../utils/regexParser';
+import { getTodayIso } from '../utils/thaiDate';
+import { isoDateToBangkokNoon, parseThaiDateText } from '../utils/thaiDateText';
 import { createTransaction } from '../services/transaction.service';
 import { formatBudgetAlert } from '../services/budget.service';
 import { formatBaht, MoneyError } from '../utils/money';
@@ -107,6 +109,19 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
   // ใช้กฎเดียวกับฝั่ง AI (SPEC §S11.2): จับคู่กับหมวดที่ผู้ใช้ "มีอยู่แล้ว" เท่านั้น
   // ไม่เจอ → รายจ่ายลง "อื่นๆ" ส่วนรายรับปล่อยว่างให้ระบบเลือกเอง เพราะฝั่งรายรับ
   // ไม่มีหมวด "อื่นๆ" และการโยนเงินเดือนเข้า "รายได้เสริม" คือการติดป้ายผิด
+  // ── วันที่ที่ผู้ใช้บอกมาในข้อความ ("ค่าข้าวเมื่อวาน 30") ─────────────────────
+  // แปลงด้วยตัวแปลงตัวเดียวกับฝั่ง AI อ่านไม่ออกหรือเกินช่วง = ไม่เดา ส่งให้ AI ถามกลับ
+  // วันนี้ = ไม่ส่ง occurredAt ใช้เวลาจริงตอนบันทึก เพื่อให้ลำดับรายการในวันเดียวกันถูก
+  let occurredAt: Date | undefined;
+  if (parsed.dateText) {
+    const occurredIso = parseThaiDateText(parsed.dateText);
+    if (!occurredIso) {
+      await handleWithAi(replyToken, userId, text);
+      return;
+    }
+    if (occurredIso !== getTodayIso()) occurredAt = isoDateToBangkokNoon(occurredIso);
+  }
+
   const entryType = parsed.type ?? 'expense';
   const matchedCategory = await resolveCategoryName(userId, parsed.category, entryType);
   const categoryName =
@@ -120,6 +135,7 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
       ...(categoryName ? { categoryName } : {}),
       // คำที่พิมพ์มาเก็บเป็นชื่อรายการแทน ไม่ให้หายไปเฉย ๆ
       note: parsed.category,
+      ...(occurredAt ? { occurredAt } : {}),
       source: 'chat',
       parsedBy: 'regex',
     });

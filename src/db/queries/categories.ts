@@ -269,6 +269,30 @@ export async function countTransactionsUsingCategory(
 }
 
 /** ลบหมวดของผู้ใช้คนนี้ คืน false ถ้าไม่มีแถวไหนถูกลบ (ไม่ใช่ของเขา/ไม่มีจริง) */
+/**
+ * ปลดรายการที่ "ถูกลบไปแล้ว" ออกจากหมวด (category_id = null) — คืนจำนวนแถวที่ปลด
+ *
+ * ⚠️ แตะเฉพาะ deleted_at is not null เท่านั้น รายการที่ยังใช้อยู่ห้ามแตะ
+ * (ยอดรายหมวดย้อนหลังของผู้ใช้จะหายเงียบ ๆ) ดู category.service removeCategory
+ */
+export async function detachDeletedTransactionsFromCategory(
+  userId: string,
+  categoryId: string
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .update({ category_id: null })
+    .eq('user_id', userId)
+    .eq('category_id', categoryId)
+    .not('deleted_at', 'is', null)
+    .select('id');
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? []).length;
+}
+
 export async function deleteCategoryForUser(
   userId: string,
   categoryId: string

@@ -396,3 +396,44 @@ describe('คำตอบของ remaining — ต้องบอกชัด�
     expect(text).toContain('฿500.00');
   });
 });
+
+// ผู้ใช้ทดสอบถาม "พรุ่งนี้จะใช้เงินได้กี่บาท" แล้วได้ยอดของวันนี้กลับไป
+describe('พรุ่งนี้ใช้ได้เท่าไหร่ (remaining_tomorrow)', () => {
+  it.each([
+    'พรุ่งนี้ใช้ได้เท่าไหร่',
+    'พรุ่งนี้จะใช้เงินได้กี่บาท',
+    'พรุ่งนี้ใช้เงินได้เท่าไรครับ',
+    'พรุ่งนี้เหลือเงินเท่าไหร่',
+  ])('"%s" → remaining_tomorrow', (text) => {
+    expect(matchCommand(text)).toBe('remaining_tomorrow');
+  });
+
+  it('คำถามของวันนี้ยังได้ remaining เหมือนเดิม ไม่ถูกแย่งไป', () => {
+    expect(matchCommand('วันนี้จะใช้เงินได้อีกกี่บาท')).toBe('remaining');
+  });
+
+  it('⚖️ G1: ให้ S5.2 คิดด้วยวันที่ของพรุ่งนี้ ไม่คิดเลขเอง', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T10:00:00+07:00'));
+    try {
+      const text = await runCommand(USER, 'remaining_tomorrow');
+      expect(getSafeToSpend).toHaveBeenCalledWith(USER, '2026-10-13');
+      expect(text).toContain('พรุ่งนี้ใช้ได้');
+      expect(text).toContain('ถ้าวันนี้ไม่ใช้เพิ่มแล้ว');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('พรุ่งนี้ขึ้นเดือนใหม่ = บอกตรง ๆ ไม่ตอบตัวเลขที่ไม่มีความหมาย', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-31T10:00:00+07:00'));
+    try {
+      const text = await runCommand(USER, 'remaining_tomorrow');
+      expect(getSafeToSpend).not.toHaveBeenCalled();
+      expect(text).toContain('เดือนใหม่');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
