@@ -3415,6 +3415,40 @@ function showAlertModal(message, title = 'ยังทำไม่ได้') {
   `);
 }
 
+/**
+ * ถามยืนยันก่อนทำสิ่งที่ย้อนกลับยาก แล้วค่อยเรียก onConfirm
+ *
+ * ทำไมต้องมี: ก่อนหน้านี้ปุ่ม "ลบหมวดหมู่" ทำงานทันทีที่กด ไม่มีจังหวะให้เปลี่ยนใจ
+ * ซึ่งอยู่ในปุ่มสีแดงที่อยู่ติดกับ "ดูรายละเอียด" — กดพลาดได้ง่ายมาก
+ *
+ * ⚠️ ใช้ confirm() ของเบราว์เซอร์ไม่ได้ เพราะ LINE in-app browser บางเวอร์ชันบล็อก
+ * และหน้าตาจะหลุดจากสไตล์ของแอปทั้งหมด
+ */
+function showConfirmModal(options) {
+  const { title = 'ยืนยันอีกครั้ง', message, confirmLabel = 'ยืนยัน', onConfirm } = options;
+
+  // ใช้โครงและคลาสชุดเดียวกับกล่องยืนยัน "ออกจากระบบ" ใน boot.js
+  // เพื่อให้หน้าตาเหมือนกันทั้งแอป และใช้ CSS ที่มีอยู่แล้วโดยไม่ต้องเพิ่มคลาสใหม่
+  openModal(`
+    <div class="modal-card small an-detail">
+      <div class="modal-head">
+        <h3>${title}</h3>
+        <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
+      </div>
+      <p class="an-detail-lead">${message}</p>
+      <div class="an-detail-actions two">
+        <button class="secondary-btn" type="button" data-close-modal="true">ยกเลิก</button>
+        <button class="primary-btn danger" type="button" data-confirm-action="true">${confirmLabel}</button>
+      </div>
+    </div>
+  `);
+
+  document.querySelector('[data-confirm-action]')?.addEventListener('click', () => {
+    closeModal();
+    onConfirm();
+  });
+}
+
 function showSuccessModal(message) {
   const html = `
     <div class="modal-card success-modal">
@@ -3799,7 +3833,13 @@ function openCategoryMenu(categoryId) {
   const deleteBtn = document.querySelector('[data-category-delete]');
   if (deleteBtn) {
     deleteBtn.addEventListener('click', () => {
-      deleteCategory(category.id);
+      showConfirmModal({
+        title: 'ลบหมวดหมู่นี้?',
+        message: `"${escapeHtml(category.name)}" จะถูกลบถาวร เอากลับคืนไม่ได้<br>`
+          + 'รายการที่เคยอยู่ในหมวดนี้จะไม่หายไป แต่จะไม่มีหมวดกำกับ',
+        confirmLabel: 'ลบหมวดหมู่',
+        onConfirm: () => deleteCategory(category.id),
+      });
     });
   }
 }

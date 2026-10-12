@@ -14,10 +14,11 @@ vi.mock('../src/db/queries/categories', () => ({
   deleteCategoryForUser: vi.fn(),
   findCategoryOwnedByUser: vi.fn(),
   countTransactionsUsingCategory: vi.fn(),
+  countCategoryUsage: vi.fn(),
 }));
 
 import {
-  countTransactionsUsingCategory,
+  countCategoryUsage,
   deleteCategoryForUser,
   findCategoryOwnedByUser,
   insertCategory,
@@ -155,9 +156,12 @@ describe('updateCategory', () => {
 });
 
 describe('removeCategory', () => {
-  it('ลบได้เมื่อไม่มีรายการผูกอยู่', async () => {
+  /** ไม่มีอะไรผูกอยู่เลย = ลบได้ */
+  const FREE = { activeTransactions: 0, deletedTransactions: 0, recurringRules: 0 };
+
+  it('ลบได้เมื่อไม่มีอะไรผูกอยู่', async () => {
     vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
-    vi.mocked(countTransactionsUsingCategory).mockResolvedValue(0);
+    vi.mocked(countCategoryUsage).mockResolvedValue(FREE);
     vi.mocked(deleteCategoryForUser).mockResolvedValue(true);
 
     await expect(removeCategory(USER, CAT)).resolves.toBeUndefined();
@@ -166,24 +170,64 @@ describe('removeCategory', () => {
 
   it('ยังมีรายการเงินอยู่ในหมวด = ปฏิเสธพร้อมบอกจำนวน และต้องไม่ยิง DELETE เลย', async () => {
     vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
-    vi.mocked(countTransactionsUsingCategory).mockResolvedValue(12);
+    vi.mocked(countCategoryUsage).mockResolvedValue({ ...FREE, activeTransactions: 12 });
 
-    await expect(removeCategory(USER, CAT)).rejects.toThrow(/ยังมี 12 รายการ/);
+    await expect(removeCategory(USER, CAT)).rejects.toThrow(/มี 12 รายการ/);
     // สำคัญ: ถ้ายิง DELETE ไป DB จะตอบ FK violation ซึ่งผู้ใช้อ่านไม่รู้เรื่อง
     expect(deleteCategoryForUser).not.toHaveBeenCalled();
+  });
+
+  it('🔴 หมวดที่ลบรายการไปหมดแล้ว แต่แถวยังค้างอยู่ (soft delete) ต้องอธิบายให้ถูก', async () => {
+    // นี่คือบั๊กที่เจอตอนส่ง prototype: หน้าจอเห็นหมวดว่าง ผู้ใช้กดลบแล้วลบไม่ได้
+    // เดิมโค้ดนับเฉพาะรายการที่ยังไม่ถูกลบ จึงคิดว่าหมวดว่างแล้วสั่ง DELETE
+    // พอ Postgres ปฏิเสธ (FK ไม่มี ON DELETE) ผู้ใช้ได้ข้อความว่า
+    // "มีรายการประจำหรืองบผูกอยู่" ทั้งที่ไม่มีสักอัน — ชี้สาเหตุผิดสนิท
+    vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
+    vi.mocked(countCategoryUsage).mockResolvedValue({ ...FREE, deletedTransactions: 5 });
+
+    await expect(removeCategory(USER, CAT)).rejects.toThrow(/ถูกลบไปแล้ว/);
+    expect(deleteCategoryForUser).not.toHaveBeenCalled();
+  });
+
+  it('ข้อความของเคส soft delete ต้องบอกทางไปต่อ ไม่ใช่บอกแค่ว่าทำไม่ได้', async () => {
+    vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
+    vi.mocked(countCategoryUsage).mockResolvedValue({ ...FREE, deletedTransactions: 5 });
+
+    await expect(removeCategory(USER, CAT)).rejects.toThrow(/เปลี่ยนชื่อหมวด|แจ้งทีม/);
+  });
+
+  it('มีรายการประจำผูกอยู่ = ปฏิเสธโดยบอกว่าเป็นรายการประจำ', async () => {
+    vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
+    vi.mocked(countCategoryUsage).mockResolvedValue({ ...FREE, recurringRules: 2 });
+
+    await expect(removeCategory(USER, CAT)).rejects.toThrow(/รายการประจำ 2 รายการ/);
+    expect(deleteCategoryForUser).not.toHaveBeenCalled();
+  });
+
+  it('ติดหลายอย่างพร้อมกัน ต้องบอกครบทุกอย่างในข้อความเดียว', async () => {
+    vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
+    vi.mocked(countCategoryUsage).mockResolvedValue({
+      activeTransactions: 3,
+      deletedTransactions: 9,
+      recurringRules: 1,
+    });
+
+    const error = await removeCategory(USER, CAT).catch((err) => err);
+    expect(error.message).toMatch(/มี 3 รายการ/);
+    expect(error.message).toMatch(/รายการประจำ 1 รายการ/);
   });
 
   it('หมวดไม่ใช่ของผู้ใช้คนนี้ ตอบ 404 และไม่แตะอะไรต่อ — ⚖️ G6', async () => {
     vi.mocked(findCategoryOwnedByUser).mockResolvedValue(null);
 
     await expect(removeCategory(USER, CAT)).rejects.toMatchObject({ status: 404 });
-    expect(countTransactionsUsingCategory).not.toHaveBeenCalled();
+    expect(countCategoryUsage).not.toHaveBeenCalled();
     expect(deleteCategoryForUser).not.toHaveBeenCalled();
   });
 
-  it('FK violation จากตารางอื่น (รายการประจำ/งบ) ต้องกลายเป็น 409 ไม่ใช่ 500', async () => {
+  it('FK violation จากตารางที่ยังไม่ได้นับ ต้องกลายเป็น 409 ไม่ใช่ 500', async () => {
     vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
-    vi.mocked(countTransactionsUsingCategory).mockResolvedValue(0);
+    vi.mocked(countCategoryUsage).mockResolvedValue(FREE);
     vi.mocked(deleteCategoryForUser).mockRejectedValue({ code: '23503' });
 
     await expect(removeCategory(USER, CAT)).rejects.toMatchObject({
@@ -194,7 +238,7 @@ describe('removeCategory', () => {
 
   it('error อื่นที่ไม่รู้จัก ต้องโยนต่อ ไม่กลืนแล้วบอกว่าลบสำเร็จ', async () => {
     vi.mocked(findCategoryOwnedByUser).mockResolvedValue(row);
-    vi.mocked(countTransactionsUsingCategory).mockResolvedValue(0);
+    vi.mocked(countCategoryUsage).mockResolvedValue(FREE);
     vi.mocked(deleteCategoryForUser).mockRejectedValue(new Error('เน็ตหลุด'));
 
     await expect(removeCategory(USER, CAT)).rejects.toThrow('เน็ตหลุด');

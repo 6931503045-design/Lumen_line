@@ -10,7 +10,9 @@
 // ผู้ใช้รีเฟรชทีเดียวหายหมด — ซึ่งแย่กว่าไม่มีปุ่มเลย
 
 import {
+  countCategoryUsage,
   countTransactionsUsingCategory,
+  type CategoryUsage,
   deleteCategoryForUser,
   findCategoryOwnedByUser,
   insertCategory,
@@ -169,12 +171,14 @@ export async function removeCategory(userId: string, categoryId: string): Promis
     throw new CategoryError('ไม่พบหมวดหมู่นี้', 404);
   }
 
-  const inUse = await countTransactionsUsingCategory(userId, categoryId);
-  if (inUse > 0) {
-    throw new CategoryError(
-      `ลบไม่ได้ — ยังมี ${inUse} รายการอยู่ในหมวดนี้ ย้ายรายการไปหมวดอื่นก่อน`,
-      409
-    );
+  // 🔴 ต้องนับรายการที่ถูกลบไปแล้วด้วย (soft delete)
+  // เดิมนับเฉพาะ deleted_at is null ทำให้หมวดที่ผู้ใช้ลบรายการจนหมดแล้ว
+  // ถูกมองว่า "ว่าง" โค้ดจึงสั่งลบ แล้วไปตายที่ Postgres (FK ไม่มี ON DELETE)
+  // ผู้ใช้เห็นข้อความที่ชี้สาเหตุผิดว่า "มีรายการประจำหรืองบผูกอยู่" ทั้งที่ไม่มี
+  const usage = await countCategoryUsage(userId, categoryId);
+  const blocker = describeBlocker(usage);
+  if (blocker) {
+    throw new CategoryError(blocker, 409);
   }
 
   try {
@@ -183,11 +187,47 @@ export async function removeCategory(userId: string, categoryId: string): Promis
       throw new CategoryError('ไม่พบหมวดหมู่นี้', 404);
     }
   } catch (error) {
-    // 23503 = foreign_key_violation — ยังมีตารางอื่นผูกอยู่ (เช่น รายการประจำ)
-    // ที่ไม่ได้นับข้างบน ต้องแปลงเป็นข้อความที่อ่านรู้เรื่อง ไม่ใช่หลุดไปเป็น 500
+    // 23503 = foreign_key_violation — ยังมีตารางอื่นผูกอยู่ที่เรายังไม่ได้นับ
+    // ปกติไม่ควรมาถึงบรรทัดนี้แล้ว แต่กันไว้เผื่อมีตารางใหม่ในอนาคต
+    // ต้องแปลงเป็นข้อความที่อ่านรู้เรื่อง ไม่ใช่หลุดไปเป็น 500
     if (error && typeof error === 'object' && (error as { code?: string }).code === '23503') {
-      throw new CategoryError('ลบไม่ได้ — ยังมีรายการประจำหรืองบผูกกับหมวดนี้อยู่', 409);
+      throw new CategoryError(
+        'ลบไม่ได้ — ยังมีข้อมูลอื่นผูกกับหมวดนี้อยู่ ลองย้ายรายการไปหมวดอื่นก่อน',
+        409
+      );
     }
     throw error;
   }
+}
+
+/**
+ * บอกว่าอะไรบล็อกการลบอยู่ — คืน null ถ้าลบได้
+ *
+ * ข้อความต้องบอก "ต้องทำอะไรต่อ" ไม่ใช่แค่บอกว่าทำไม่ได้
+ * โดยเฉพาะเคสรายการที่ลบไปแล้ว ซึ่งผู้ใช้มองไม่เห็นในหน้าจอ จึงงงที่สุด
+ */
+function describeBlocker(usage: CategoryUsage): string | null {
+  const parts: string[] = [];
+
+  if (usage.activeTransactions > 0) {
+    parts.push(`มี ${usage.activeTransactions} รายการอยู่ในหมวดนี้`);
+  }
+  if (usage.recurringRules > 0) {
+    parts.push(`มีรายการประจำ ${usage.recurringRules} รายการผูกอยู่`);
+  }
+
+  if (parts.length > 0) {
+    return `ลบไม่ได้ — ${parts.join(' และ ')} ย้ายไปหมวดอื่นก่อนแล้วค่อยลบครับ`;
+  }
+
+  // ถึงตรงนี้แปลว่าหมวดดู "ว่าง" บนหน้าจอ แต่ยังมีรายการที่ถูกลบค้างอยู่ใน DB
+  if (usage.deletedTransactions > 0) {
+    return (
+      `ลบไม่ได้ — หมวดนี้ยังมี ${usage.deletedTransactions} รายการที่ถูกลบไปแล้วผูกอยู่ ` +
+      'ระบบเก็บรายการที่ลบไว้ให้กู้คืนได้ จึงยังลบหมวดทิ้งไม่ได้ ' +
+      'เปลี่ยนชื่อหมวดแทนได้ หรือแจ้งทีมผู้พัฒนาให้ล้างให้'
+    );
+  }
+
+  return null;
 }

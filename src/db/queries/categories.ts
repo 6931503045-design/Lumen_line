@@ -187,6 +187,70 @@ export async function updateCategoryForUser(
  * ใช้ก่อนลบหมวด เพราะ transactions.category_id ไม่มี on delete cascade
  * ถ้าลบทั้งที่ยังมีรายการผูกอยู่ DB จะปฏิเสธด้วย FK violation ซึ่งผู้ใช้อ่านไม่รู้เรื่อง
  */
+export type CategoryUsage = {
+  /** รายการที่ยังไม่ถูกลบ — ผู้ใช้เห็นในหน้ารายการ */
+  activeTransactions: number;
+  /**
+   * รายการที่ถูกลบไปแล้วแต่แถวยังอยู่ (soft delete)
+   *
+   * 🔴 ต้องนับด้วย เพราะ FK ของ transactions.category_id ไม่มี ON DELETE
+   * แถวที่ติด deleted_at ก็ยังบล็อกการลบหมวดอยู่ดี — ถ้าไม่นับ โค้ดจะคิดว่าลบได้
+   * แล้วไปตายที่ Postgres แทน พร้อมข้อความที่ชี้สาเหตุผิด
+   */
+  deletedTransactions: number;
+  /** กฎรายการประจำที่ผูกกับหมวดนี้ — FK ไม่มี ON DELETE เช่นกัน จึงบล็อกการลบ */
+  recurringRules: number;
+};
+
+/**
+ * นับทุกอย่างที่ทำให้ลบหมวดนี้ไม่ได้ (⚖️ G6: กรอง user_id ทุก query)
+ *
+ * ⚠️ ไม่ต้องนับ budgets กับ user_keyword_map เพราะ FK ของสองตารางนั้นเป็น
+ * ON DELETE CASCADE อยู่แล้ว ลบหมวดแล้วแถวพวกนั้นหายตามไปเอง ไม่บล็อก
+ */
+export async function countCategoryUsage(
+  userId: string,
+  categoryId: string
+): Promise<CategoryUsage> {
+  const countTx = async (deleted: boolean): Promise<number> => {
+    const query = supabase
+      .from('transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('category_id', categoryId);
+
+    const { count, error } = await (deleted
+      ? query.not('deleted_at', 'is', null)
+      : query.is('deleted_at', null));
+
+    if (error) {
+      throw error;
+    }
+    return count ?? 0;
+  };
+
+  const countRecurring = async (): Promise<number> => {
+    const { count, error } = await supabase
+      .from('recurring_rules')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('category_id', categoryId);
+
+    if (error) {
+      throw error;
+    }
+    return count ?? 0;
+  };
+
+  const [activeTransactions, deletedTransactions, recurringRules] = await Promise.all([
+    countTx(false),
+    countTx(true),
+    countRecurring(),
+  ]);
+
+  return { activeTransactions, deletedTransactions, recurringRules };
+}
+
 export async function countTransactionsUsingCategory(
   userId: string,
   categoryId: string
