@@ -199,6 +199,13 @@
       const heading = document.querySelector('.profile-meta h1');
       if (heading) heading.textContent = name;
     }
+    if (document.body.dataset.page === 'settings') {
+      const heading = document.querySelector('.an-profile h3');
+      if (heading) heading.textContent = name;
+      // ชั้นปี/มหาลัยใน HTML เป็นของนักศึกษาตัวอย่าง /api/me ไม่มีข้อมูลนี้ จึงซ่อนไว้แทนที่จะโชว์ของคนอื่น
+      const subtitle = document.querySelector('.an-profile .profile-row span');
+      if (subtitle) subtitle.hidden = true;
+    }
   }
 
   // ---------- แปลงข้อมูล API → รูปที่ app.js ใช้ ----------
@@ -384,21 +391,8 @@
       }
     }
 
-    // สวิตช์: backend มีแค่ aiEnabled แบบอ่านอย่างเดียว (ค่าระดับระบบ) ส่วนสรุปรายวันยังไม่มี endpoint
-    // จึงแสดงสถานะจริงแล้วล็อกไว้ ดีกว่าปล่อยให้กดได้แต่ไม่มีผลอะไร
-    const lock = (key, isOn, note) => {
-      const toggle = document.querySelector(`[data-setting="${key}"]`);
-      if (!toggle) return;
-      toggle.classList.toggle('on', Boolean(isOn));
-      toggle.setAttribute('aria-checked', String(Boolean(isOn)));
-      toggle.disabled = true;
-      toggle.style.opacity = '0.5';
-      toggle.style.cursor = 'not-allowed';
-      const text = toggle.closest('.an-setting-row')?.querySelector('.an-action-text small');
-      if (text) text.textContent = note;
-    };
-    lock('aiAssistant', settings.aiEnabled, settings.aiEnabled ? 'ระบบเปิดใช้งานอยู่ (ตั้งค่าที่เซิร์ฟเวอร์)' : 'ระบบปิดใช้งานอยู่ (ตั้งค่าที่เซิร์ฟเวอร์)');
-    lock('dailySummary', false, 'ยังไม่มี API สำหรับเปิด/ปิดรายคน');
+    wireAiToggle(settings, api);
+    wireDailySummaryToggle(settings, api);
 
     const logout = document.getElementById('logoutBtn');
     if (logout) {
@@ -910,4 +904,108 @@
   // app.js ผูก DOMContentLoaded ไว้ก่อน ตัวนี้จึงทำงานหลัง render ด้วย mock เสร็จแล้ว
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
+
+  /**
+   * สวิตช์สรุปรายวัน (FR-17) — job dailySummary ส่งเข้า LINE ตอน 21:00 เฉพาะคนที่เปิดไว้
+   * ค่าเริ่มต้นปิด เพราะโควตา push ของ LINE ใช้ร่วมกันทั้งช่องทาง (SPEC §S13)
+   */
+  function wireDailySummaryToggle(settings, api) {
+    const toggle = document.querySelector('[data-setting="dailySummary"]');
+    if (!toggle) return;
+
+    const note = toggle.closest('.an-setting-row')?.querySelector('.an-action-text small');
+    const paint = (isOn) => {
+      toggle.classList.toggle('on', isOn);
+      toggle.setAttribute('aria-checked', String(isOn));
+      if (note) note.textContent = isOn ? 'ส่งสรุปเข้า LINE ทุกวันเวลา 21:00' : 'ปิดอยู่ — เปิดเพื่อรับสรุปทุกวันเวลา 21:00';
+    };
+
+    paint(settings.dailySummaryEnabled === true);
+
+    toggle.addEventListener('click', async () => {
+      if (toggle.dataset.busy === '1') return;
+
+      // วาดผลทันที แต่ถ้าบันทึกไม่สำเร็จต้องย้อนกลับ เหมือนสวิตช์ AI
+      const before = toggle.classList.contains('on');
+      const next = !before;
+      toggle.dataset.busy = '1';
+      paint(next);
+
+      try {
+        await api.updateSettings({ dailySummaryEnabled: next });
+      } catch (err) {
+        console.error('[boot] บันทึกการตั้งค่าสรุปรายวันไม่สำเร็จ:', err);
+        paint(before);
+        if (note) note.textContent = 'บันทึกไม่สำเร็จ ลองอีกครั้ง';
+      } finally {
+        delete toggle.dataset.busy;
+      }
+    });
+  }
+
+  /**
+   * สวิตช์ "ผู้ช่วย AI" — ทางถอนความยินยอมของผู้ใช้ (⚖️ NFR-6 / PDPA)
+   *
+   * 🔴 ประกาศความเป็นส่วนตัวที่บอทส่งให้ผู้ใช้ (src/config/privacy.ts) สัญญาไว้ว่า
+   * "ปิดผู้ช่วย AI ได้ที่หน้าเว็บ → ตั้งค่า" ถ้าสวิตช์นี้กดไม่ได้จริง ข้อความนั้น
+   * จะกลายเป็นคำสัญญาเท็จ — ซึ่งแย่กว่าไม่แจ้งผู้ใช้เลย
+   *
+   * สองกรณีที่ต่างกันและต้องแยกให้ผู้ใช้เห็น:
+   *   ผู้ดูแลปิดทั้งระบบ (aiSystemEnabled=false) → ล็อกสวิตช์ บอกว่าปิดที่เซิร์ฟเวอร์
+   *   ผู้ใช้ปิดเอง (aiUserEnabled=false)        → กดเปิดกลับได้
+   */
+  function wireAiToggle(settings, api) {
+    const toggle = document.querySelector('[data-setting="aiAssistant"]');
+    if (!toggle) return;
+
+    const note = toggle.closest('.an-setting-row')?.querySelector('.an-action-text small');
+    const setNote = (text) => {
+      if (note) note.textContent = text;
+    };
+
+    // ระบบปิดไว้ทั้งก้อน — ผู้ใช้เปลี่ยนไม่ได้ ไม่ต้องหลอกให้กด
+    if (settings.aiSystemEnabled === false) {
+      toggle.classList.remove('on');
+      toggle.setAttribute('aria-checked', 'false');
+      toggle.disabled = true;
+      toggle.style.opacity = '0.5';
+      toggle.style.cursor = 'not-allowed';
+      setNote('ผู้ดูแลปิดผู้ช่วย AI ไว้ทั้งระบบ');
+      return;
+    }
+
+    const paint = (isOn) => {
+      toggle.classList.toggle('on', isOn);
+      toggle.setAttribute('aria-checked', String(isOn));
+      setNote(
+        isOn
+          ? 'อ่านประโยคยาวและรูปสลิป · ปิดแล้วยังพิมพ์จดได้ปกติ'
+          : 'ปิดอยู่ — จดด้วยการพิมพ์ "กาแฟ 80" และคำสั่งต่าง ๆ ยังใช้ได้ครบ'
+      );
+    };
+
+    paint(settings.aiUserEnabled !== false);
+
+    toggle.addEventListener('click', async () => {
+      if (toggle.dataset.busy === '1') return;
+
+      const next = !toggle.classList.contains('on');
+
+      // วาดผลทันทีให้รู้สึกตอบสนอง แต่ถ้าบันทึกไม่สำเร็จต้องย้อนกลับ
+      // ไม่ปล่อยให้ผู้ใช้เห็นว่า "ปิดแล้ว" ทั้งที่เซิร์ฟเวอร์ยังเปิดอยู่
+      const before = toggle.classList.contains('on');
+      toggle.dataset.busy = '1';
+      paint(next);
+
+      try {
+        await api.updateSettings({ aiEnabled: next });
+      } catch (err) {
+        console.error('[boot] บันทึกการตั้งค่า AI ไม่สำเร็จ:', err);
+        paint(before);
+        setNote('บันทึกไม่สำเร็จ ลองอีกครั้ง');
+      } finally {
+        delete toggle.dataset.busy;
+      }
+    });
+  }
 })();

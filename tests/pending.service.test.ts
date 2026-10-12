@@ -321,6 +321,101 @@ describe('confirmPending — ชนิดคำขออื่น', () => {
   });
 });
 
+describe('คำขอที่มาจากสลิป (FR-15, SPEC §S9)', () => {
+  const SLIP_ENTRY = {
+    type: 'expense' as const,
+    amountSatang: 350000,
+    totalSatang: 350000,
+    splitCount: 1,
+    item: 'หอพักสุขสันต์',
+    occurredAtIso: '2026-10-06T07:32:00.000Z',
+    categoryName: 'ที่พัก/บิล',
+    refNumber: '0123456789',
+  };
+
+  it('🔴 source ของแถวถูกส่งต่อเป็น source ของรายการ ไม่ fix เป็น chat', async () => {
+    // ถ้า fix เป็น 'chat' สถิติแยกช่องทางจะผิด และคำสั่ง `ยกเลิก` ที่กรอง source='chat'
+    // จะไปลบรายการที่มาจากสลิปได้ ซึ่งผู้ใช้ไม่ได้สั่ง
+    vi.mocked(claimPendingAction).mockResolvedValue(
+      pendingRow({ payload: SLIP_ENTRY, source: 'image' }) as never
+    );
+
+    await confirmPending('u1', 'p1', NOW);
+
+    expect(createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'image', parsedBy: 'ai' })
+    );
+  });
+
+  it('เลขอ้างอิงถูกส่งลง DB — unique index จึงกันสลิปใบเดิมซ้ำได้อีกชั้น (S10)', async () => {
+    vi.mocked(claimPendingAction).mockResolvedValue(
+      pendingRow({ payload: SLIP_ENTRY, source: 'image' }) as never
+    );
+
+    await confirmPending('u1', 'p1', NOW);
+
+    expect(createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ refNumber: '0123456789' })
+    );
+  });
+
+  it('🔴 เวลาจากสลิปถูกใช้ตรง ๆ ไม่ปัดเป็นเที่ยงวัน', async () => {
+    // ปัดเป็นเที่ยงวันทุกใบ = สลิป 2 ใบยอดเท่ากันที่โอนห่างกันหลายชั่วโมง
+    // จะถูกกฎ S10 มองว่าซ้ำกันทันที
+    vi.mocked(claimPendingAction).mockResolvedValue(
+      pendingRow({ payload: SLIP_ENTRY, source: 'image' }) as never
+    );
+
+    await confirmPending('u1', 'p1', NOW);
+
+    expect(createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ occurredAt: new Date('2026-10-06T07:32:00.000Z') })
+    );
+  });
+
+  it('รายการจากแชทที่บอกแค่วัน ยังลงเป็นเที่ยงวันไทยเหมือนเดิม', async () => {
+    vi.mocked(claimPendingAction).mockResolvedValue(
+      pendingRow({ payload: { ...ENTRY, occurredAtIso: '2026-10-06' } }) as never
+    );
+
+    await confirmPending('u1', 'p1', NOW);
+
+    expect(createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ occurredAt: new Date('2026-10-06T12:00:00+07:00') })
+    );
+  });
+
+  it('รายการจากแชทไม่มีเลขอ้างอิง ต้องไม่ส่งฟิลด์นั้นลง DB', async () => {
+    vi.mocked(claimPendingAction).mockResolvedValue(pendingRow() as never);
+
+    await confirmPending('u1', 'p1', NOW);
+
+    const arg = vi.mocked(createTransaction).mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(arg).not.toHaveProperty('refNumber');
+    expect(arg.source).toBe('chat');
+  });
+
+  it('เวลาที่อ่านไม่ออกใน payload → ตอบ failed ไม่ใช่เขียนค่าเพี้ยนลง DB', async () => {
+    vi.mocked(claimPendingAction).mockResolvedValue(
+      pendingRow({ payload: { ...SLIP_ENTRY, occurredAtIso: 'เมื่อวานนี้' } }) as never
+    );
+
+    const outcome = await confirmPending('u1', 'p1', NOW);
+
+    expect(outcome.kind).toBe('failed');
+    expect(createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('การ์ดยืนยันแสดงเวลาเป็นเวลาไทยที่คนอ่านรู้เรื่อง ไม่ใช่ ISO ดิบ', () => {
+    const text = describePending('create_transaction', SLIP_ENTRY);
+
+    // 07:32 UTC = 14:32 เวลาไทย ซึ่งเป็นเวลาที่ผู้ใช้เห็นบนสลิป
+    expect(text).toContain('2026-10-06 14:32');
+    expect(text).not.toContain('T07:32');
+    expect(text).toContain('เลขอ้างอิง 0123456789');
+  });
+});
+
 describe('cancelPending', () => {
   it('ยกเลิกสำเร็จ ไม่มีอะไรถูกบันทึก', async () => {
     vi.mocked(cancelPendingAction).mockResolvedValue(pendingRow({ status: 'cancelled' }) as never);

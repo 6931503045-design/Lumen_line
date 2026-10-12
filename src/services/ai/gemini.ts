@@ -127,25 +127,33 @@ export async function understandText(input: UnderstandInput): Promise<Understand
       const picked = response.functionCalls?.[0];
       const toolName = picked?.name;
       if (picked && toolName) {
+        const latencyMs = Date.now() - startedAt;
         await insertAiUsageLog({
           userId: input.userId,
           kind: 'text',
           toolName,
           success: true,
-          latencyMs: Date.now() - startedAt,
+          latencyMs,
         });
+        // ⚖️ G5: log ได้แค่ "เลือก tool ไหน ใช้เวลาเท่าไหร่" ห้ามใส่ args หรือข้อความผู้ใช้
+        // args มียอดเงินและชื่อรายการของผู้ใช้อยู่ ซึ่งเป็นข้อมูลส่วนตัว
+        // ใครที่เข้าถึง log ของ host ได้จะอ่านได้หมด — ของพวกนั้นอยู่ใน DB ที่กรอง user_id แล้ว
+        console.info(`[ai/gemini] ✅ เลือก tool "${toolName}" (${latencyMs}ms)`);
         return { kind: 'tool', name: toolName, args: picked.args ?? {} };
       }
 
       const text = response.text?.trim();
       if (text) {
+        const latencyMs = Date.now() - startedAt;
         await insertAiUsageLog({
           userId: input.userId,
           kind: 'text',
           toolName: null,
           success: true,
-          latencyMs: Date.now() - startedAt,
+          latencyMs,
         });
+        // ⚖️ G5: ไม่ log ตัวข้อความ เพราะคำถามกลับของ AI มักทวนคำของผู้ใช้อยู่ข้างใน
+        console.info(`[ai/gemini] ✅ ตอบเป็นข้อความ ไม่ได้เลือก tool (${latencyMs}ms)`);
         return { kind: 'text', text };
       }
 

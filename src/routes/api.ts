@@ -54,7 +54,14 @@ import {
   removeCategory,
   updateCategory,
 } from '../services/category.service';
-import { ensureEmailIngestToken, rotateEmailIngestToken } from '../db/queries/users';
+import {
+  ensureEmailIngestToken,
+  isAiEnabledForUser,
+  isDailySummaryEnabledForUser,
+  rotateEmailIngestToken,
+  setAiEnabledForUser,
+  setDailySummaryEnabledForUser,
+} from '../db/queries/users';
 import { countUnparsedEmails } from '../db/queries/emails';
 import { env } from '../config/env';
 import { toSatang } from '../utils/money';
@@ -552,6 +559,11 @@ apiRouter.get(
     const token = await ensureEmailIngestToken(req.userId!);
     const unparsedEmails = await countUnparsedEmails(req.userId!);
 
+    const [userAiEnabled, dailySummaryEnabled] = await Promise.all([
+      isAiEnabledForUser(req.userId!),
+      isDailySummaryEnabledForUser(req.userId!),
+    ]);
+
     res.json({
       emailIngest: {
         // ไม่ได้ตั้ง GMAIL_USER = ระบบรับอีเมลยังไม่พร้อม บอกตรงๆ ไม่ต้องแสดงที่อยู่ครึ่งๆ
@@ -559,8 +571,64 @@ apiRouter.get(
         available: Boolean(env.gmailUser),
         unparsedCount: unparsedEmails,
       },
-      aiEnabled: env.aiEnabled,
+      /**
+       * 🔴 แยก 2 ชั้นโดยเจตนา เพราะหน้าเว็บต้องรู้ว่า "ปิดเพราะใคร"
+       *   aiSystemEnabled — ผู้ดูแลระบบปิดทั้งระบบไว้ ผู้ใช้เปลี่ยนไม่ได้ (⚖️ G4)
+       *   aiUserEnabled   — ผู้ใช้ปิดเอง เปลี่ยนได้ (NFR-6 สิทธิถอนความยินยอม)
+       * ถ้ารวมเป็นค่าเดียว ผู้ใช้จะเห็นสวิตช์ปิดอยู่แล้วกดเปิดไม่ขึ้น โดยไม่รู้สาเหตุ
+       */
+      aiSystemEnabled: env.aiEnabled,
+      aiUserEnabled: userAiEnabled,
+      /** ผลรวมที่ใช้จริง — คงชื่อเดิมไว้เพื่อไม่ให้หน้าเว็บเวอร์ชันเก่าพัง */
+      aiEnabled: env.aiEnabled && userAiEnabled,
+      /** สรุปรายวันเข้า LINE ตอน 21:00 (FR-17) — opt-in ค่าเริ่มต้นปิด */
+      dailySummaryEnabled,
     });
+  })
+);
+
+/**
+ * ผู้ใช้เปลี่ยนการตั้งค่าของตัวเอง — body: { aiEnabled?: boolean, dailySummaryEnabled?: boolean }
+ * ส่งมาทีละค่าหรือพร้อมกันก็ได้ แต่ต้องมีอย่างน้อยหนึ่งค่า
+ *
+ * aiEnabled — ⚖️ NFR-6 (PDPA): ทางถอนความยินยอมให้ส่งข้อความและรูปสลิปออกไปให้ Gemini
+ * ประกาศความเป็นส่วนตัว (config/privacy.ts) สัญญากับผู้ใช้ว่าปิดได้ที่หน้านี้
+ * ⚖️ G4: ปิดแล้วทางด่วน regex และคำสั่งตายตัวต้องยังใช้ได้ครบ ซึ่งเป็นจริงอยู่แล้ว
+ * เพราะ guard ด่านที่ 2 อ่านค่านี้แล้วตอบ ok:false ให้ผู้เรียกไปใช้ทางอื่นต่อ
+ *
+ * dailySummaryEnabled — เปิด/ปิดสรุปรายวันเข้า LINE (FR-17, job dailySummary)
+ */
+apiRouter.patch(
+  '/settings',
+  handle(async (req, res) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const hasAi = body.aiEnabled !== undefined;
+    const hasDaily = body.dailySummaryEnabled !== undefined;
+
+    // รับเฉพาะ boolean แท้ ๆ ไม่แปลง "false" หรือ 0 ให้เอง —
+    // การเดาใจตรงนี้เสี่ยงเปิด AI ให้คนที่สั่งปิด ซึ่งเป็นการละเมิดความยินยอม
+    if (
+      (!hasAi && !hasDaily) ||
+      (hasAi && typeof body.aiEnabled !== 'boolean') ||
+      (hasDaily && typeof body.dailySummaryEnabled !== 'boolean')
+    ) {
+      res.status(400).json({
+        ok: false,
+        error: 'ต้องส่ง aiEnabled หรือ dailySummaryEnabled เป็น true หรือ false',
+      });
+      return;
+    }
+
+    const result: Record<string, unknown> = { ok: true };
+    if (hasAi) {
+      await setAiEnabledForUser(req.userId!, body.aiEnabled as boolean);
+      result.aiUserEnabled = body.aiEnabled;
+    }
+    if (hasDaily) {
+      await setDailySummaryEnabledForUser(req.userId!, body.dailySummaryEnabled as boolean);
+      result.dailySummaryEnabled = body.dailySummaryEnabled;
+    }
+    res.json(result);
   })
 );
 

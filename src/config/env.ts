@@ -51,12 +51,22 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'ต้องมีค่า (service_role key เท่านั้น ไม่ใช่ anon key)'),
 
   // ── AI (ไม่จำเป็น: G4 บอกว่าปิด AI แล้วแอปต้องยังใช้ได้) ───────────────────
+  //
+  // 🔴 GEMINI_MODEL: ห้ามย้อนกลับไปเป็น gemini-2.0-flash
+  // Google ปิดรุ่น 2.0 ไปแล้ว (เอกสารขึ้นเป็น "Previous models — Shut down")
+  // เรียกไปจะได้ error กลับมา ซึ่ง guard จะ log เป็น provider_error แล้วตอบ fallback
+  // อาการที่เห็นคือ "ใส่ API key แล้วแต่บอทยังอ่านภาษาคนไม่ได้" ซึ่งหาสาเหตุยาก
+  //
+  // เลือก flash-lite เพราะงานของเราคือ "อ่านประโยคสั้น แล้วเลือก tool" ที่ temperature 0
+  // ไม่ต้องใช้รุ่นเก่ง และ flash-lite มีโควตา request ต่อวันบน free tier สูงกว่ารุ่นใหญ่
+  // ถ้ารุ่นนี้ถูกปิดอีกในอนาคต ดูรุ่นที่ยังอยู่ที่ ai.google.dev/gemini-api/docs/models
+  // แล้วตั้งทับด้วย env GEMINI_MODEL ในหน้า dashboard ของ host ได้เลย ไม่ต้องแก้โค้ด
   AI_PROVIDER: z.string().default('gemini'),
   GEMINI_API_KEY: z.string().optional().default(''),
-  GEMINI_MODEL: z.string().default('gemini-2.0-flash'),
+  GEMINI_MODEL: z.string().default('gemini-3.5-flash-lite'),
   AI_ENABLED: booleanFromString(true),
   AI_DAILY_LIMIT_PER_USER: intFromString(30),
-  AI_DAILY_LIMIT_GLOBAL: intFromString(0),
+  AI_DAILY_LIMIT_GLOBAL: intFromString(200),
   AI_TIMEOUT_MS: intFromString(8000),
 
   // ── งานที่ยังไม่ได้ทำ แต่ .env.example ประกาศไว้แล้ว ───────────────────────

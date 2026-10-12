@@ -1,8 +1,18 @@
+// ไฟล์นี้ทำหน้าที่อะไร: สร้าง/คืนสภาพบัญชีผู้ใช้ตอนแอดเพื่อน และแจ้งเรื่องข้อมูลส่วนบุคคล
+// ใครรับผิดชอบ: ① Bot Core
+// เขียนในสัปดาห์: W1 (สร้างบัญชี) / W4 (ข้อความต้อนรับ + แจ้ง PDPA)
+// อ้างอิง: SPEC.md §S11.4 "ความเป็นส่วนตัว" / SRS NFR-6
+// ⚖️ กฎเหล็ก G5, G6
+
 import { supabase } from '../db/supabase';
 import { DEFAULT_CATEGORIES } from '../config/constants';
+import { WELCOME_MESSAGE } from '../config/privacy';
 import { ensureEmailIngestToken } from '../db/queries/users';
+import { replyText } from '../line/reply';
 
 type LineEventLike = {
+  /** follow event ของ LINE มี replyToken มาด้วย ใช้ตอบข้อความต้อนรับได้ฟรี */
+  replyToken?: string;
   source?: { userId?: string };
 };
 
@@ -32,7 +42,12 @@ export async function handleFollow(event: LineEventLike): Promise<void> {
 
     if (updateError) {
       console.error('[followHandler] reactivate user error:', updateError);
+      return;
     }
+
+    // แอดกลับมาใหม่ก็ต้องได้เห็นข้อความแจ้งอีกครั้ง — คนที่เคยบล็อกแล้วกลับมา
+    // ส่วนใหญ่ลืมไปแล้วว่าตกลงอะไรไว้ และระหว่างที่หายไปเงื่อนไขอาจเปลี่ยน
+    await sendWelcome(event.replyToken);
     return;
   }
 
@@ -69,6 +84,28 @@ export async function handleFollow(event: LineEventLike): Promise<void> {
   } catch (err) {
     console.error('[followHandler] สร้าง email_ingest_token ไม่สำเร็จ:', err);
   }
+
+  // 🔴 ส่งหลังสร้างบัญชีเสร็จเท่านั้น (SPEC §S11.4)
+  // ถ้าส่งก่อนแล้วการสร้างบัญชีพัง ผู้ใช้จะได้ข้อความชวนให้เริ่มใช้
+  // ทั้งที่พิมพ์อะไรไปก็จะเจอ "ยังไม่พบบัญชีผู้ใช้" ซึ่งสับสนกว่าไม่ได้ข้อความเลย
+  await sendWelcome(event.replyToken);
+}
+
+/**
+ * ข้อความต้อนรับพร้อมการแจ้งเรื่องข้อมูลส่วนบุคคล (SPEC §S11.4 / NFR-6)
+ *
+ * ⚠️ ใช้ reply ไม่ใช่ push เพราะ reply ฟรีและไม่กินโควตา 280 ครั้ง/เดือน
+ * follow event มี replyToken มาให้อยู่แล้ว
+ *
+ * ไม่มี replyToken (เช่น event ที่ส่งมาจากการทดสอบ) ก็ข้ามไป ไม่ทำให้ flow พัง —
+ * การสร้างบัญชีสำคัญกว่าการได้ข้อความต้อนรับ
+ */
+async function sendWelcome(replyToken: string | undefined): Promise<void> {
+  if (!replyToken) {
+    console.warn('[followHandler] follow event ไม่มี replyToken ข้ามข้อความต้อนรับ');
+    return;
+  }
+  await replyText(replyToken, WELCOME_MESSAGE);
 }
 
 export async function handleUnfollow(event: LineEventLike): Promise<void> {
