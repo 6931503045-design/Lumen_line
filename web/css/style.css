@@ -336,10 +336,10 @@ h3 {
   color: var(--on-dark);
 }
 
-.hero-card-brand svg {
-  width: 18px;
-  height: 18px;
-  color: var(--lime);
+/* มาสคอตมะนาวของแอป ใช้เป็นโลโก้ — รูปกว้างกว่าสูงเกือบ 2 เท่า จึงล็อกความสูงแล้วให้ความกว้างตามสัดส่วน */
+.hero-card-logo {
+  height: 24px;
+  width: auto;
 }
 
 /* ไอคอน contactless ลอยมุมขวา ล้อสไตล์บัตรเครดิต (ตกแต่งอย่างเดียว) */
