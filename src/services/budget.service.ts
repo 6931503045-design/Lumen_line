@@ -242,6 +242,48 @@ export async function removeBudget(
  * ใช้เดือนของ occurredAt ไม่ใช่เดือนปัจจุบัน เพราะผู้ใช้ย้อนบันทึกรายการของเดือนก่อนได้
  * ตอนนั้นงบที่ต้องเช็คคืองบของเดือนนั้น ไม่ใช่เดือนนี้
  */
+/**
+ * สถานะงบของหมวดหนึ่ง ณ ตอนนี้ — อ่านอย่างเดียว ไม่แตะสิทธิ์เตือน
+ *
+ * ต่างจาก evaluateBudgetAlert() ตรงที่อันนั้นคืนค่า "เฉพาะตอนเพิ่งข้ามเกณฑ์ 80/100%"
+ * และ **เขียน DB เพื่อจองสิทธิ์เตือน** ด้วย เอามาวาดแถบความคืบหน้าทุกครั้งไม่ได้
+ * เพราะจะเผาสิทธิ์เตือนของทั้งเดือนทิ้งตั้งแต่รายการแรก
+ *
+ * ฟังก์ชันนี้มีไว้ให้การ์ด "บันทึกแล้ว" โชว์แถบงบได้ทุกครั้งที่บันทึก
+ * คืน null เมื่อหมวดนี้ยังไม่ได้ตั้งงบเดือนนั้น ซึ่งเป็นเรื่องปกติ ไม่ใช่ error
+ */
+export async function getCategoryBudgetStatus(
+  userId: string,
+  categoryId: string,
+  occurredAt: Date = new Date()
+): Promise<BudgetStatus | null> {
+  const monthIso = getMonthStartIso(occurredAt);
+
+  const budget = await findBudget(userId, categoryId, monthIso);
+  if (!budget) return null;
+
+  const limitSatang = toSatang(budget.limit_amount);
+  if (limitSatang <= 0) return null;
+
+  const category = await findCategoryOwnedByUser(userId, categoryId);
+  const spent = await spentByCategoryInMonth(userId, monthIso);
+  const spentSatang = spent.get(categoryId) ?? 0;
+
+  return {
+    budgetId: budget.id,
+    categoryId,
+    categoryName: category?.name ?? 'ไม่ระบุหมวด',
+    emoji: category?.emoji ?? null,
+    limitSatang,
+    spentSatang,
+    remainingSatang: limitSatang - spentSatang,
+    percentUsed: percentOf(spentSatang, limitSatang),
+    level: levelOf(spentSatang, limitSatang),
+    alerted80: budget.alerted_80,
+    alerted100: budget.alerted_100,
+  };
+}
+
 export async function evaluateBudgetAlert(
   userId: string,
   categoryId: string,

@@ -16,7 +16,9 @@ import {
   softDeleteTransaction,
   restoreTransaction,
 } from '../db/queries/transactions';
-import { replyText, replyTextWithQuickReply } from '../line/reply';
+import { replyFlex, replyText, replyTextWithQuickReply } from '../line/reply';
+import { buildRecordedCardFor } from '../line/recordedView';
+import { env } from '../config/env';
 import { cancelPending, confirmPending } from '../services/pending.service';
 
 type LinePostbackEvent = {
@@ -72,7 +74,14 @@ export async function handlePostback(event: LinePostbackEvent): Promise<void> {
       await replyText(replyToken, 'ฟีเจอร์แก้หมวดยังไม่เปิดใช้งานตอนนี้ครับ 🙏 (กำลังทำต่อ)');
       break;
     default:
+      // 🔴 เคยแค่ log แล้วจบ ผู้ใช้กดปุ่มแล้วไม่มีอะไรเกิดขึ้นเลย ไม่มีแม้แต่ข้อความบอก
+      // ซึ่งแยกไม่ออกจาก "แอปค้าง" และทำให้บั๊กแบบนี้มองไม่เห็นจากฝั่งผู้ใช้
+      // (เจอจริงกับปุ่ม ✏️ ที่ยิง action=edit มาโดยไม่มี case รองรับ)
       console.error('[postbackHandler] ไม่รู้จัก action:', action);
+      await replyText(
+        replyToken,
+        'ปุ่มนี้ยังใช้ไม่ได้ครับ 🙏 อาจเป็นการ์ดเก่าในแชท ลองพิมพ์ "ช่วยเหลือ" ดูคำสั่งที่ใช้ได้'
+      );
       break;
   }
 }
@@ -190,6 +199,14 @@ async function handleAiConfirm(
 
     // บันทึกสำเร็จแล้วให้ปุ่ม "ยกเลิก" ติดไปด้วย เพื่อให้ผู้ใช้ถอนได้ทันที
     // ถ้าเพิ่งเห็นว่า AI อ่านผิดตอนเห็นผลลัพธ์จริง (ปุ่มนี้ใช้ flow undo เดิม)
+    // บันทึกสำเร็จ -> ตอบด้วยการ์ดเดียวกับทางด่วน ผู้ใช้จะได้เห็นหน้าตาแบบเดิม
+    // ไม่ว่าจะจดด้วยการพิมพ์สั้นๆ หรือให้ AI ตีความ และได้แถบงบเหมือนกัน
+    // ปุ่มยกเลิก/แก้ไขอยู่ในการ์ดรายแถวอยู่แล้ว จึงไม่ต้องแนบ quick reply ซ้ำ
+    if (outcome.kind === 'done' && outcome.recorded && outcome.recorded.length > 0) {
+      await replyFlex(replyToken, buildRecordedCardFor(outcome.recorded, env.appBaseUrl));
+      return;
+    }
+
     if (outcome.kind === 'done' && outcome.transactionId) {
       await replyTextWithQuickReply(replyToken, outcome.text, [
         {

@@ -4655,6 +4655,39 @@ function isTransfer(item) {
   return item.type === 'transfer';
 }
 
+/**
+ * ลิงก์จากปุ่ม ✏️ บนการ์ด LINE — เปิดหน้าต่างแก้ไขรายการนั้นให้เลย
+ *
+ * ทำไมไม่ใช้ postback เหมือนปุ่มอื่นบนการ์ด: การแก้ไขต้องกรอกยอด/วันเวลา/หมวด
+ * ซึ่งในแชททำได้ลำบาก ส่วนหน้าเว็บมีฟอร์มครบอยู่แล้ว พาผู้ใช้มาที่นี่เลยจึงเร็วกว่า
+ * (Flex action แบบ postback เปิด URL ไม่ได้ ปุ่มนี้จึงเป็น type 'uri')
+ */
+let deepLinkEditDone = false;
+
+function applyTransactionDeepLinkEdit() {
+  const transactionId = new URLSearchParams(window.location.search).get('tx');
+  if (!transactionId) return;
+
+  // 🔴 ถูกเรียกสองรอบ: ครั้งแรกตอน init ซึ่งยังเป็นข้อมูลตัวอย่าง และอีกครั้งจาก boot.js
+  // หลังโหลดข้อมูลจริงเสร็จ ถ้าไม่กันไว้ รอบแรกจะหา id จริงใน mock ไม่เจอแล้วขึ้นว่า
+  // "ไม่พบรายการนี้แล้ว" ทั้งที่รายการมีอยู่ — จึงเปิดโมดัลเฉพาะตอนเจอ และทำครั้งเดียว
+  if (deepLinkEditDone) return;
+
+  const target = mock.transactions.find((item) => sameId(item.id, transactionId));
+  if (!target) return;
+
+  deepLinkEditDone = true;
+  editTransaction(target.id);
+}
+
+/** โหลดข้อมูลจริงเสร็จแล้วยังหาไม่เจอ = รายการถูกลบไปแล้วจริง ค่อยบอกผู้ใช้ */
+function reportDeepLinkEditMissing() {
+  const transactionId = new URLSearchParams(window.location.search).get('tx');
+  if (!transactionId || deepLinkEditDone) return;
+  showAlertModal('ไม่พบรายการนี้แล้ว อาจถูกลบไปก่อนหน้านี้', 'เปิดรายการไม่ได้');
+  deepLinkEditDone = true;
+}
+
 function applyTransactionDeepLinkFilter() {
   const params = new URLSearchParams(window.location.search);
   // 🔴 แก้บั๊ก: id ของหมวดเป็น uuid ไม่ใช่ตัวเลข Number() จึงคืน NaN แล้วหลุด return ทุกครั้ง
@@ -4692,6 +4725,8 @@ function initializePage() {
   if (pageName === 'transactions') {
     applyTransactionDeepLinkFilter();
     renderTransactionsPage();
+    // เรียกหลังวาดหน้าเสร็จ เพราะโมดัลแก้ไขอ่านข้อมูลจากรายการที่เพิ่ง render
+    applyTransactionDeepLinkEdit();
   }
   if (pageName === 'categories') {
     bindBarTip(categoryOverviewTip);

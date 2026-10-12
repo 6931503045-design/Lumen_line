@@ -13,9 +13,13 @@
 // จะถูกมองว่าเป็นคำสั่ง `สรุป` แทนที่จะเป็นการบันทึกเงิน
 
 import { PRIVACY_NOTICE } from '../config/privacy';
-import { formatBaht, toSatang } from '../utils/money';
-import { getTodayIso } from '../utils/thaiDate';
+import { formatBaht, toSatang, formatBahtNoSatang } from '../utils/money';
+import { getTodayIso, formatThaiMonthLabel } from '../utils/thaiDate';
+import { buildSummaryCard } from '../line/flex/summaryCard';
+import { buildPlanCarousel, type PlanCardInput } from '../line/flex/planCard';
+import { buildBudgetCard, type BudgetCardRow } from '../line/flex/budgetCard';
 import { AI_DISCLAIMER } from '../config/constants';
+import { env } from '../config/env';
 import { getSafeToSpend, getUserSummary } from './summary.service';
 import { getBudgetOverview } from './budget.service';
 import { listPlansWithProgress, transferToPlan } from './plan.service';
@@ -184,6 +188,116 @@ async function buildBudget(userId: string): Promise<string> {
     `รวม ${formatBaht(overview.totalSpentSatang)} จาก ${formatBaht(overview.totalLimitSatang)}`
   );
   return lines.join('\n');
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// เวอร์ชัน Flex ของคำสั่งที่มีข้อมูลเป็นโครงสร้าง (SPEC §S1 ตาราง Flex Message)
+//
+// ทำไมแยกจาก runCommand แทนที่จะเปลี่ยน return type ของมัน: runCommand ยังถูกใช้เป็น
+// ทางสำรองสำหรับคำสั่งที่ยังเป็นข้อความล้วน (เหลือ/งบ/ช่วยเหลือ) ถ้ารวมเป็นฟังก์ชันเดียว
+// ผู้เรียกต้องแยกชนิดผลลัพธ์ทุกครั้งทั้งที่ 3 ใน 5 คำสั่งไม่มีการ์ด
+//
+// ⚖️ G1: ที่นี่แปลงข้อมูลเป็นรูปที่การ์ดใช้เท่านั้น ยอดเงินทุกตัว format ด้วย formatBaht
+// ส่วนเปอร์เซ็นต์ที่คำนวณเป็นสัดส่วนสำหรับ "ความกว้างแถบ" ไม่ใช่ยอดเงินที่ผู้ใช้เอาไปใช้ต่อ
+// ────────────────────────────────────────────────────────────────────────────
+
+/** YYYY-MM-DD -> "ก.ย. 2569" (พ.ศ.) ใช้กับป้ายเดือนบนการ์ด */
+function thaiMonthYear(isoDate: string): string {
+  const monthIso = isoDate.slice(0, 7);
+  const year = Number(monthIso.slice(0, 4)) + 543;
+  return `${formatThaiMonthLabel(monthIso)} ${year}`;
+}
+
+async function buildSummaryFlex(userId: string) {
+  const summary = await getUserSummary(userId);
+  const balanceSatang = summary.monthIncomeSatang - summary.monthExpenseSatang;
+  const totalExpense = summary.monthExpenseSatang;
+
+  return buildSummaryCard({
+    monthLabel: thaiMonthYear(getTodayIso()),
+    formattedIncome: formatBaht(summary.monthIncomeSatang),
+    formattedExpense: formatBaht(summary.monthExpenseSatang),
+    formattedBalance: formatBaht(balanceSatang),
+    balanceIsNegative: balanceSatang < 0,
+    topCategories: summary.expenseByCategory.slice(0, 3).map((item) => ({
+      name: item.name,
+      formattedAmount: formatBaht(item.amountSatang),
+      // สัดส่วนของหมวดเทียบรายจ่ายทั้งเดือน ใช้วาดความกว้างแถบเท่านั้น
+      // ถ้าเดือนนี้ยังไม่มีรายจ่ายเลย ให้เป็น 0 แทนการหารด้วยศูนย์
+      percent: totalExpense > 0 ? Math.round((item.amountSatang / totalExpense) * 100) : 0,
+    })),
+    footnote:
+      summary.transactionCount === 0
+        ? 'ยังไม่มีรายการเลย — ลองพิมพ์ "กาแฟ 80" ดูครับ'
+        : undefined,
+  });
+}
+
+async function buildPlansFlex(userId: string) {
+  const plans = (await listPlansWithProgress(userId)).filter(
+    (plan) => plan.status === 'active'
+  );
+  if (plans.length === 0) return null;
+
+  const cards: PlanCardInput[] = plans.map((plan) => ({
+    title: plan.title,
+    formattedTarget: formatBaht(plan.targetSatang),
+    formattedSaved: formatBaht(plan.savedSatang),
+    formattedMonthly: formatBaht(plan.monthlySaveSatang),
+    percentComplete: plan.percentComplete,
+    confidence: plan.confidence,
+    dueMonth: thaiMonthYear(plan.targetDate),
+    offTrack: plan.offTrack,
+  }));
+  return buildPlanCarousel(cards);
+}
+
+async function buildBudgetFlex(userId: string) {
+  const overview = await getBudgetOverview(userId);
+  if (overview.items.length === 0) return null;
+
+  // เรียงให้หมวดที่เกินงบขึ้นก่อน แล้วค่อยหมวดที่ใกล้เต็ม — เป็นเหตุผลที่ผู้ใช้พิมพ์ "งบ" มาดู
+  // ถ้าเรียงตามลำดับที่ตั้งงบไว้ หมวดที่เกินอาจตกไปอยู่ท้ายการ์ดจนต้องเลื่อนหา
+  const order = { over: 0, warning: 1, ok: 2 } as const;
+  const rows: BudgetCardRow[] = [...overview.items]
+    .sort((a, b) => order[a.level] - order[b.level] || b.percentUsed - a.percentUsed)
+    .map((item) => ({
+      categoryName: item.categoryName,
+      formattedSpent: formatBahtNoSatang(item.spentSatang),
+      formattedLimit: formatBahtNoSatang(item.limitSatang),
+      percentUsed: item.percentUsed,
+      level: item.level,
+    }));
+
+  return buildBudgetCard({
+    monthLabel: thaiMonthYear(overview.month),
+    rows,
+    formattedTotalSpent: formatBahtNoSatang(overview.totalSpentSatang),
+    formattedTotalLimit: formatBahtNoSatang(overview.totalLimitSatang),
+    // สัดส่วนรวม — คิดจากยอดที่ service ส่งมา ไม่ได้ไปรวมยอดเอง (G1)
+    totalPercentUsed:
+      overview.totalLimitSatang > 0
+        ? Math.round((overview.totalSpentSatang / overview.totalLimitSatang) * 100)
+        : 0,
+    assetBaseUrl: env.appBaseUrl,
+  });
+}
+
+/**
+ * การ์ด Flex ของคำสั่ง — คืน null ถ้าคำสั่งนั้นยังไม่มีการ์ด หรือไม่มีข้อมูลพอจะทำการ์ด
+ * ผู้เรียกต้องถอยไปใช้ runCommand() ต่อเมื่อได้ null
+ */
+export async function runCommandCard(userId: string, command: CommandName) {
+  switch (command) {
+    case 'summary':
+      return buildSummaryFlex(userId);
+    case 'plans':
+      return buildPlansFlex(userId);
+    case 'budget':
+      return buildBudgetFlex(userId);
+    default:
+      return null;
+  }
 }
 
 /** ข้อความตอบกลับของคำสั่ง — ทุกตัวเลขมาจาก service ไม่มีการคำนวณที่นี่ (G1) */

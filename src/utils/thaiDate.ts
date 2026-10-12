@@ -44,6 +44,23 @@ export function formatThaiDate(date: Date = new Date()): string {
   return THAI_DISPLAY.format(date);
 }
 
+const THAI_DISPLAY_TIME = new Intl.DateTimeFormat('th-TH', {
+  timeZone: TIMEZONE,
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/**
+ * วันที่พร้อมเวลา ตามเวลาไทย เช่น "8 ต.ค. 2569 19:55"
+ * ใช้บนการ์ดที่ต้องบอกว่าบันทึกตอนไหน — ห้ามเอาไปเขียนลง DB เหมือน formatThaiDate
+ */
+export function formatThaiDateTime(date: Date = new Date()): string {
+  return THAI_DISPLAY_TIME.format(date);
+}
+
 /**
  * วันแรกของเดือนปัจจุบันตามเวลาไทย รูปแบบ ISO `YYYY-MM-01`
  * ใช้เป็นขอบล่างตอน query ยอดรวม "เดือนนี้"

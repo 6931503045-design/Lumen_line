@@ -19,19 +19,32 @@ import { getUserIdByLineUserId } from '../db/queries/users';
 import { parseQuickExpenseText } from '../utils/regexParser';
 import { createTransaction } from '../services/transaction.service';
 import { formatBudgetAlert } from '../services/budget.service';
-import { formatBaht } from '../utils/money';
+import { formatBaht, MoneyError } from '../utils/money';
 import { replyFlex, replyText, replyTextWithQuickReply } from '../line/reply';
 import {
   matchCommand,
   matchSaveCommand,
   runCommand,
+  runCommandCard,
   runSaveCommand,
   runUndoLatest,
 } from '../services/command.service';
-import { buildConfirmCard } from '../line/flex/confirmCard';
+import { buildRecordedCardFor } from '../line/recordedView';
+import { buildPendingCard } from '../line/flex/pendingCard';
 import { answerHelpTopic, matchHelpQuestion } from '../services/help.service';
-import { interpretUserMessage } from '../services/ai/router';
-import { AI_UNAVAILABLE_FALLBACK } from '../services/ai/prompt';
+import {
+  buildAiUnavailableCard,
+  buildAmountTooLargeCard,
+  buildSaveFailedCard,
+  buildUnreadableCard,
+} from '../line/flex/errorCard';
+import {
+  FALLBACK_EXPENSE_CATEGORY,
+  interpretUserMessage,
+  resolveCategoryName,
+} from '../services/ai/router';
+import { MAX_AMOUNT_SATANG } from '../config/constants';
+import { env } from '../config/env';
 
 type LineTextMessageEvent = {
   replyToken?: string;
@@ -86,30 +99,61 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
     return;
   }
 
+  // 🔴 คำที่ผู้ใช้พิมพ์ไม่ใช่ชื่อหมวด เป็นแค่ชื่อของที่ซื้อ
+  // ถ้าส่งเข้า createTransaction ตรง ๆ findOrCreateCategory จะสร้างหมวดใหม่ทุกคำ
+  // พิมพ์ "มะม่วง 500" แล้วได้หมวด "มะม่วง" เพิ่มมาหนึ่งหมวด — จด 3 วันก็มี 20 หมวด
+  // แล้วหน้าสรุปรายหมวดใช้ไม่ได้อีกเลย
+  //
+  // ใช้กฎเดียวกับฝั่ง AI (SPEC §S11.2): จับคู่กับหมวดที่ผู้ใช้ "มีอยู่แล้ว" เท่านั้น
+  // ไม่เจอ → รายจ่ายลง "อื่นๆ" ส่วนรายรับปล่อยว่างให้ระบบเลือกเอง เพราะฝั่งรายรับ
+  // ไม่มีหมวด "อื่นๆ" และการโยนเงินเดือนเข้า "รายได้เสริม" คือการติดป้ายผิด
+  const entryType = parsed.type ?? 'expense';
+  const matchedCategory = await resolveCategoryName(userId, parsed.category, entryType);
+  const categoryName =
+    matchedCategory ?? (entryType === 'expense' ? FALLBACK_EXPENSE_CATEGORY : undefined);
+
   try {
     const tx = await createTransaction({
       userId,
-      type: parsed.type ?? 'expense',
+      type: entryType,
       amountSatang: parsed.amountSatang,
-      categoryName: parsed.category,
+      ...(categoryName ? { categoryName } : {}),
+      // คำที่พิมพ์มาเก็บเป็นชื่อรายการแทน ไม่ให้หายไปเฉย ๆ
+      note: parsed.category,
       source: 'chat',
       parsedBy: 'regex',
     });
 
-    const confirmCard = buildConfirmCard({
-      transactionId: tx.id,
-      type: tx.type === 'income' ? 'income' : 'expense',
-      categoryName: parsed.category,
-      formattedAmount: formatBaht(tx.amountSatang),
-    });
+    const card = buildRecordedCardFor(
+      [
+        {
+          transactionId: tx.id,
+          type: tx.type,
+          categoryName,
+          // คำที่ผู้ใช้พิมพ์คือชื่อของที่ซื้อ ไม่ใช่ชื่อหมวด แสดงเป็นชื่อรายการ
+          title: parsed.category,
+          amountSatang: tx.amountSatang,
+          occurredAtIso: tx.occurredAt,
+          budgetStatus: tx.budgetStatus,
+        },
+      ],
+      env.appBaseUrl
+    );
 
     // S5.8: รายการนี้ทำให้ข้ามเกณฑ์งบพอดี — แนบไปกับ reply เดียวกัน
     // reply มี quota แยกจาก push และไม่จำกัดจำนวน จึงเตือนตรงนี้ได้ฟรี
     // ถ้าปล่อยไปเตือนทีหลังต้องใช้ push ซึ่งมีแค่ 280 ครั้งต่อเดือนทั้งระบบ
-    await replyFlex(replyToken, confirmCard, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
+    await replyFlex(replyToken, card, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
   } catch (err) {
     console.error('[textHandler] createTransaction error:', err);
-    await replyText(replyToken, 'บันทึกไม่สำเร็จ ลองพิมพ์ใหม่อีกครั้งนะครับ 🙏');
+    // ยอดเกินเพดานต่อรายการเป็นเรื่องของสิ่งที่ผู้ใช้พิมพ์ ไม่ใช่ระบบพัง
+    // ถ้าตอบว่า "ระบบมีปัญหา ไม่ได้เกิดจากข้อความที่พิมพ์" จะเป็นการโกหกและผู้ใช้
+    // จะลองส่งซ้ำไปเรื่อย ๆ โดยไม่รู้ว่าต้องแก้ยอด
+    if (err instanceof MoneyError) {
+      await replyFlex(replyToken, buildAmountTooLargeCard(formatBaht(MAX_AMOUNT_SATANG)));
+      return;
+    }
+    await replyFlex(replyToken, buildSaveFailedCard());
   }
 }
 /**
@@ -174,6 +218,15 @@ async function handleCommands(
   const command = matchCommand(trimmed);
   if (!command) return false;
 
+  // คำสั่งที่มีการ์ด (สรุป/แผน) ตอบเป็น Flex — ที่เหลือยังเป็นข้อความล้วน
+  // ถ้าการ์ดคืน null แปลว่ายังไม่มีข้อมูลพอ (เช่นยังไม่มีแผน) ให้ถอยไปใช้ข้อความเดิม
+  // ซึ่งเขียนกรณี "ยังไม่มี..." ไว้ครบแล้ว
+  const card = await runCommandCard(userId, command);
+  if (card) {
+    await replyFlex(replyToken, card);
+    return true;
+  }
+
   await replyText(replyToken, await runCommand(userId, command));
   return true;
 }
@@ -196,28 +249,16 @@ async function handleWithAi(replyToken: string, userId: string, text: string): P
   }
 
   if (reply.kind === 'pending') {
-    await replyTextWithQuickReply(replyToken, reply.text, [
-      {
-        type: 'action',
-        action: {
-          type: 'postback',
-          label: 'ยืนยัน',
-          data: `action=ai_confirm&id=${reply.pendingId}`,
-          displayText: 'ยืนยัน',
-        },
-      },
-      {
-        type: 'action',
-        action: {
-          type: 'postback',
-          label: 'ไม่ใช่',
-          data: `action=ai_cancel&id=${reply.pendingId}`,
-          displayText: 'ไม่ใช่',
-        },
-      },
-    ]);
+    // ⚖️ G2: ปุ่มในการ์ดคือจุดที่ "คน" ยืนยัน ก่อนหน้านี้ยังไม่มีอะไรถูกเขียนลงฐาน
+    await replyFlex(
+      replyToken,
+      buildPendingCard({ pendingId: reply.pendingId, summary: reply.text })
+    );
     return;
   }
 
-  await replyText(replyToken, AI_UNAVAILABLE_FALLBACK);
+  // ⚖️ G4: router รวมทุกเหตุผลที่ AI ใช้ไม่ได้เป็น kind เดียว แต่ผู้ใช้ต้องการคำตอบคนละแบบ
+  // ปิดไว้ถาวร = ระบบนี้อ่านประโยคยาวไม่ได้ บอกรูปแบบที่ใช้ได้ไปเลย
+  // เปิดอยู่แต่ล้ม = เป็นเรื่องชั่วคราว บอกว่าลองใหม่ได้ ไม่ใช่ให้เปลี่ยนวิธีพิมพ์ถาวร
+  await replyFlex(replyToken, env.aiEnabled ? buildAiUnavailableCard() : buildUnreadableCard());
 }

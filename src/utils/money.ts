@@ -120,6 +120,35 @@ export function formatBaht(satang: number): string {
 }
 
 /**
+ * เหมือน formatBaht แต่ตัด ".00" ทิ้งเมื่อไม่มีเศษสตางค์ เช่น 8000 -> "฿80" · 8050 -> "฿80.50"
+ *
+ * ใช้กับรายการบนการ์ดที่คนอ่านไล่หลายบรรทัด ".00" ต่อท้ายทุกบรรทัดเป็น noise
+ * ที่ทำให้สแกนยากขึ้นโดยไม่ได้ให้ข้อมูลอะไร แต่ยอดที่มีเศษจริงยังแสดงครบ
+ * ต่างจาก formatBahtNoSatang ที่ปัดทิ้งเสมอแม้มีเศษ — อันนั้นใช้เฉพาะที่พื้นที่แคบจริงๆ
+ */
+export function formatBahtShort(satang: number): string {
+  assertIntegerSatang(satang, 'formatBahtShort');
+  return satang % 100 === 0 ? formatBahtNoSatang(satang) : formatBaht(satang);
+}
+
+/**
+ * เหมือน formatBaht แต่ตัดสตางค์ทิ้ง เช่น 12850050 -> "฿128,501"
+ *
+ * ⚠️ ใช้กับการ "แสดงผลในพื้นที่แคบ" เท่านั้น (เช่นแถบงบบนการ์ด Flex ที่ชื่อหมวด
+ * กับยอดต้องอยู่บรรทัดเดียวกัน) ห้ามเอาค่าที่ปัดแล้วไปคำนวณต่อหรือเก็บลง DB
+ * ทุกการคำนวณยังต้องอยู่บนจำนวนเต็มสตางค์ตามกฎ G3
+ */
+export function formatBahtNoSatang(satang: number): string {
+  assertIntegerSatang(satang, 'formatBahtNoSatang');
+
+  const negative = satang < 0;
+  const baht = Math.round(Math.abs(satang) / 100);
+  const withComma = String(baht).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+  return `${negative ? '-' : ''}฿${withComma}`;
+}
+
+/**
  * บวกจำนวนเงิน (หน่วยสตางค์) หลายค่าเข้าด้วยกัน — เป็นจำนวนเต็มล้วนๆ จึงไม่มีปัญหา float
  * รับค่าติดลบได้ (สำหรับคำนวณผลต่างระหว่างทาง เช่น สูตร S5.2) แต่ทุกอินพุตต้องเป็นจำนวนเต็มสตางค์
  */

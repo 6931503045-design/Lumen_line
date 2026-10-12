@@ -11,7 +11,12 @@ import {
 } from '../db/queries/transactions';
 import { findOrCreateCategory } from '../db/queries/categories';
 import { MAX_AMOUNT_SATANG } from '../config/constants';
-import { evaluateBudgetAlert, type BudgetAlert } from './budget.service';
+import {
+  evaluateBudgetAlert,
+  getCategoryBudgetStatus,
+  type BudgetAlert,
+  type BudgetStatus,
+} from './budget.service';
 
 export type CreateTransactionInput = {
   userId: string;
@@ -51,6 +56,12 @@ export type CreatedTransaction = {
    * ผู้เรียกฝั่งอีเมล/recurring ต้องส่งเป็น push เอง
    */
   budgetAlert: BudgetAlert | null;
+  /**
+   * สถานะงบของหมวดนี้ ณ ตอนนี้ — มีค่าทุกครั้งที่หมวดนั้นตั้งงบไว้ ไม่ใช่เฉพาะตอนข้ามเกณฑ์
+   * ต่างจาก budgetAlert ที่มีค่าเฉพาะตอน "เพิ่งข้าม" เพื่อใช้เตือน
+   * อันนี้มีไว้ให้การ์ดบันทึกวาดแถบความคืบหน้าได้ทุกครั้ง
+   */
+  budgetStatus: BudgetStatus | null;
 };
 
 export async function createTransaction(
@@ -95,6 +106,7 @@ export async function createTransaction(
     type: row.type,
     occurredAt: row.occurred_at,
     budgetAlert: await safeEvaluateBudgetAlert(input.userId, input.type, categoryId, occurredAt),
+    budgetStatus: await safeBudgetStatus(input.userId, input.type, categoryId, occurredAt),
   };
 }
 
@@ -105,6 +117,23 @@ export async function createTransaction(
  *
  * ⚖️ G7: เช็คเฉพาะรายจ่าย — รายรับกับ transfer ไม่กินงบหมวด
  */
+/** อ่านสถานะงบไว้วาดแถบ — ล้มแล้วไม่ทำให้การบันทึกพัง เพราะรายการถูกเขียนไปแล้ว */
+async function safeBudgetStatus(
+  userId: string,
+  type: TransactionType,
+  categoryId: string | null,
+  occurredAtIso: string
+): Promise<BudgetStatus | null> {
+  if (type !== 'expense' || !categoryId) return null;
+
+  try {
+    return await getCategoryBudgetStatus(userId, categoryId, new Date(occurredAtIso));
+  } catch (err) {
+    console.error('[transaction.service] อ่านสถานะงบไม่สำเร็จ (รายการถูกบันทึกแล้ว):', err);
+    return null;
+  }
+}
+
 async function safeEvaluateBudgetAlert(
   userId: string,
   type: TransactionType,
@@ -215,6 +244,12 @@ export async function updateTransactionForUser(
     occurredAt: updated.occurred_at,
     // แก้ยอดหรือย้ายหมวดแล้วอาจข้ามเกณฑ์งบพอดี — ธงใน DB กันเตือนซ้ำอยู่แล้ว
     budgetAlert: await safeEvaluateBudgetAlert(
+      userId,
+      typeAfterUpdate,
+      finalCategoryId,
+      updated.occurred_at
+    ),
+    budgetStatus: await safeBudgetStatus(
       userId,
       typeAfterUpdate,
       finalCategoryId,

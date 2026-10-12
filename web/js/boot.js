@@ -359,7 +359,13 @@
   function renderCurrentPage() {
     const page = document.body.dataset.page;
     if (page === 'dashboard') renderDashboard();
-    if (page === 'transactions') renderTransactionsPage();
+    if (page === 'transactions') {
+      renderTransactionsPage();
+      // ลิงก์ ?tx= จากปุ่ม ✏️ บนการ์ด LINE — ต้องเรียกหลังข้อมูลจริงมาถึง
+      // เพราะตอน app.js เรียกครั้งแรกยังเป็นข้อมูลตัวอย่าง หา id จริงไม่เจอ
+      if (typeof applyTransactionDeepLinkEdit === 'function') applyTransactionDeepLinkEdit();
+      if (typeof reportDeepLinkEditMissing === 'function') reportDeepLinkEditMissing();
+    }
     if (page === 'categories') renderCategoriesPage();
     if (page === 'analyze') renderAnalyzePage();
     if (page === 'settings') renderSpendingLimitSettings();
@@ -804,11 +810,11 @@
   // ---------- ปุ่มที่ยังไม่มี endpoint รองรับ ----------
   // เดิมปล่อยให้กดได้แล้วค่อยขึ้นข้อความปฏิเสธ ซึ่งน่าหงุดหงิดกว่าไม่ต้องแสดงตั้งแต่แรก
   // ตอนนี้ซ่อนทิ้งไปเลยเมื่อต่อ API แล้ว (โหมดตัวอย่างยังโชว์ครบเพื่อใช้สาธิตดีไซน์)
+  // 🔴 เอาปุ่มออกจากรายการนี้ทุกครั้งที่ endpoint พร้อมแล้ว ไม่งั้นของที่ทำเสร็จแล้ว
+  // จะยังถูกซ่อนอยู่โดยไม่มีใครรู้ — เพิ่ม/ลบ/แก้หมวดหมู่เคยค้างอยู่ตรงนี้ทั้งที่
+  // api.js กับ jodtangPersist รองรับครบแล้ว ผู้ใช้เลยหาปุ่มไม่เจอในหน้าหมวดหมู่
   const UNSUPPORTED_SELECTORS = [
-    '#addCategoryBtn',
     '#toggleCategorySortBtn',
-    '[data-category-delete]',
-    '[data-toggle-essential]',
     '[data-plan-edit]',
     '[data-plan-history]',
     '#emergencyToggle',
