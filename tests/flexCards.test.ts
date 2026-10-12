@@ -253,16 +253,36 @@ describe('richmenu', () => {
     }
   });
 
-  it('5 ช่องส่งคำสั่งที่ command.service รองรับอยู่แล้ว ไม่พึ่ง AI (G4)', () => {
-    const texts = menu.areas
-      .filter((area) => area.action.type === 'message')
-      .map((area) => area.action.text);
-    expect(texts).toEqual(['สรุป', 'เหลือ', 'งบ', 'แผน', 'ช่วยเหลือ']);
+  it('5 ช่องเปิดหน้าเว็บคนละหน้า ไม่ซ้ำกัน', () => {
+    const uris = menu.areas
+      .filter((area) => area.action.type === 'uri')
+      .map((area) => area.action.uri);
+    expect(uris).toEqual([
+      'https://example.test/index.html',
+      'https://example.test/transactions.html',
+      'https://example.test/categories.html',
+      'https://example.test/analyze.html',
+      'https://example.test/settings.html',
+    ]);
   });
 
-  it('ช่องเปิดเว็บใช้ uri ที่ส่งเข้ามา', () => {
-    const uri = menu.areas.find((area) => area.action.type === 'uri');
-    expect(uri?.action.uri).toBe('https://example.test');
+  it('ช่อง "เหลือ" ยังเป็นคำสั่งในแชท เพราะต้องตอบทันที ไม่รอ webview โหลด', () => {
+    const messages = menu.areas.filter((area) => area.action.type === 'message');
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.action.text).toBe('เหลือ');
+  });
+
+  it('ไม่มีช่องไหนพึ่ง AI — ปิด AI แล้วเมนูยังใช้ได้ครบ (G4)', () => {
+    const kinds = new Set(menu.areas.map((area) => area.action.type));
+    expect([...kinds].sort()).toEqual(['message', 'uri']);
+  });
+
+  it('baseUrl ที่มี / ต่อท้าย ต้องไม่ทำให้ URL มี // ซ้อน', () => {
+    const withSlash = buildRichMenu('https://example.test/');
+    const uris = withSlash.areas
+      .filter((a) => a.action.type === 'uri')
+      .map((a) => a.action.uri as string);
+    expect(uris.every((u) => !u.replace('https://', '').includes('//'))).toBe(true);
   });
 });
 

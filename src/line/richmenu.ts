@@ -22,14 +22,18 @@ const COL = Math.floor(RICH_MENU_SIZE.width / 3); // 833
 const ROW = RICH_MENU_SIZE.height / 2; // 843
 
 /**
- * ┌─────────┬─────────┬─────────┐
- * │  สรุป   │  เหลือ  │   งบ    │
- * ├─────────┼─────────┼─────────┤
- * │  แผน    │ เปิดเว็บ │ ช่วยเหลือ │
- * └─────────┴─────────┴─────────┘
+ * ┌──────────┬──────────┬──────────┐
+ * │ ภาพรวม   │  รายการ  │  หมวดหมู่ │   ← เปิดหน้าเว็บ
+ * ├──────────┼──────────┼──────────┤
+ * │ วิเคราะห์ │  ตั้งค่า  │  เหลือ   │   ← 2 หน้าเว็บ + คำสั่งในแชท
+ * └──────────┴──────────┴──────────┘
  *
- * ช่องขวาสุดของแถวบนกว้างกว่าช่องอื่น 1 px เพื่อกินเศษที่หารสามไม่ลงตัว
+ * ช่องขวาสุดของแต่ละแถวกว้างกว่าช่องอื่น 1 px เพื่อกินเศษที่หารสามไม่ลงตัว
  * (2500 / 3 = 833.33) ถ้าปล่อยไว้จะมีแถบ 1 px ตรงขอบที่กดแล้วไม่เกิดอะไร
+ *
+ * ทำไม "เหลือ" ยังเป็นคำสั่งในแชทไม่ใช่ลิงก์: มันคือคำถามหลักของทั้งโปรเจกต์
+ * ("วันนี้ใช้ได้อีกเท่าไหร่") ซึ่งต้องตอบได้ทันทีตรงหน้าเคาน์เตอร์
+ * ถ้าต้องรอ webview โหลดก่อน จะช้ากว่าการตัดสินใจของผู้ใช้
  */
 const LAST_COL_WIDTH = RICH_MENU_SIZE.width - COL * 2;
 
@@ -38,39 +42,44 @@ type MenuCell = {
   action: Record<string, unknown>;
 };
 
-function messageCell(col: number, row: number, label: string, text: string): MenuCell {
-  const isLast = col === 2;
+function bounds(col: number, row: number) {
   return {
-    bounds: {
-      x: col * COL,
-      y: row * ROW,
-      width: isLast ? LAST_COL_WIDTH : COL,
-      height: ROW,
-    },
-    // type 'message' = ส่งข้อความนี้แทนผู้ใช้ ซึ่งวิ่งเข้า textHandler ตามปกติ
-    // ทำให้เมนูใช้เส้นทางเดียวกับการพิมพ์เอง ไม่มีโค้ดสาขาพิเศษให้ดูแลเพิ่ม
-    action: { type: 'message', label, text },
+    x: col * COL,
+    y: row * ROW,
+    width: col === 2 ? LAST_COL_WIDTH : COL,
+    height: ROW,
   };
 }
 
+/** ช่องที่เปิดหน้าเว็บ — เปิดในเบราว์เซอร์ในแอป LINE ซึ่งใช้ session cookie เดิมได้ */
+function pageCell(col: number, row: number, label: string, baseUrl: string, path: string): MenuCell {
+  return { bounds: bounds(col, row), action: { type: 'uri', label, uri: `${baseUrl}/${path}` } };
+}
+
+/**
+ * ช่องที่ส่งข้อความคำสั่งแทนผู้ใช้ ซึ่งวิ่งเข้า textHandler ตามปกติ
+ * ทำให้เมนูใช้เส้นทางเดียวกับการพิมพ์เอง ไม่มีโค้ดสาขาพิเศษให้ดูแลเพิ่ม
+ */
+function messageCell(col: number, row: number, label: string, text: string): MenuCell {
+  return { bounds: bounds(col, row), action: { type: 'message', label, text } };
+}
+
 export function buildRichMenu(webUrl: string = env.appBaseUrl) {
+  const base = webUrl.replace(/\/$/, '');
   const areas: MenuCell[] = [
-    messageCell(0, 0, 'สรุป', 'สรุป'),
-    messageCell(1, 0, 'เหลือ', 'เหลือ'),
-    messageCell(2, 0, 'งบ', 'งบ'),
-    messageCell(0, 1, 'แผน', 'แผน'),
-    {
-      bounds: { x: COL, y: ROW, width: COL, height: ROW },
-      action: { type: 'uri', label: 'เปิดเว็บ', uri: webUrl },
-    },
-    messageCell(2, 1, 'ช่วยเหลือ', 'ช่วยเหลือ'),
+    pageCell(0, 0, 'ภาพรวม', base, 'index.html'),
+    pageCell(1, 0, 'รายการ', base, 'transactions.html'),
+    pageCell(2, 0, 'หมวดหมู่', base, 'categories.html'),
+    pageCell(0, 1, 'วิเคราะห์', base, 'analyze.html'),
+    pageCell(1, 1, 'ตั้งค่า', base, 'settings.html'),
+    messageCell(2, 1, 'เหลือ', 'เหลือ'),
   ];
 
   return {
     size: { ...RICH_MENU_SIZE },
     selected: true,
     name: 'JOD tang · เมนูหลัก',
-    // ข้อความที่ขึ้นบนปุ่มเปิดเมนู ผู้ใช้เห็นตอนเมนูถูกพับอยู่
+    // ข้อความบนปุ่มเปิดเมนู ผู้ใช้เห็นตอนเมนูถูกพับอยู่
     chatBarText: 'เมนู',
     areas,
   };
