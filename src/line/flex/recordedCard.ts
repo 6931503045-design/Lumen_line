@@ -272,7 +272,7 @@ export function buildRecordedCard(input: RecordedCardInput) {
     altText:
       count === 1 && first
         ? `บันทึก ${first.title ?? input.groups[0]?.categoryName ?? 'รายการ'} ${first.formattedAmount} แล้ว`
-        : `${headline}แล้ว`,
+        : headline,
     contents: {
       type: 'bubble',
       size: 'mega',

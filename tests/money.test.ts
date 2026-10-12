@@ -18,6 +18,7 @@ import {
   roundHalfUpToSatang,
   splitEvenly,
   formatBahtNoSatang,
+  formatBahtShort,
   toSatang,
 } from '../src/utils/money';
 import { MAX_AMOUNT_SATANG } from '../src/config/constants';
@@ -204,5 +205,18 @@ describe('formatBahtNoSatang — สำหรับพื้นที่แค�
 
   it('ยังบังคับว่าอินพุตต้องเป็นจำนวนเต็มสตางค์ (G3)', () => {
     expect(() => formatBahtNoSatang(10.5)).toThrow();
+  });
+});
+
+describe('formatBahtShort — ตัด .00 เฉพาะตอนไม่มีเศษ', () => {
+  it.each([
+    [8000, '฿80'],
+    [8050, '฿80.50'],
+    [8001, '฿80.01'],
+    [0, '฿0'],
+    [12850050, '฿128,500.50'],
+    [-250000, '-฿2,500'],
+  ])('%d สตางค์ -> %s', (satang, expected) => {
+    expect(formatBahtShort(satang)).toBe(expected);
   });
 });

@@ -120,6 +120,18 @@ export function formatBaht(satang: number): string {
 }
 
 /**
+ * เหมือน formatBaht แต่ตัด ".00" ทิ้งเมื่อไม่มีเศษสตางค์ เช่น 8000 -> "฿80" · 8050 -> "฿80.50"
+ *
+ * ใช้กับรายการบนการ์ดที่คนอ่านไล่หลายบรรทัด ".00" ต่อท้ายทุกบรรทัดเป็น noise
+ * ที่ทำให้สแกนยากขึ้นโดยไม่ได้ให้ข้อมูลอะไร แต่ยอดที่มีเศษจริงยังแสดงครบ
+ * ต่างจาก formatBahtNoSatang ที่ปัดทิ้งเสมอแม้มีเศษ — อันนั้นใช้เฉพาะที่พื้นที่แคบจริงๆ
+ */
+export function formatBahtShort(satang: number): string {
+  assertIntegerSatang(satang, 'formatBahtShort');
+  return satang % 100 === 0 ? formatBahtNoSatang(satang) : formatBaht(satang);
+}
+
+/**
  * เหมือน formatBaht แต่ตัดสตางค์ทิ้ง เช่น 12850050 -> "฿128,501"
  *
  * ⚠️ ใช้กับการ "แสดงผลในพื้นที่แคบ" เท่านั้น (เช่นแถบงบบนการ์ด Flex ที่ชื่อหมวด

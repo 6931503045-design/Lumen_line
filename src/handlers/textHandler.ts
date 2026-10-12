@@ -19,7 +19,7 @@ import { getUserIdByLineUserId } from '../db/queries/users';
 import { parseQuickExpenseText } from '../utils/regexParser';
 import { createTransaction } from '../services/transaction.service';
 import { formatBudgetAlert } from '../services/budget.service';
-import { formatBaht, formatBahtNoSatang } from '../utils/money';
+import { formatBaht } from '../utils/money';
 import { replyFlex, replyText, replyTextWithQuickReply } from '../line/reply';
 import {
   matchCommand,
@@ -29,11 +29,10 @@ import {
   runSaveCommand,
   runUndoLatest,
 } from '../services/command.service';
-import { buildRecordedCard } from '../line/flex/recordedCard';
+import { buildRecordedCardFor } from '../line/recordedView';
 import { buildPendingCard } from '../line/flex/pendingCard';
 import { buildAiUnavailableCard, buildSaveFailedCard } from '../line/flex/errorCard';
 import { interpretUserMessage } from '../services/ai/router';
-import { formatThaiDateTime } from '../utils/thaiDate';
 import { env } from '../config/env';
 
 type LineTextMessageEvent = {
@@ -90,35 +89,21 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
       parsedBy: 'regex',
     });
 
-    const card = buildRecordedCard({
-      groups: [
+    const card = buildRecordedCardFor(
+      [
         {
-          type: tx.type === 'income' ? 'income' : 'expense',
+          transactionId: tx.id,
+          type: tx.type,
           categoryName: parsed.category,
-          items: [
-            {
-              transactionId: tx.id,
-              occurredLabel: formatThaiDateTime(new Date(tx.occurredAt)),
-              formattedAmount: formatBaht(tx.amountSatang),
-            },
-          ],
+          // ทางด่วน regex อ่านได้แค่หมวดกับยอด ไม่มีชื่อรายการแยก จึงไม่ส่ง title
+          // การ์ดจะเว้นชื่อไว้แทนที่จะเอาชื่อหมวดมาใส่ซ้ำสองที่ติดกัน
+          amountSatang: tx.amountSatang,
+          occurredAtIso: tx.occurredAt,
+          budgetStatus: tx.budgetStatus,
         },
       ],
-      // หมวดที่ยังไม่ได้ตั้งงบจะไม่มี budgetStatus ซึ่งปกติ — การ์ดจะไม่วาดส่วนแถบเลย
-      // ดีกว่าโชว์แถบเปล่าที่สื่อว่า "งบ 0 บาท"
-      budgets: tx.budgetStatus
-        ? [
-            {
-              categoryName: tx.budgetStatus.categoryName,
-              formattedSpent: formatBahtNoSatang(tx.budgetStatus.spentSatang),
-              formattedLimit: formatBahtNoSatang(tx.budgetStatus.limitSatang),
-              percentUsed: tx.budgetStatus.percentUsed,
-            },
-          ]
-        : [],
-      periodNote: 'รอบงบ: รายเดือน (เริ่มวันที่ 1)',
-      assetBaseUrl: env.appBaseUrl,
-    });
+      env.appBaseUrl
+    );
 
     // S5.8: รายการนี้ทำให้ข้ามเกณฑ์งบพอดี — แนบไปกับ reply เดียวกัน
     // reply มี quota แยกจาก push และไม่จำกัดจำนวน จึงเตือนตรงนี้ได้ฟรี
