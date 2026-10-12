@@ -33,6 +33,7 @@ import {
 } from './transaction.service';
 import { formatBaht } from '../utils/money';
 import { isoDateToBangkokNoon } from '../utils/thaiDateText';
+import type { SavedEntryView } from '../line/recordedView';
 
 // ────────────────────────────────────────────────────────────────────────────
 // รูปร่างของ payload แต่ละชนิด
@@ -163,7 +164,17 @@ export async function createPending(input: CreatePendingInput): Promise<CreatedP
 // ────────────────────────────────────────────────────────────────────────────
 
 export type ConfirmOutcome =
-  | { kind: 'done'; text: string; transactionId?: string }
+  | {
+      kind: 'done';
+      text: string;
+      transactionId?: string;
+      /**
+       * รายการที่เพิ่งเขียนลง DB จริง — ผู้เรียกฝั่งแชทเอาไปทำการ์ด "บันทึกแล้ว"
+       * ต้องเป็น array เพราะ create_transaction_batch บันทึกหลายแถวในครั้งเดียว
+       * ส่วน transactionId ด้านบนยังคงไว้ให้ flow เดิมที่ต้องการแค่ id เดียว (ปุ่มยกเลิก)
+       */
+      recorded?: SavedEntryView[];
+    }
   | { kind: 'already'; text: string }
   | { kind: 'failed'; text: string };
 
@@ -235,6 +246,7 @@ async function executePending(
       return {
         kind: 'done',
         transactionId: tx.id,
+        recorded: [viewOf(tx, entry)],
         text: `บันทึกแล้วครับ ✅ ${entry.item} ${formatBaht(entry.amountSatang)}`,
       };
     }
@@ -246,13 +258,15 @@ async function executePending(
       // (หาหมวด + เช็คงบ) ที่ทำรวมทีเดียวไม่ได้ ถ้าล้มกลางทาง รายการที่เขียนไปแล้ว
       // จะค้างอยู่ — จึงบอกผู้ใช้ตรง ๆ ว่าบันทึกได้กี่รายการ แล้วให้กดยืนยันซ้ำได้
       const saved: string[] = [];
+      const recorded: SavedEntryView[] = [];
       for (const entry of entries) {
         const tx = await saveEntry(userId, entry, row.source);
         saved.push(`${entry.item} ${formatBaht(entry.amountSatang)}`);
-        void tx;
+        recorded.push(viewOf(tx, entry));
       }
       return {
         kind: 'done',
+        recorded,
         text: [`บันทึก ${saved.length} รายการแล้วครับ ✅`, ...saved.map((line) => `• ${line}`)].join('\n'),
       };
     }
@@ -311,6 +325,26 @@ async function executePending(
  * ไม่งั้นสถิติแยกช่องทางจะผิด และคำสั่ง `ยกเลิก` ที่กรอง source='chat'
  * จะไปลบรายการที่มาจากสลิปได้ ซึ่งไม่ใช่สิ่งที่ผู้ใช้สั่ง
  */
+/**
+ * รายการที่เพิ่งเขียน -> รูปที่การ์ดใช้
+ * ชื่อหมวดเอาจาก payload ไม่ใช่จากผลลัพธ์ เพราะ createTransaction ไม่ได้คืนชื่อหมวดกลับมา
+ * (มันรับชื่อเข้าไปหาหรือสร้างให้ ชื่อที่ลงจริงจึงเท่ากับชื่อที่ส่งเข้าไป)
+ */
+function viewOf(
+  tx: Awaited<ReturnType<typeof saveEntry>>,
+  entry: EntryPayload
+): SavedEntryView {
+  return {
+    transactionId: tx.id,
+    type: tx.type,
+    categoryName: entry.categoryName ?? undefined,
+    title: entry.item,
+    amountSatang: tx.amountSatang,
+    occurredAtIso: tx.occurredAt,
+    budgetStatus: tx.budgetStatus,
+  };
+}
+
 async function saveEntry(userId: string, entry: EntryPayload, source: PendingActionSource) {
   return createTransaction({
     userId,

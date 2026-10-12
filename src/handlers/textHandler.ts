@@ -25,12 +25,15 @@ import {
   matchCommand,
   matchSaveCommand,
   runCommand,
+  runCommandCard,
   runSaveCommand,
   runUndoLatest,
 } from '../services/command.service';
-import { buildConfirmCard } from '../line/flex/confirmCard';
+import { buildRecordedCardFor } from '../line/recordedView';
+import { buildPendingCard } from '../line/flex/pendingCard';
+import { buildAiUnavailableCard, buildSaveFailedCard } from '../line/flex/errorCard';
 import { interpretUserMessage } from '../services/ai/router';
-import { AI_UNAVAILABLE_FALLBACK } from '../services/ai/prompt';
+import { env } from '../config/env';
 
 type LineTextMessageEvent = {
   replyToken?: string;
@@ -86,20 +89,29 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
       parsedBy: 'regex',
     });
 
-    const confirmCard = buildConfirmCard({
-      transactionId: tx.id,
-      type: tx.type === 'income' ? 'income' : 'expense',
-      categoryName: parsed.category,
-      formattedAmount: formatBaht(tx.amountSatang),
-    });
+    const card = buildRecordedCardFor(
+      [
+        {
+          transactionId: tx.id,
+          type: tx.type,
+          categoryName: parsed.category,
+          // ทางด่วน regex อ่านได้แค่หมวดกับยอด ไม่มีชื่อรายการแยก จึงไม่ส่ง title
+          // การ์ดจะเว้นชื่อไว้แทนที่จะเอาชื่อหมวดมาใส่ซ้ำสองที่ติดกัน
+          amountSatang: tx.amountSatang,
+          occurredAtIso: tx.occurredAt,
+          budgetStatus: tx.budgetStatus,
+        },
+      ],
+      env.appBaseUrl
+    );
 
     // S5.8: รายการนี้ทำให้ข้ามเกณฑ์งบพอดี — แนบไปกับ reply เดียวกัน
     // reply มี quota แยกจาก push และไม่จำกัดจำนวน จึงเตือนตรงนี้ได้ฟรี
     // ถ้าปล่อยไปเตือนทีหลังต้องใช้ push ซึ่งมีแค่ 280 ครั้งต่อเดือนทั้งระบบ
-    await replyFlex(replyToken, confirmCard, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
+    await replyFlex(replyToken, card, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
   } catch (err) {
     console.error('[textHandler] createTransaction error:', err);
-    await replyText(replyToken, 'บันทึกไม่สำเร็จ ลองพิมพ์ใหม่อีกครั้งนะครับ 🙏');
+    await replyFlex(replyToken, buildSaveFailedCard());
   }
 }
 /**
@@ -164,6 +176,15 @@ async function handleCommands(
   const command = matchCommand(trimmed);
   if (!command) return false;
 
+  // คำสั่งที่มีการ์ด (สรุป/แผน) ตอบเป็น Flex — ที่เหลือยังเป็นข้อความล้วน
+  // ถ้าการ์ดคืน null แปลว่ายังไม่มีข้อมูลพอ (เช่นยังไม่มีแผน) ให้ถอยไปใช้ข้อความเดิม
+  // ซึ่งเขียนกรณี "ยังไม่มี..." ไว้ครบแล้ว
+  const card = await runCommandCard(userId, command);
+  if (card) {
+    await replyFlex(replyToken, card);
+    return true;
+  }
+
   await replyText(replyToken, await runCommand(userId, command));
   return true;
 }
@@ -186,28 +207,13 @@ async function handleWithAi(replyToken: string, userId: string, text: string): P
   }
 
   if (reply.kind === 'pending') {
-    await replyTextWithQuickReply(replyToken, reply.text, [
-      {
-        type: 'action',
-        action: {
-          type: 'postback',
-          label: 'ยืนยัน',
-          data: `action=ai_confirm&id=${reply.pendingId}`,
-          displayText: 'ยืนยัน',
-        },
-      },
-      {
-        type: 'action',
-        action: {
-          type: 'postback',
-          label: 'ไม่ใช่',
-          data: `action=ai_cancel&id=${reply.pendingId}`,
-          displayText: 'ไม่ใช่',
-        },
-      },
-    ]);
+    // ⚖️ G2: ปุ่มในการ์ดคือจุดที่ "คน" ยืนยัน ก่อนหน้านี้ยังไม่มีอะไรถูกเขียนลงฐาน
+    await replyFlex(
+      replyToken,
+      buildPendingCard({ pendingId: reply.pendingId, summary: reply.text })
+    );
     return;
   }
 
-  await replyText(replyToken, AI_UNAVAILABLE_FALLBACK);
+  await replyFlex(replyToken, buildAiUnavailableCard());
 }

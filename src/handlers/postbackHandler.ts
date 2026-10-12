@@ -16,7 +16,9 @@ import {
   softDeleteTransaction,
   restoreTransaction,
 } from '../db/queries/transactions';
-import { replyText, replyTextWithQuickReply } from '../line/reply';
+import { replyFlex, replyText, replyTextWithQuickReply } from '../line/reply';
+import { buildRecordedCardFor } from '../line/recordedView';
+import { env } from '../config/env';
 import { cancelPending, confirmPending } from '../services/pending.service';
 
 type LinePostbackEvent = {
@@ -190,6 +192,14 @@ async function handleAiConfirm(
 
     // บันทึกสำเร็จแล้วให้ปุ่ม "ยกเลิก" ติดไปด้วย เพื่อให้ผู้ใช้ถอนได้ทันที
     // ถ้าเพิ่งเห็นว่า AI อ่านผิดตอนเห็นผลลัพธ์จริง (ปุ่มนี้ใช้ flow undo เดิม)
+    // บันทึกสำเร็จ -> ตอบด้วยการ์ดเดียวกับทางด่วน ผู้ใช้จะได้เห็นหน้าตาแบบเดิม
+    // ไม่ว่าจะจดด้วยการพิมพ์สั้นๆ หรือให้ AI ตีความ และได้แถบงบเหมือนกัน
+    // ปุ่มยกเลิก/แก้ไขอยู่ในการ์ดรายแถวอยู่แล้ว จึงไม่ต้องแนบ quick reply ซ้ำ
+    if (outcome.kind === 'done' && outcome.recorded && outcome.recorded.length > 0) {
+      await replyFlex(replyToken, buildRecordedCardFor(outcome.recorded, env.appBaseUrl));
+      return;
+    }
+
     if (outcome.kind === 'done' && outcome.transactionId) {
       await replyTextWithQuickReply(replyToken, outcome.text, [
         {
