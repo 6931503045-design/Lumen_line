@@ -43,6 +43,56 @@ const COLOR_BAR = '#1a3a6b';
 
 const MAX_TOP_CATEGORIES = 3;
 
+// สเกลสีของแถบ: เขียว (0%) → เหลืองอำพัน (50%) → แดง (100%)
+// ไล่ผ่านเหลืองแทนการไล่เขียว→แดงตรงๆ เพราะจุดกึ่งกลางแบบตรงจะเป็นสีน้ำตาลขุ่น
+const GRADIENT_START = '#1DB446';
+const GRADIENT_MID = '#F5A524';
+const GRADIENT_END = '#E74C3C';
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function mixHex(a: string, b: string, t: number): string {
+  const ca = hexToRgb(a);
+  const cb = hexToRgb(b);
+  return (
+    '#' +
+    ca
+      .map((v, i) => Math.round(v + (cb[i] - v) * t).toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
+  );
+}
+
+/** สีบนสเกล ณ ตำแหน่ง p (0–100) ของรางทั้งเส้น */
+function scaleColor(p: number): string {
+  return p <= 50
+    ? mixHex(GRADIENT_START, GRADIENT_MID, p / 50)
+    : mixHex(GRADIENT_MID, GRADIENT_END, (p - 50) / 50);
+}
+
+/**
+ * ไล่สีของแถบยาว barWidth% โดยยึดสเกลของ "รางทั้งเส้น" ไม่ใช่ของตัวแถบ
+ * แถบสั้นจึงเขียวเกือบล้วน แถบยาวจึงค่อยแดงที่ปลาย — สีบอกสัดส่วนได้ตรงกับความยาว
+ * (เป็นการคำนวณสีของ UI ล้วนๆ ไม่ใช่ยอดเงิน — ไม่ขัด G1)
+ */
+function barGradient(barWidth: number) {
+  const gradient: Record<string, string> = {
+    type: 'linearGradient',
+    angle: '90deg',
+    startColor: GRADIENT_START,
+    endColor: scaleColor(barWidth),
+  };
+  // เกิน 50% แถบผ่านจุดเหลืองของราง — ปักสีกลางไว้ตรงตำแหน่งนั้นของตัวแถบ
+  if (barWidth > 50) {
+    gradient.centerColor = GRADIENT_MID;
+    gradient.centerPosition = `${Math.round((50 / barWidth) * 100)}%`;
+  }
+  return gradient;
+}
+
 /** แถวตัวเลข 1 บรรทัด: ป้ายซ้าย ยอดขวา */
 function amountRow(label: string, value: string, color?: string) {
   return {
@@ -103,13 +153,16 @@ function categoryRow(item: SummaryTopCategory) {
           {
             type: 'box',
             layout: 'vertical',
-            contents: [],
+            // 🔴 ต้องมี filler ข้างใน ห้ามปล่อย contents: [] — แอป LINE บนมือถือ
+            // ไม่วาดกล่องที่ไม่มีลูกเลย (Simulator บนเดสก์ท็อปยังวาดให้ จึงหลุดรอดตอนทดสอบ)
+            contents: [{ type: 'filler' }],
             // 🔴 ต้องกำหนด height ซ้ำที่กล่องใน ไม่ใช่พึ่งความสูงของกล่องนอก
-            // กล่องที่ contents ว่างและไม่มี height ของตัวเองจะสูง 0 แล้วแถบหายทั้งแถบ
-            // บนแอป LINE จริง (Flex Simulator บนเดสก์ท็อปยังวาดให้เห็น จึงหลุดรอดตอนทดสอบ)
+            // ไม่งั้นกล่องในสูง 0 แล้วแถบหายทั้งแถบบนแอป LINE จริง
             height: '6px',
             width: `${barWidth}%`,
-            backgroundColor: COLOR_BAR,
+            // backgroundColor ไว้เป็นสีสำรองให้ไคลเอนต์รุ่นเก่าที่ไม่รู้จัก gradient
+            backgroundColor: scaleColor(barWidth),
+            background: barGradient(barWidth),
             cornerRadius: barRadius,
           },
         ],
