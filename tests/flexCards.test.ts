@@ -18,6 +18,7 @@ import {
 } from '../src/line/flex/errorCard';
 import { buildPendingCard } from '../src/line/flex/pendingCard';
 import { buildRecordedCard } from '../src/line/flex/recordedCard';
+import { buildBudgetCard } from '../src/line/flex/budgetCard';
 import { buildRichMenu, RICH_MENU_SIZE } from '../src/line/richmenu';
 
 /** เดินทั้ง object หาค่าทุกตัวของ key ที่สนใจ — ใช้ตรวจโครง Flex ที่ซ้อนกันหลายชั้น */
@@ -377,6 +378,79 @@ describe('recordedCard', () => {
   it('assetBaseUrl ที่มี / ต่อท้าย ต้องไม่ทำให้ URL มี // ซ้อน', () => {
     const card = buildRecordedCard({ ...input, assetBaseUrl: 'https://example.test/' });
     const urls = collect(card, 'url') as string[];
+    expect(urls.every((u) => !u.replace('https://', '').includes('//'))).toBe(true);
+  });
+});
+
+describe('budgetCard', () => {
+  const base = 'https://example.test';
+  const row = (name: string, pct: number, level: 'ok' | 'warning' | 'over') => ({
+    categoryName: name,
+    formattedSpent: '฿3,280',
+    formattedLimit: '฿4,000',
+    percentUsed: pct,
+    level,
+  });
+  const input = {
+    monthLabel: 'ต.ค. 2569',
+    rows: [row('อาหาร', 82, 'warning' as const)],
+    formattedTotalSpent: '฿5,600',
+    formattedTotalLimit: '฿9,000',
+    totalPercentUsed: 62,
+    assetBaseUrl: base,
+  };
+
+  it('🔴 กล่องในของทุกแถบมี height เท่ากล่องนอก', () => {
+    // 1 แถบรวม + 1 แถบรายหมวด = ราง 2 + แถบใน 2 = 4
+    const heights = collect(buildBudgetCard(input), 'height') as string[];
+    expect(heights.filter((h) => h === '10px')).toHaveLength(4);
+  });
+
+  it('altText บอกสถานะได้โดยไม่ต้องเปิดการ์ด', () => {
+    const over = buildBudgetCard({ ...input, rows: [row('อาหาร', 120, 'over')] });
+    expect(over.altText).toContain('เกินงบแล้ว 1 หมวด');
+    expect(over.altText).toContain('฿5,600');
+  });
+
+  it('พาดหัวเปลี่ยนตามสถานะที่แย่ที่สุด', () => {
+    const ok = buildBudgetCard({ ...input, rows: [row('อาหาร', 20, 'ok')] });
+    expect(ok.altText).toContain('งบยังอยู่ในเกณฑ์');
+    const warn = buildBudgetCard(input);
+    expect(warn.altText).toContain('ใกล้เต็ม 1 หมวด');
+    // เกินงบสำคัญกว่าใกล้เต็ม ต้องรายงานเกินก่อนแม้มีทั้งสองแบบ
+    const both = buildBudgetCard({
+      ...input,
+      rows: [row('อาหาร', 85, 'warning'), row('เดินทาง', 130, 'over')],
+    });
+    expect(both.altText).toContain('เกินงบแล้ว 1 หมวด');
+  });
+
+  it('แถบเปลี่ยนสีตามระดับของหมวดนั้น', () => {
+    expect(JSON.stringify(buildBudgetCard({ ...input, rows: [row('ก', 20, 'ok')] }))).toContain('#8fbf18');
+    expect(JSON.stringify(buildBudgetCard({ ...input, rows: [row('ก', 85, 'warning')] }))).toContain('#f5a524');
+    expect(JSON.stringify(buildBudgetCard({ ...input, rows: [row('ก', 130, 'over')] }))).toContain('#e5484d');
+  });
+
+  it('หมวดเยอะเกิน 8 ตัดแล้วบอกว่าเหลืออีกกี่หมวด ไม่ใช่ตัดเงียบ', () => {
+    const many = Array.from({ length: 12 }, (_, i) => row(`หมวด ${i}`, 10, 'ok' as const));
+    const texts = collect(buildBudgetCard({ ...input, rows: many }), 'text') as string[];
+    expect(texts).toContain('หมวด 7');
+    expect(texts).not.toContain('หมวด 8');
+    expect(texts.some((t) => t.includes('และอีก 4 หมวด'))).toBe(true);
+  });
+
+  it('ชื่อหมวดยาวต้องตกบรรทัด ไม่โดนตัด', () => {
+    const card = buildBudgetCard({
+      ...input,
+      rows: [row('การศึกษาและพัฒนาตนเองระยะยาว', 40, 'ok')],
+    });
+    const json = JSON.parse(JSON.stringify(card));
+    const nameCell = json.contents.body.contents[2].contents[0].contents[0];
+    expect(nameCell.wrap).toBe(true);
+  });
+
+  it('assetBaseUrl ที่มี / ต่อท้าย ต้องไม่ทำให้ URL มี // ซ้อน', () => {
+    const urls = collect(buildBudgetCard({ ...input, assetBaseUrl: `${base}/` }), 'url') as string[];
     expect(urls.every((u) => !u.replace('https://', '').includes('//'))).toBe(true);
   });
 });

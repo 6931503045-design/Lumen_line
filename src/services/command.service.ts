@@ -13,11 +13,13 @@
 // จะถูกมองว่าเป็นคำสั่ง `สรุป` แทนที่จะเป็นการบันทึกเงิน
 
 import { PRIVACY_NOTICE } from '../config/privacy';
-import { formatBaht, toSatang } from '../utils/money';
+import { formatBaht, toSatang, formatBahtNoSatang } from '../utils/money';
 import { getTodayIso, formatThaiMonthLabel } from '../utils/thaiDate';
 import { buildSummaryCard } from '../line/flex/summaryCard';
 import { buildPlanCarousel, type PlanCardInput } from '../line/flex/planCard';
+import { buildBudgetCard, type BudgetCardRow } from '../line/flex/budgetCard';
 import { AI_DISCLAIMER } from '../config/constants';
+import { env } from '../config/env';
 import { getSafeToSpend, getUserSummary } from './summary.service';
 import { getBudgetOverview } from './budget.service';
 import { listPlansWithProgress, transferToPlan } from './plan.service';
@@ -228,6 +230,37 @@ async function buildPlansFlex(userId: string) {
   return buildPlanCarousel(cards);
 }
 
+async function buildBudgetFlex(userId: string) {
+  const overview = await getBudgetOverview(userId);
+  if (overview.items.length === 0) return null;
+
+  // เรียงให้หมวดที่เกินงบขึ้นก่อน แล้วค่อยหมวดที่ใกล้เต็ม — เป็นเหตุผลที่ผู้ใช้พิมพ์ "งบ" มาดู
+  // ถ้าเรียงตามลำดับที่ตั้งงบไว้ หมวดที่เกินอาจตกไปอยู่ท้ายการ์ดจนต้องเลื่อนหา
+  const order = { over: 0, warning: 1, ok: 2 } as const;
+  const rows: BudgetCardRow[] = [...overview.items]
+    .sort((a, b) => order[a.level] - order[b.level] || b.percentUsed - a.percentUsed)
+    .map((item) => ({
+      categoryName: item.categoryName,
+      formattedSpent: formatBahtNoSatang(item.spentSatang),
+      formattedLimit: formatBahtNoSatang(item.limitSatang),
+      percentUsed: item.percentUsed,
+      level: item.level,
+    }));
+
+  return buildBudgetCard({
+    monthLabel: thaiMonthYear(overview.month),
+    rows,
+    formattedTotalSpent: formatBahtNoSatang(overview.totalSpentSatang),
+    formattedTotalLimit: formatBahtNoSatang(overview.totalLimitSatang),
+    // สัดส่วนรวม — คิดจากยอดที่ service ส่งมา ไม่ได้ไปรวมยอดเอง (G1)
+    totalPercentUsed:
+      overview.totalLimitSatang > 0
+        ? Math.round((overview.totalSpentSatang / overview.totalLimitSatang) * 100)
+        : 0,
+    assetBaseUrl: env.appBaseUrl,
+  });
+}
+
 /**
  * การ์ด Flex ของคำสั่ง — คืน null ถ้าคำสั่งนั้นยังไม่มีการ์ด หรือไม่มีข้อมูลพอจะทำการ์ด
  * ผู้เรียกต้องถอยไปใช้ runCommand() ต่อเมื่อได้ null
@@ -238,6 +271,8 @@ export async function runCommandCard(userId: string, command: CommandName) {
       return buildSummaryFlex(userId);
     case 'plans':
       return buildPlansFlex(userId);
+    case 'budget':
+      return buildBudgetFlex(userId);
     default:
       return null;
   }
