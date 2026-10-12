@@ -74,7 +74,14 @@ export async function handlePostback(event: LinePostbackEvent): Promise<void> {
       await replyText(replyToken, 'ฟีเจอร์แก้หมวดยังไม่เปิดใช้งานตอนนี้ครับ 🙏 (กำลังทำต่อ)');
       break;
     default:
+      // 🔴 เคยแค่ log แล้วจบ ผู้ใช้กดปุ่มแล้วไม่มีอะไรเกิดขึ้นเลย ไม่มีแม้แต่ข้อความบอก
+      // ซึ่งแยกไม่ออกจาก "แอปค้าง" และทำให้บั๊กแบบนี้มองไม่เห็นจากฝั่งผู้ใช้
+      // (เจอจริงกับปุ่ม ✏️ ที่ยิง action=edit มาโดยไม่มี case รองรับ)
       console.error('[postbackHandler] ไม่รู้จัก action:', action);
+      await replyText(
+        replyToken,
+        'ปุ่มนี้ยังใช้ไม่ได้ครับ 🙏 อาจเป็นการ์ดเก่าในแชท ลองพิมพ์ "ช่วยเหลือ" ดูคำสั่งที่ใช้ได้'
+      );
       break;
   }
 }

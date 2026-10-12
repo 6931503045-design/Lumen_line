@@ -359,7 +359,13 @@
   function renderCurrentPage() {
     const page = document.body.dataset.page;
     if (page === 'dashboard') renderDashboard();
-    if (page === 'transactions') renderTransactionsPage();
+    if (page === 'transactions') {
+      renderTransactionsPage();
+      // ลิงก์ ?tx= จากปุ่ม ✏️ บนการ์ด LINE — ต้องเรียกหลังข้อมูลจริงมาถึง
+      // เพราะตอน app.js เรียกครั้งแรกยังเป็นข้อมูลตัวอย่าง หา id จริงไม่เจอ
+      if (typeof applyTransactionDeepLinkEdit === 'function') applyTransactionDeepLinkEdit();
+      if (typeof reportDeepLinkEditMissing === 'function') reportDeepLinkEditMissing();
+    }
     if (page === 'categories') renderCategoriesPage();
     if (page === 'analyze') renderAnalyzePage();
     if (page === 'settings') renderSpendingLimitSettings();

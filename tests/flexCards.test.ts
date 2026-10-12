@@ -8,6 +8,8 @@
 //   2. ความกว้างแถบต้องอยู่ใน 0–100% ไม่งั้น LINE ปฏิเสธทั้งข้อความ ไม่ใช่แค่แถบเพี้ยน
 //   3. พิกัด rich menu ต้องปูเต็ม 2500 px พอดี ไม่เหลือแถบที่กดแล้วไม่เกิดอะไร
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildSummaryCard } from '../src/line/flex/summaryCard';
 import { buildPlanCard, buildPlanCarousel } from '../src/line/flex/planCard';
@@ -334,9 +336,8 @@ describe('recordedCard', () => {
     expect(icons[1].url).toBe(`${base}/img/icon/trash-2.png`);
   });
 
-  it('ปุ่มไอคอนยิง postback ที่ postbackHandler รับอยู่', () => {
+  it('ปุ่มลบยิง postback ที่ postbackHandler รับอยู่', () => {
     const data = collect(buildRecordedCard(input), 'data') as string[];
-    expect(data).toContain('action=edit&id=t1');
     expect(data).toContain('action=undo&id=t1');
   });
 
@@ -452,5 +453,68 @@ describe('budgetCard', () => {
   it('assetBaseUrl ที่มี / ต่อท้าย ต้องไม่ทำให้ URL มี // ซ้อน', () => {
     const urls = collect(buildBudgetCard({ ...input, assetBaseUrl: `${base}/` }), 'url') as string[];
     expect(urls.every((u) => !u.replace('https://', '').includes('//'))).toBe(true);
+  });
+});
+
+describe('ปุ่มบนการ์ดต้องกดแล้วเกิดอะไรขึ้นจริง', () => {
+  // 🔴 บั๊กที่เคยเกิด: ปุ่ม ✏️ ยิง action=edit ออกไปแต่ postbackHandler ไม่มี case นี้
+  // ตกไปที่ default ซึ่งตอนนั้นแค่ log ลง console ผู้ใช้กดแล้วเงียบสนิท
+  // เทสต์นี้อ่าน case จาก postbackHandler จริง แล้วเทียบกับทุก action ที่การ์ดยิงออก
+  const handlerSource = readFileSync(
+    resolve(__dirname, '../src/handlers/postbackHandler.ts'),
+    'utf8'
+  );
+  const handled = new Set(
+    [...handlerSource.matchAll(/case '([a-z_]+)':/g)].map((m) => m[1] as string)
+  );
+
+  /** ทุก action ที่ฝังอยู่ในการ์ด ไม่ว่าจะซ้อนลึกแค่ไหน */
+  function postbackActions(card: unknown): string[] {
+    return (collect(card, 'data') as string[])
+      .filter((d) => typeof d === 'string' && d.startsWith('action='))
+      .map((d) => d.slice('action='.length).split('&')[0] as string);
+  }
+
+  const cards: Record<string, unknown> = {
+    recordedCard: buildRecordedCard({
+      groups: [{ type: 'expense', categoryName: 'อาหาร', items: [
+        { transactionId: 't1', occurredLabel: 'x', title: 'กาแฟ', formattedAmount: '฿80' }]}],
+      budgets: [], periodNote: '', assetBaseUrl: 'https://example.test',
+    }),
+    pendingCard: buildPendingCard({ pendingId: 'p1', summary: 'ทดสอบ' }),
+    planCard: buildPlanCard(planInput),
+    summaryCard: buildSummaryCard(summaryInput),
+    errorCard: buildUnreadableCard(),
+    budgetCard: buildBudgetCard({
+      monthLabel: 'ต.ค. 2569',
+      rows: [{ categoryName: 'อาหาร', formattedSpent: '฿1', formattedLimit: '฿2',
+               percentUsed: 50, level: 'ok' }],
+      formattedTotalSpent: '฿1', formattedTotalLimit: '฿2', totalPercentUsed: 50,
+      assetBaseUrl: 'https://example.test',
+    }),
+  };
+
+  for (const [name, card] of Object.entries(cards)) {
+    it(`${name}: ทุก postback มี case รองรับใน postbackHandler`, () => {
+      const unhandled = postbackActions(card).filter((a) => !handled.has(a));
+      expect(unhandled).toEqual([]);
+    });
+  }
+
+  it('ปุ่มแก้ไขเปิดหน้าเว็บไปที่รายการนั้นโดยตรง', () => {
+    const card = cards.recordedCard;
+    const uris = (collect(card, 'uri') as string[]).filter(Boolean);
+    expect(uris).toContain('https://example.test/transactions.html?tx=t1');
+  });
+
+  it('ทุกปุ่มที่กดได้ต้องมี action จริง ไม่ใช่รูปเปล่า', () => {
+    for (const [name, card] of Object.entries(cards)) {
+      for (const action of collect(card, 'action') as Record<string, unknown>[]) {
+        expect(action.type, `${name} มี action ที่ไม่มี type`).toBeTruthy();
+        if (action.type === 'postback') expect(action.data, name).toBeTruthy();
+        if (action.type === 'uri') expect(action.uri, name).toBeTruthy();
+        if (action.type === 'message') expect(action.text, name).toBeTruthy();
+      }
+    }
   });
 });
