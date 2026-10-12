@@ -8,6 +8,8 @@
 //   2. ความกว้างแถบต้องอยู่ใน 0–100% ไม่งั้น LINE ปฏิเสธทั้งข้อความ ไม่ใช่แค่แถบเพี้ยน
 //   3. พิกัด rich menu ต้องปูเต็ม 2500 px พอดี ไม่เหลือแถบที่กดแล้วไม่เกิดอะไร
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildSummaryCard } from '../src/line/flex/summaryCard';
 import { buildPlanCard, buildPlanCarousel } from '../src/line/flex/planCard';
@@ -18,6 +20,7 @@ import {
 } from '../src/line/flex/errorCard';
 import { buildPendingCard } from '../src/line/flex/pendingCard';
 import { buildRecordedCard } from '../src/line/flex/recordedCard';
+import { buildBudgetCard } from '../src/line/flex/budgetCard';
 import { buildRichMenu, RICH_MENU_SIZE } from '../src/line/richmenu';
 
 /** เดินทั้ง object หาค่าทุกตัวของ key ที่สนใจ — ใช้ตรวจโครง Flex ที่ซ้อนกันหลายชั้น */
@@ -333,9 +336,8 @@ describe('recordedCard', () => {
     expect(icons[1].url).toBe(`${base}/img/icon/trash-2.png`);
   });
 
-  it('ปุ่มไอคอนยิง postback ที่ postbackHandler รับอยู่', () => {
+  it('ปุ่มลบยิง postback ที่ postbackHandler รับอยู่', () => {
     const data = collect(buildRecordedCard(input), 'data') as string[];
-    expect(data).toContain('action=edit&id=t1');
     expect(data).toContain('action=undo&id=t1');
   });
 
@@ -378,5 +380,141 @@ describe('recordedCard', () => {
     const card = buildRecordedCard({ ...input, assetBaseUrl: 'https://example.test/' });
     const urls = collect(card, 'url') as string[];
     expect(urls.every((u) => !u.replace('https://', '').includes('//'))).toBe(true);
+  });
+});
+
+describe('budgetCard', () => {
+  const base = 'https://example.test';
+  const row = (name: string, pct: number, level: 'ok' | 'warning' | 'over') => ({
+    categoryName: name,
+    formattedSpent: '฿3,280',
+    formattedLimit: '฿4,000',
+    percentUsed: pct,
+    level,
+  });
+  const input = {
+    monthLabel: 'ต.ค. 2569',
+    rows: [row('อาหาร', 82, 'warning' as const)],
+    formattedTotalSpent: '฿5,600',
+    formattedTotalLimit: '฿9,000',
+    totalPercentUsed: 62,
+    assetBaseUrl: base,
+  };
+
+  it('🔴 กล่องในของทุกแถบมี height เท่ากล่องนอก', () => {
+    // 1 แถบรวม + 1 แถบรายหมวด = ราง 2 + แถบใน 2 = 4
+    const heights = collect(buildBudgetCard(input), 'height') as string[];
+    expect(heights.filter((h) => h === '10px')).toHaveLength(4);
+  });
+
+  it('altText บอกสถานะได้โดยไม่ต้องเปิดการ์ด', () => {
+    const over = buildBudgetCard({ ...input, rows: [row('อาหาร', 120, 'over')] });
+    expect(over.altText).toContain('เกินงบแล้ว 1 หมวด');
+    expect(over.altText).toContain('฿5,600');
+  });
+
+  it('พาดหัวเปลี่ยนตามสถานะที่แย่ที่สุด', () => {
+    const ok = buildBudgetCard({ ...input, rows: [row('อาหาร', 20, 'ok')] });
+    expect(ok.altText).toContain('งบยังอยู่ในเกณฑ์');
+    const warn = buildBudgetCard(input);
+    expect(warn.altText).toContain('ใกล้เต็ม 1 หมวด');
+    // เกินงบสำคัญกว่าใกล้เต็ม ต้องรายงานเกินก่อนแม้มีทั้งสองแบบ
+    const both = buildBudgetCard({
+      ...input,
+      rows: [row('อาหาร', 85, 'warning'), row('เดินทาง', 130, 'over')],
+    });
+    expect(both.altText).toContain('เกินงบแล้ว 1 หมวด');
+  });
+
+  it('แถบเปลี่ยนสีตามระดับของหมวดนั้น', () => {
+    expect(JSON.stringify(buildBudgetCard({ ...input, rows: [row('ก', 20, 'ok')] }))).toContain('#8fbf18');
+    expect(JSON.stringify(buildBudgetCard({ ...input, rows: [row('ก', 85, 'warning')] }))).toContain('#f5a524');
+    expect(JSON.stringify(buildBudgetCard({ ...input, rows: [row('ก', 130, 'over')] }))).toContain('#e5484d');
+  });
+
+  it('หมวดเยอะเกิน 8 ตัดแล้วบอกว่าเหลืออีกกี่หมวด ไม่ใช่ตัดเงียบ', () => {
+    const many = Array.from({ length: 12 }, (_, i) => row(`หมวด ${i}`, 10, 'ok' as const));
+    const texts = collect(buildBudgetCard({ ...input, rows: many }), 'text') as string[];
+    expect(texts).toContain('หมวด 7');
+    expect(texts).not.toContain('หมวด 8');
+    expect(texts.some((t) => t.includes('และอีก 4 หมวด'))).toBe(true);
+  });
+
+  it('ชื่อหมวดยาวต้องตกบรรทัด ไม่โดนตัด', () => {
+    const card = buildBudgetCard({
+      ...input,
+      rows: [row('การศึกษาและพัฒนาตนเองระยะยาว', 40, 'ok')],
+    });
+    const json = JSON.parse(JSON.stringify(card));
+    const nameCell = json.contents.body.contents[2].contents[0].contents[0];
+    expect(nameCell.wrap).toBe(true);
+  });
+
+  it('assetBaseUrl ที่มี / ต่อท้าย ต้องไม่ทำให้ URL มี // ซ้อน', () => {
+    const urls = collect(buildBudgetCard({ ...input, assetBaseUrl: `${base}/` }), 'url') as string[];
+    expect(urls.every((u) => !u.replace('https://', '').includes('//'))).toBe(true);
+  });
+});
+
+describe('ปุ่มบนการ์ดต้องกดแล้วเกิดอะไรขึ้นจริง', () => {
+  // 🔴 บั๊กที่เคยเกิด: ปุ่ม ✏️ ยิง action=edit ออกไปแต่ postbackHandler ไม่มี case นี้
+  // ตกไปที่ default ซึ่งตอนนั้นแค่ log ลง console ผู้ใช้กดแล้วเงียบสนิท
+  // เทสต์นี้อ่าน case จาก postbackHandler จริง แล้วเทียบกับทุก action ที่การ์ดยิงออก
+  const handlerSource = readFileSync(
+    resolve(__dirname, '../src/handlers/postbackHandler.ts'),
+    'utf8'
+  );
+  const handled = new Set(
+    [...handlerSource.matchAll(/case '([a-z_]+)':/g)].map((m) => m[1] as string)
+  );
+
+  /** ทุก action ที่ฝังอยู่ในการ์ด ไม่ว่าจะซ้อนลึกแค่ไหน */
+  function postbackActions(card: unknown): string[] {
+    return (collect(card, 'data') as string[])
+      .filter((d) => typeof d === 'string' && d.startsWith('action='))
+      .map((d) => d.slice('action='.length).split('&')[0] as string);
+  }
+
+  const cards: Record<string, unknown> = {
+    recordedCard: buildRecordedCard({
+      groups: [{ type: 'expense', categoryName: 'อาหาร', items: [
+        { transactionId: 't1', occurredLabel: 'x', title: 'กาแฟ', formattedAmount: '฿80' }]}],
+      budgets: [], periodNote: '', assetBaseUrl: 'https://example.test',
+    }),
+    pendingCard: buildPendingCard({ pendingId: 'p1', summary: 'ทดสอบ' }),
+    planCard: buildPlanCard(planInput),
+    summaryCard: buildSummaryCard(summaryInput),
+    errorCard: buildUnreadableCard(),
+    budgetCard: buildBudgetCard({
+      monthLabel: 'ต.ค. 2569',
+      rows: [{ categoryName: 'อาหาร', formattedSpent: '฿1', formattedLimit: '฿2',
+               percentUsed: 50, level: 'ok' }],
+      formattedTotalSpent: '฿1', formattedTotalLimit: '฿2', totalPercentUsed: 50,
+      assetBaseUrl: 'https://example.test',
+    }),
+  };
+
+  for (const [name, card] of Object.entries(cards)) {
+    it(`${name}: ทุก postback มี case รองรับใน postbackHandler`, () => {
+      const unhandled = postbackActions(card).filter((a) => !handled.has(a));
+      expect(unhandled).toEqual([]);
+    });
+  }
+
+  it('ปุ่มแก้ไขเปิดหน้าเว็บไปที่รายการนั้นโดยตรง', () => {
+    const card = cards.recordedCard;
+    const uris = (collect(card, 'uri') as string[]).filter(Boolean);
+    expect(uris).toContain('https://example.test/transactions.html?tx=t1');
+  });
+
+  it('ทุกปุ่มที่กดได้ต้องมี action จริง ไม่ใช่รูปเปล่า', () => {
+    for (const [name, card] of Object.entries(cards)) {
+      for (const action of collect(card, 'action') as Record<string, unknown>[]) {
+        expect(action.type, `${name} มี action ที่ไม่มี type`).toBeTruthy();
+        if (action.type === 'postback') expect(action.data, name).toBeTruthy();
+        if (action.type === 'uri') expect(action.uri, name).toBeTruthy();
+        if (action.type === 'message') expect(action.text, name).toBeTruthy();
+      }
+    }
   });
 });

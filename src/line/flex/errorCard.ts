@@ -98,6 +98,11 @@ export function buildErrorCard(input: ErrorCardInput) {
 
 // ── กรณีที่เจอบ่อย เขียนไว้ให้เรียกใช้ซ้ำได้ ไม่ต้องคิดข้อความใหม่ทุกที่ ──
 
+// ไม่มี buildNegativeAmountCard โดยตั้งใจ: ทางด่วน regex ตีกลับยอด <= 0 ตั้งแต่ชั้น parser
+// (regexParser.ts) ข้อความนั้นจึงไหลไปหา AI ไม่เคยถึง createTransaction การ์ดใบนั้นเคยมี
+// แต่ไม่มีทางถูกเรียก จึงเอาออก — การ์ดที่กดไปไม่ถึงแย่กว่าไม่มี เพราะคนอ่านโค้ดจะเข้าใจผิด
+// ว่ามี flow นั้นอยู่
+
 /** ไม่มีตัวเลขในข้อความ หรือรูปประโยคอ่านไม่ออก (SRS FR-1 ทางผิดข้อ 4) */
 export function buildUnreadableCard() {
   return buildErrorCard({
@@ -112,15 +117,6 @@ export function buildAmountTooLargeCard(formattedCeiling: string) {
   return buildErrorCard({
     title: 'ยอดเกินที่รับได้',
     reason: `หนึ่งรายการรับได้ไม่เกิน ${formattedCeiling} ครับ ถ้ายอดถูกต้องจริง ลองแบ่งบันทึกเป็นหลายรายการดูนะครับ`,
-  });
-}
-
-/** ยอดติดลบ — ทิศทางเงินดูจาก type ไม่ใช่เครื่องหมาย (G3) */
-export function buildNegativeAmountCard() {
-  return buildErrorCard({
-    title: 'ใส่ยอดเป็นจำนวนติดลบไม่ได้',
-    reason: 'ใส่เป็นจำนวนบวกได้เลยครับ ถ้าเป็นเงินเข้าให้ใส่ + ไว้ข้างหน้า',
-    examples: ['กาแฟ 80', '+เงินเดือน 15000'],
   });
 }
 

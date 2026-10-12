@@ -117,8 +117,13 @@ function pill(label: string, background: string, color: string) {
   };
 }
 
-/** 🔴 ต้องเป็น image ไม่ใช่ icon — component icon ใช้ได้เฉพาะใน baseline box */
-function iconButton(url: string, label: string, data: string) {
+/**
+ * ไอคอนที่กดได้
+ *
+ * 🔴 ต้องเป็น image ไม่ใช่ icon — component icon ใช้ได้เฉพาะใน baseline box
+ * และ action ต้องอยู่บนตัว image เอง ไม่ใช่กล่องที่ครอบ ไม่งั้นแตะแล้วไม่ติด
+ */
+function iconButton(url: string, label: string, action: Record<string, unknown>) {
   return {
     type: 'image',
     url,
@@ -126,7 +131,7 @@ function iconButton(url: string, label: string, data: string) {
     flex: 0,
     margin: 'md',
     aspectMode: 'fit',
-    action: { type: 'postback', label, data },
+    action,
   };
 }
 
@@ -187,8 +192,22 @@ function itemRow(item: RecordedItem, isIncome: boolean, base: string) {
             gravity: 'center',
           },
           // 🔴 ไอคอนอยู่ตรงนี้ ไม่ห่อ box (หมายเหตุข้อ 3)
-          iconButton(`${base}/img/icon/pencil.png`, 'แก้ไข', `action=edit&id=${item.transactionId}`),
-          iconButton(`${base}/img/icon/trash-2.png`, 'ลบ', `action=undo&id=${item.transactionId}`),
+          //
+          // ✏️ ใช้ uri ไม่ใช่ postback โดยตั้งใจ: การแก้ไขต้องกรอกยอด/วันเวลา/หมวด
+          // ซึ่งทำในแชทลำบาก ส่วนหน้าเว็บมีฟอร์มครบอยู่แล้ว พาไปที่รายการนั้นเลยเร็วกว่า
+          // (เคยเป็น postback action=edit ซึ่ง postbackHandler ไม่มี case รองรับ
+          //  กดแล้วเงียบสนิทไม่มีอะไรเกิดขึ้น)
+          iconButton(`${base}/img/icon/pencil.png`, 'แก้ไข', {
+            type: 'uri',
+            label: 'แก้ไข',
+            uri: `${base}/transactions.html?tx=${encodeURIComponent(item.transactionId)}`,
+          }),
+          iconButton(`${base}/img/icon/trash-2.png`, 'ลบ', {
+            type: 'postback',
+            label: 'ลบ',
+            data: `action=undo&id=${item.transactionId}`,
+            displayText: 'ลบรายการนี้',
+          }),
         ],
       },
     ],

@@ -19,7 +19,7 @@ import { getUserIdByLineUserId } from '../db/queries/users';
 import { parseQuickExpenseText } from '../utils/regexParser';
 import { createTransaction } from '../services/transaction.service';
 import { formatBudgetAlert } from '../services/budget.service';
-import { formatBaht } from '../utils/money';
+import { formatBaht, MoneyError } from '../utils/money';
 import { replyFlex, replyText, replyTextWithQuickReply } from '../line/reply';
 import {
   matchCommand,
@@ -31,8 +31,14 @@ import {
 } from '../services/command.service';
 import { buildRecordedCardFor } from '../line/recordedView';
 import { buildPendingCard } from '../line/flex/pendingCard';
-import { buildAiUnavailableCard, buildSaveFailedCard } from '../line/flex/errorCard';
+import {
+  buildAiUnavailableCard,
+  buildAmountTooLargeCard,
+  buildSaveFailedCard,
+  buildUnreadableCard,
+} from '../line/flex/errorCard';
 import { interpretUserMessage } from '../services/ai/router';
+import { MAX_AMOUNT_SATANG } from '../config/constants';
 import { env } from '../config/env';
 
 type LineTextMessageEvent = {
@@ -111,6 +117,13 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
     await replyFlex(replyToken, card, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
   } catch (err) {
     console.error('[textHandler] createTransaction error:', err);
+    // ยอดเกินเพดานต่อรายการเป็นเรื่องของสิ่งที่ผู้ใช้พิมพ์ ไม่ใช่ระบบพัง
+    // ถ้าตอบว่า "ระบบมีปัญหา ไม่ได้เกิดจากข้อความที่พิมพ์" จะเป็นการโกหกและผู้ใช้
+    // จะลองส่งซ้ำไปเรื่อย ๆ โดยไม่รู้ว่าต้องแก้ยอด
+    if (err instanceof MoneyError) {
+      await replyFlex(replyToken, buildAmountTooLargeCard(formatBaht(MAX_AMOUNT_SATANG)));
+      return;
+    }
     await replyFlex(replyToken, buildSaveFailedCard());
   }
 }
@@ -215,5 +228,8 @@ async function handleWithAi(replyToken: string, userId: string, text: string): P
     return;
   }
 
-  await replyFlex(replyToken, buildAiUnavailableCard());
+  // ⚖️ G4: router รวมทุกเหตุผลที่ AI ใช้ไม่ได้เป็น kind เดียว แต่ผู้ใช้ต้องการคำตอบคนละแบบ
+  // ปิดไว้ถาวร = ระบบนี้อ่านประโยคยาวไม่ได้ บอกรูปแบบที่ใช้ได้ไปเลย
+  // เปิดอยู่แต่ล้ม = เป็นเรื่องชั่วคราว บอกว่าลองใหม่ได้ ไม่ใช่ให้เปลี่ยนวิธีพิมพ์ถาวร
+  await replyFlex(replyToken, env.aiEnabled ? buildAiUnavailableCard() : buildUnreadableCard());
 }
