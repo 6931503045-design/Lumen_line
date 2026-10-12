@@ -55,15 +55,19 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 function mixHex(a: string, b: string, t: number): string {
-  const ca = hexToRgb(a);
-  const cb = hexToRgb(b);
-  return (
-    '#' +
-    ca
-      .map((v, i) => Math.round(v + (cb[i] - v) * t).toString(16).padStart(2, '0'))
-      .join('')
-      .toUpperCase()
-  );
+  // 🔴 ห้ามใช้ ca.map((v, i) => ... cb[i] ...) ตรงนี้
+  // tsconfig เปิด noUncheckedIndexedAccess ไว้ การ index tuple ด้วยตัวแปร (ไม่ใช่เลขคงที่)
+  // จะได้ชนิด number | undefined แล้ว build ล้มด้วย TS2532 ทั้งที่โค้ดถูกตามตรรกะ
+  // แยกค่าออกมาด้วย destructuring แทน — tuple ความยาวคงที่จึงได้ number ตรง ๆ ไม่ต้องใส่ !
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+
+  const mix = (from: number, to: number): string =>
+    Math.round(from + (to - from) * t)
+      .toString(16)
+      .padStart(2, '0');
+
+  return `#${mix(ar, br)}${mix(ag, bg)}${mix(ab, bb)}`.toUpperCase();
 }
 
 /** สีบนสเกล ณ ตำแหน่ง p (0–100) ของรางทั้งเส้น */
