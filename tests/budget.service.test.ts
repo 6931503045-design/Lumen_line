@@ -14,6 +14,9 @@ vi.mock('../src/db/queries/budgets', () => ({
   upsertBudget: vi.fn(),
   deleteBudget: vi.fn(),
   claimBudgetAlert: vi.fn(),
+  listBudgetHistoryUpTo: vi.fn(),
+  insertCarriedBudgets: vi.fn(),
+  markBudgetCleared: vi.fn(),
 }));
 vi.mock('../src/db/queries/categories', () => ({
   findCategoryOwnedByUser: vi.fn(),
@@ -26,7 +29,10 @@ import {
   claimBudgetAlert,
   deleteBudget,
   findBudget,
+  insertCarriedBudgets,
+  listBudgetHistoryUpTo,
   listBudgetsByMonth,
+  markBudgetCleared,
   upsertBudget,
 } from '../src/db/queries/budgets';
 import { findCategoryOwnedByUser } from '../src/db/queries/categories';
@@ -88,6 +94,9 @@ beforeEach(() => {
   vi.mocked(listTransactionRowsInRange).mockResolvedValue([]);
   vi.mocked(findBudget).mockResolvedValue(null);
   vi.mocked(claimBudgetAlert).mockResolvedValue(true);
+  vi.mocked(listBudgetHistoryUpTo).mockResolvedValue([]);
+  vi.mocked(insertCarriedBudgets).mockResolvedValue(undefined);
+  vi.mocked(markBudgetCleared).mockResolvedValue(undefined);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(findCategoryOwnedByUser).mockResolvedValue(category() as any);
 });
@@ -272,11 +281,113 @@ describe('setBudget — การตรวจก่อนเขียน', () =>
   });
 });
 
-describe('removeBudget', () => {
-  it('ส่งเดือนปัจจุบันให้ query เมื่อไม่ได้ระบุเดือน', async () => {
+/** แถวประวัติงบแบบที่ listBudgetHistoryUpTo คืน (เรียงเดือนใหม่ไปเก่า) */
+function historyRow(categoryId: string, month: string, limit: string, type = 'expense') {
+  return { category_id: categoryId, month, limit_amount: limit, categories: { type } };
+}
+
+describe('removeBudget — ยกเลิกงบตั้งแต่เดือนนี้', () => {
+  it('เก็บเป็นแถว 0 ของเดือนปัจจุบัน ไม่ลบทิ้ง (ไม่งั้นงบเดือนก่อนจะถูกยกกลับมา)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(findBudget).mockResolvedValue(budgetRow() as any);
+    await expect(removeBudget(USER, FOOD)).resolves.toBe(true);
+    expect(markBudgetCleared).toHaveBeenCalledWith(USER, FOOD, MONTH);
+    expect(deleteBudget).not.toHaveBeenCalled();
+  });
+
+  it('ยังไม่ได้รัน migration 003 (check violation) → ถอยไปลบแถวแบบเดิม ปุ่มยังใช้ได้', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(findBudget).mockResolvedValue(budgetRow() as any);
+    vi.mocked(markBudgetCleared).mockRejectedValue({ code: '23514' });
     vi.mocked(deleteBudget).mockResolvedValue(true);
+
     await expect(removeBudget(USER, FOOD)).resolves.toBe(true);
     expect(deleteBudget).toHaveBeenCalledWith(USER, FOOD, MONTH);
+  });
+
+  it('ไม่มีงบให้ยกเลิก → false และไม่เขียนอะไร', async () => {
+    await expect(removeBudget(USER, FOOD)).resolves.toBe(false);
+    expect(markBudgetCleared).not.toHaveBeenCalled();
+  });
+});
+
+// ผู้ใช้ทดสอบตั้งงบไว้ พอขึ้นเดือนใหม่ทุกหมวดกลายเป็น "ยังไม่ตั้งงบ"
+describe('ยกงบไปเดือนถัดไปอัตโนมัติ', () => {
+  it('🔴 เดือนนี้ยังไม่มีแถว → คัดลอกงบล่าสุดของแต่ละหมวดมาให้', async () => {
+    vi.mocked(listBudgetHistoryUpTo).mockResolvedValue([
+      historyRow(FOOD, '2026-08-01', '3000.00'),
+      historyRow(FOOD, '2026-07-01', '2500.00'), // เก่ากว่า ต้องไม่ถูกเลือก
+      historyRow(SHOP, '2026-06-01', '1000.00'),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any);
+
+    await getBudgetOverview(USER);
+
+    expect(listBudgetHistoryUpTo).toHaveBeenCalledWith(USER, MONTH);
+    expect(insertCarriedBudgets).toHaveBeenCalledWith(USER, MONTH, [
+      { categoryId: FOOD, limitBaht: '3000.00' },
+      { categoryId: SHOP, limitBaht: '1000.00' },
+    ]);
+  });
+
+  it('หมวดที่มีแถวของเดือนนี้แล้ว (รวมแถวยกเลิก) ไม่ยกทับ', async () => {
+    vi.mocked(listBudgetHistoryUpTo).mockResolvedValue([
+      historyRow(FOOD, MONTH, '0'), // ผู้ใช้ยกเลิกเดือนนี้
+      historyRow(FOOD, '2026-08-01', '3000.00'),
+      historyRow(SHOP, MONTH, '1200.00'),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any);
+
+    await getBudgetOverview(USER);
+    expect(insertCarriedBudgets).toHaveBeenCalledWith(USER, MONTH, []);
+  });
+
+  it('🔴 งบที่ยกเลิกไปเมื่อเดือนก่อน ต้องไม่ฟื้นกลับมาเดือนนี้', async () => {
+    vi.mocked(listBudgetHistoryUpTo).mockResolvedValue([
+      historyRow(FOOD, '2026-08-01', '0'),
+      historyRow(FOOD, '2026-07-01', '3000.00'),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any);
+
+    await getBudgetOverview(USER);
+    expect(insertCarriedBudgets).toHaveBeenCalledWith(USER, MONTH, []);
+  });
+
+  it('หมวดที่ถูกเปลี่ยนเป็นรายรับภายหลัง ไม่ยกต่อ', async () => {
+    vi.mocked(listBudgetHistoryUpTo).mockResolvedValue([
+      historyRow(FOOD, '2026-08-01', '3000.00', 'income'),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any);
+
+    await getBudgetOverview(USER);
+    expect(insertCarriedBudgets).toHaveBeenCalledWith(USER, MONTH, []);
+  });
+
+  it('ไม่ยกไปเดือนอนาคต', async () => {
+    await getBudgetOverview(USER, '2026-10-01');
+    expect(listBudgetHistoryUpTo).not.toHaveBeenCalled();
+  });
+
+  it('ยกงบไม่สำเร็จ → หน้างบยังแสดงได้ ไม่ throw', async () => {
+    vi.mocked(listBudgetHistoryUpTo).mockRejectedValue(new Error('DB ล่ม'));
+    await expect(getBudgetOverview(USER)).resolves.toMatchObject({ items: [] });
+  });
+
+  it('รายการแรกของเดือนจากแชท → ยกงบก่อนตัดสินใจเตือน', async () => {
+    vi.mocked(findBudget)
+      .mockResolvedValueOnce(null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockResolvedValueOnce(budgetRow() as any);
+    vi.mocked(listBudgetHistoryUpTo).mockResolvedValue([
+      historyRow(FOOD, '2026-08-01', '3000.00'),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ] as any);
+    vi.mocked(listTransactionRowsInRange).mockResolvedValue([tx('expense', '2500.00', FOOD)]);
+
+    const alert = await evaluateBudgetAlert(USER, FOOD);
+
+    expect(insertCarriedBudgets).toHaveBeenCalled();
+    expect(alert?.threshold).toBe(80);
   });
 });
 

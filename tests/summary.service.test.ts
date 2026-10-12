@@ -164,6 +164,22 @@ describe('getUserSummary — รายจ่ายแยกตามหมวด
     const summary = await getUserSummary('u1');
     expect(summary.expenseByCategory).toEqual([]);
   });
+
+  it('🔴 รายรับแยกตามหมวดอยู่ใน incomeByCategory — หน้าหมวดหมู่แท็บรายรับเคยขึ้น ฿0 ทุกหมวด', async () => {
+    vi.mocked(listCategoriesByUser).mockResolvedValue([
+      { id: 'c9', name: 'เงินเดือน', type: 'income', emoji: '💰', is_essential: false, is_default: true },
+    ]);
+    vi.mocked(listTransactionRowsInRange).mockResolvedValue([
+      row('income', '5000.00', '2026-09-01T05:00:00Z', 'c9'),
+      row('expense', '80.00', '2026-09-02T05:00:00Z', 'c9'),
+      row('transfer', '500.00', '2026-09-03T05:00:00Z', 'c9'), // ⚖️ G7 ไม่ใช่รายรับ
+    ]);
+
+    const summary = await getUserSummary('u1');
+    expect(summary.incomeByCategory).toEqual([
+      { categoryId: 'c9', name: 'เงินเดือน', amountSatang: 500000 },
+    ]);
+  });
 });
 
 describe('getUserSummary — กราฟย้อนหลัง', () => {

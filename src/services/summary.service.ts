@@ -54,6 +54,8 @@ export type UserSummary = {
   transactionCount: number;
   /** รายจ่ายเดือนนี้แยกตามหมวด เรียงมากไปน้อย */
   expenseByCategory: CategoryAmount[];
+  /** รายรับเดือนนี้แยกตามหมวด เรียงมากไปน้อย — หน้าหมวดหมู่แท็บรายรับใช้แสดง "ได้รับแล้ว" */
+  incomeByCategory: CategoryAmount[];
   /** ยอดรายเดือนย้อนหลัง 6 เดือนรวมเดือนปัจจุบัน เรียงเก่าไปใหม่ */
   monthlyTrend: MonthlyPoint[];
 };
@@ -87,23 +89,27 @@ export async function getUserSummary(userId: string): Promise<UserSummary> {
   // ── ยอดคงเหลือสะสม (G7: transfer ไม่นับทั้งสองฝั่ง) ────────────────────────
   const netBalanceSatang = sumByType(allRows, 'income') - sumByType(allRows, 'expense');
 
-  // ── รายจ่ายเดือนนี้แยกตามหมวด ───────────────────────────────────────────────
+  // ── รายรับ/รายจ่ายเดือนนี้แยกตามหมวด ─────────────────────────────────────────
+  // เดิมมีแต่ฝั่งรายจ่าย หน้าหมวดหมู่แท็บรายรับจึงขึ้น "ได้รับแล้ว ฿0" ทุกหมวดเสมอ
   const categoryNameById = new Map(categories.map((category) => [category.id, category.name]));
-  const byCategory = new Map<string | null, number>();
 
-  for (const row of monthRows) {
-    if (row.type !== 'expense') continue;
-    const current = byCategory.get(row.category_id) ?? 0;
-    byCategory.set(row.category_id, current + toSatang(row.amount));
-  }
+  const totalsByCategory = (type: 'income' | 'expense'): CategoryAmount[] => {
+    const byCategory = new Map<string | null, number>();
+    for (const row of monthRows) {
+      if (row.type !== type) continue;
+      byCategory.set(row.category_id, (byCategory.get(row.category_id) ?? 0) + toSatang(row.amount));
+    }
+    return [...byCategory.entries()]
+      .map(([categoryId, amountSatang]) => ({
+        categoryId,
+        name: (categoryId && categoryNameById.get(categoryId)) || 'ไม่ระบุหมวด',
+        amountSatang,
+      }))
+      .sort((a, b) => b.amountSatang - a.amountSatang);
+  };
 
-  const expenseByCategory: CategoryAmount[] = [...byCategory.entries()]
-    .map(([categoryId, amountSatang]) => ({
-      categoryId,
-      name: (categoryId && categoryNameById.get(categoryId)) || 'ไม่ระบุหมวด',
-      amountSatang,
-    }))
-    .sort((a, b) => b.amountSatang - a.amountSatang);
+  const expenseByCategory = totalsByCategory('expense');
+  const incomeByCategory = totalsByCategory('income');
 
   // ── กราฟย้อนหลัง 6 เดือน ────────────────────────────────────────────────────
   // สร้างช่องของทุกเดือนไว้ก่อนแล้วค่อยเติม เพื่อให้เดือนที่ไม่มีรายการเลยยังมีจุด 0
@@ -132,6 +138,7 @@ export async function getUserSummary(userId: string): Promise<UserSummary> {
     netBalanceSatang,
     transactionCount: allRows.length,
     expenseByCategory,
+    incomeByCategory,
     monthlyTrend: [...trendByMonth.values()],
   };
 }

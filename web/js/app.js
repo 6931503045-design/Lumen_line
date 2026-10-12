@@ -1513,20 +1513,37 @@ function renderCategoryOverview() {
   const percent = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
   const tone = isIncome ? 'success' : (percent > 100 ? 'danger' : percent >= 80 ? 'warning' : 'success');
 
-  document.getElementById('categoryOverviewLabel').textContent = isIncome ? 'เป้ารายรับรวมทั้งหมด' : 'งบประมาณรวมทั้งหมด (รายจ่าย)';
-  totalEl.textContent = formatMoney(totalLimit);
-  document.getElementById('categoryOverviewUsedLabel').textContent = isIncome ? 'ได้รับแล้ว' : 'ใช้ไปแล้ว';
-  document.getElementById('categoryOverviewUsed').textContent = formatMoney(totalUsed);
+  // งบตั้งได้เฉพาะหมวดรายจ่าย (backend ปฏิเสธหมวดรายรับ) แท็บรายรับจึงไม่มี "เป้า" ให้เทียบ
+  // เดิมแสดง "เป้ารายรับรวม ฿0" กับปุ่มตั้งงบที่กดแล้วขึ้นบันทึกไม่สำเร็จ — ตอนนี้แสดงรายรับจริงแทน
+  if (isIncome) {
+    const top = [...items].sort((a, b) => safeNumber(b.used) - safeNumber(a.used))[0];
+    const hasIncome = top && safeNumber(top.used) > 0;
+    document.getElementById('categoryOverviewLabel').textContent = 'รายรับเดือนนี้';
+    totalEl.textContent = formatMoney(totalUsed);
+    document.getElementById('categoryOverviewUsedLabel').textContent = 'ได้มากสุดจาก';
+    document.getElementById('categoryOverviewUsed').textContent = hasIncome ? top.name : '-';
+    document.getElementById('categoryOverviewRemainingLabel').textContent = 'คิดเป็น';
+    const remainingEl = document.getElementById('categoryOverviewRemaining');
+    remainingEl.textContent = hasIncome ? `${Math.round((safeNumber(top.used) / totalUsed) * 100)}%` : '-';
+    remainingEl.classList.remove('over');
+    const badge = document.getElementById('categoryOverviewBadge');
+    if (badge) badge.innerHTML = '';
+  } else {
+    document.getElementById('categoryOverviewLabel').textContent = 'งบประมาณรวมทั้งหมด (รายจ่าย)';
+    totalEl.textContent = formatMoney(totalLimit);
+    document.getElementById('categoryOverviewUsedLabel').textContent = 'ใช้ไปแล้ว';
+    document.getElementById('categoryOverviewUsed').textContent = formatMoney(totalUsed);
 
-  const isOver = !isIncome && remaining < 0;
-  document.getElementById('categoryOverviewRemainingLabel').textContent = isIncome ? 'เหลืออีก' : (isOver ? 'เกินงบ' : 'คงเหลือ');
-  const remainingEl = document.getElementById('categoryOverviewRemaining');
-  remainingEl.textContent = formatMoney(Math.abs(remaining));
-  remainingEl.classList.toggle('over', isOver);
+    const isOver = remaining < 0;
+    document.getElementById('categoryOverviewRemainingLabel').textContent = isOver ? 'เกินงบ' : 'คงเหลือ';
+    const remainingEl = document.getElementById('categoryOverviewRemaining');
+    remainingEl.textContent = formatMoney(Math.abs(remaining));
+    remainingEl.classList.toggle('over', isOver);
 
-  const badge = document.getElementById('categoryOverviewBadge');
-  if (badge) {
-    badge.innerHTML = `<span class="pill ${tone}">${Math.round(percent)}% ${isIncome ? 'ของเป้า' : 'ของงบ'}</span>`;
+    const badge = document.getElementById('categoryOverviewBadge');
+    if (badge) {
+      badge.innerHTML = `<span class="pill ${tone}">${Math.round(percent)}% ของงบ</span>`;
+    }
   }
 
   // แถบ = งบทั้งหมด, ส่วนสีคือยอดที่ใช้ไปของแต่ละหมวด, ส่วนว่างคือที่เหลือ
@@ -1546,10 +1563,12 @@ function renderCategoryOverview() {
           color: item.color,
           used,
           limit: safeNumber(item.limit),
-          sharePercent: totalLimit > 0 ? (used / totalLimit) * 100 : 0,
+          sharePercent: isIncome
+            ? (totalUsed > 0 ? (used / totalUsed) * 100 : 0)
+            : (totalLimit > 0 ? (used / totalLimit) * 100 : 0),
           categoryPercent: item.limit ? (used / item.limit) * 100 : 0,
           isIncome,
-          shareLabel: isIncome ? 'ของเป้ารวม' : 'ของงบรวม',
+          shareLabel: isIncome ? 'ของรายรับเดือนนี้' : 'ของงบรวม',
         });
         return `<button type="button" class="stacked-bar-seg" data-overview-seg="${key}" style="width: ${share}%; background: ${item.color}" aria-label="${escapeHtml(item.name)}"></button>`;
       })
@@ -1595,8 +1614,8 @@ function showBarTip(ctx, segment) {
   } else {
     tip.innerHTML = `
       <span class="overview-tip-title"><i class="legend-dot" style="background: ${data.color}"></i>${escapeHtml(data.name)}</span>
-      <span class="overview-tip-amount">${formatMoney(data.used)} <small>จาก ${formatMoney(data.limit)}</small></span>
-      <span class="overview-tip-meta">${Math.round(data.sharePercent)}% ${data.shareLabel} · ${data.isIncome ? 'ได้รับ' : 'ใช้'} ${Math.round(data.categoryPercent)}% ของหมวดนี้</span>
+      <span class="overview-tip-amount">${formatMoney(data.used)}${data.limit > 0 ? ` <small>จาก ${formatMoney(data.limit)}</small>` : ''}</span>
+      <span class="overview-tip-meta">${Math.round(data.sharePercent)}% ${data.shareLabel}${data.limit > 0 ? ` · ${data.isIncome ? 'ได้รับ' : 'ใช้'} ${Math.round(data.categoryPercent)}% ของหมวดนี้` : ''}</span>
     `;
   }
 
@@ -1727,13 +1746,13 @@ function renderCategoriesPage() {
             <span>${escapeHtml(item.name)}</span>
           </div>
           <div class="category-top-right">
-            ${hasLimit ? `<span class="pill ${getProgressTone(percent)}">${percent}%</span>` : '<span class="pill muted">ยังไม่ตั้งงบ</span>'}
+            ${item.type === 'income' ? '' : hasLimit ? `<span class="pill ${getProgressTone(percent)}">${percent}%</span>` : '<span class="pill muted">ยังไม่ตั้งงบ</span>'}
             <button class="row-more" type="button" data-category-menu="${item.id}">${renderIcon('more-vertical')}</button>
           </div>
         </div>
         <div class="progress-bar"><span style="width: ${clamp(percent)}%; background: ${item.color}"></span></div>
         <div class="card-row">
-          <span>ใช้ไปแล้ว</span>
+          <span>${item.type === 'income' ? 'ได้รับแล้ว' : 'ใช้ไปแล้ว'}</span>
           <strong>${formatMoney(item.used)}${hasLimit ? ` <span class="budget-breakdown-limit">/ ${formatMoney(item.limit)}</span>` : ''}</strong>
         </div>
       </div>
@@ -3798,8 +3817,9 @@ function openCategoryMenu(categoryId) {
           </div>
           <button type="button" class="switch ${category.isEssential ? 'on' : ''}" data-toggle-essential="${category.id}" role="switch" aria-checked="${!!category.isEssential}"></button>
         </div>
+        ${category.type === 'income' ? '' : `
         <button class="settings-row" type="button" data-category-set-limit="${category.id}"><span>${category.limit ? 'แก้งบ' : 'ตั้งงบ'}</span><strong>›</strong></button>
-        ${category.limit ? `<button class="settings-row" type="button" data-category-clear-limit="${category.id}"><span>ยกเลิกงบ</span><strong>›</strong></button>` : ''}
+        ${category.limit ? `<button class="settings-row" type="button" data-category-clear-limit="${category.id}"><span>ยกเลิกงบ</span><strong>›</strong></button>` : ''}`}
         <button class="settings-row" type="button" data-category-view-detail="${category.id}"><span>ดูรายละเอียด</span><strong>›</strong></button>
         <button class="settings-row danger" type="button" data-category-delete="${category.id}"><span>ลบหมวดหมู่</span><strong>›</strong></button>
       </div>
@@ -3927,6 +3947,12 @@ function openBatchEditModal() {
 
   document.querySelector('[data-confirm-batch-edit]').addEventListener('click', () => {
     const categoryName = document.getElementById('batchCategorySelect')?.value;
+    if (window.jodtangPersist) {
+      const ids = [...transactionState.selectedIds];
+      transactionState.selectedIds = [];
+      window.jodtangPersist.updateTransactions(ids, { type: selectedType, ...(categoryName ? { categoryName } : {}) });
+      return;
+    }
     mock.transactions.forEach((item) => {
       if (!transactionState.selectedIds.some((selected) => sameId(selected, item.id))) return;
       if (categoryName) item.category = categoryName;
@@ -4066,9 +4092,9 @@ function openCategoryDetail(categoryId) {
       </div>
       <div id="categoryTabOverview">
         <div class="category-detail-card">
-          <div class="summary-row"><span>งบเดือนนี้</span><strong>${limitAmount > 0 ? formatMoney(limitAmount) : 'ยังไม่ตั้ง'}</strong></div>
+          ${category.type === 'income' ? '' : `<div class="summary-row"><span>งบเดือนนี้</span><strong>${limitAmount > 0 ? formatMoney(limitAmount) : 'ยังไม่ตั้ง'}</strong></div>`}
           <div class="summary-row"><span>${verb}แล้ว</span><strong>${formatMoney(usedAmount)}</strong></div>
-          ${limitAmount > 0
+          ${category.type === 'income' ? '' : limitAmount > 0
             ? `<div class="summary-row"><span>${verb}ไปแล้ว</span><strong>${Math.round((usedAmount / limitAmount) * 100)}% ของงบ</strong></div>`
             // ไม่มีงบ = ไม่มีอะไรให้เทียบ เดิมหารด้วย 1 แล้วขึ้นเป็นหลักแสนเปอร์เซ็นต์
             : '<p class="mini-label">งบตั้งเป็นรายเดือน ตั้งงบของเดือนนี้ได้จากเมนู ⋮ ของหมวด</p>'}
@@ -4284,6 +4310,12 @@ function bindTransactionControls() {
         renderTransactionsPage();
       }
       if (action === 'delete') {
+        if (window.jodtangPersist) {
+          const ids = [...transactionState.selectedIds];
+          transactionState.selectedIds = [];
+          window.jodtangPersist.deleteTransactions(ids);
+          return;
+        }
         mock.transactions = mock.transactions.filter((item) => !transactionState.selectedIds.some((selected) => sameId(selected, item.id)));
         transactionState.selectedIds = [];
         renderTransactionsPage();

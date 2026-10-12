@@ -60,7 +60,7 @@ G7	transfer ไม่นับเป็นรายรับ/รายจ่า�
 > | `src/db/queries/` | ประตูเข้า DB ทุกบาน กรอง user_id |
 > | `src/utils/money.ts` | ไฟล์เดียวที่แตะเลขเงินดิบได้ |
 > | `web/` | หน้าเว็บที่ backend เสิร์ฟเอง |
-> | `supabase/migrations/` | schema SQL (001, 002) |
+> | `supabase/migrations/` | schema SQL (001, 002, 003) |
 >
 > ส่วนตาราง §1–§19 ด้านล่างยังใช้อ้างอิงแนวคิดได้ แต่เลขบรรทัด/ชื่อไฟล์ไม่ตรงแล้ว
 
@@ -91,7 +91,7 @@ npm install
 cp .env.example .env        # ใส่ค่า LINE + Supabase
                             # แนะนำ: เริ่มด้วย AI_ENABLED=false ก่อน
 
-# รัน supabase/migrations/001_init.sql แล้วตามด้วย 002_updated_at_trigger.sql
+# รัน supabase/migrations/001_init.sql แล้วตามด้วย 002_updated_at_trigger.sql และ 003_budget_carry_over.sql
 # ที่ Supabase > SQL Editor (โปรเจกต์นี้ไม่ได้ต่อ Postgres ตรงๆ จึงไม่มี DATABASE_URL)
 
 npm run dev                 # เปิดที่ localhost:3000

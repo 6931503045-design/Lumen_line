@@ -20,7 +20,10 @@ import {
   claimBudgetAlert,
   deleteBudget,
   findBudget,
+  insertCarriedBudgets,
+  listBudgetHistoryUpTo,
   listBudgetsByMonth,
+  markBudgetCleared,
   upsertBudget,
 } from '../db/queries/budgets';
 import { findCategoryOwnedByUser } from '../db/queries/categories';
@@ -139,11 +142,50 @@ async function spentByCategoryInMonth(
   return spent;
 }
 
+/**
+ * ยกงบล่าสุดของแต่ละหมวดมาเป็นงบของเดือนนี้ — ตั้งครั้งเดียวใช้ทุกเดือนจนกว่าจะแก้หรือยกเลิก
+ *
+ * 🔴 ทำไมต้องมี: งบเก็บเป็นรายเดือน ผู้ใช้ทดสอบตั้งงบไว้ พอขึ้นเดือนใหม่ทุกหมวดกลายเป็น
+ * "ยังไม่ตั้งงบ" แต่คลิกเข้าไปยังเห็นยอดใช้อยู่ — งงว่าข้อมูลหายหรือเปล่า
+ *
+ * กติกา:
+ *   • หมวดที่มีแถวของเดือนนี้แล้ว (รวมแถวยกเลิก = 0) ไม่แตะ
+ *   • ไม่งั้นหยิบแถวล่าสุดก่อนหน้า ถ้าเป็น 0 (ผู้ใช้ยกเลิกไว้) ไม่ยก
+ *   • คัดลอกเป็นแถวจริงของเดือนนี้ ธงเตือน 80/100% จึงเริ่มนับใหม่ทุกเดือนตาม S5.8
+ *   • ไม่ยกไปเดือนอนาคต — ยังไม่มีใครใช้ และผู้ใช้อาจแก้งบก่อนถึงเดือนนั้น
+ *
+ * ⚖️ G4 แนวเดียวกัน: ยกงบไม่สำเร็จต้องไม่ทำให้หน้างบหรือการบันทึกรายการพัง แค่ไม่มีงบให้เห็น
+ */
+async function carryOverBudgets(userId: string, monthIso: string): Promise<void> {
+  if (monthIso > getMonthStartIso()) return;
+
+  try {
+    const history = await listBudgetHistoryUpTo(userId, monthIso);
+
+    const latestByCategory = new Map<string, (typeof history)[number]>();
+    for (const row of history) {
+      if (!latestByCategory.has(row.category_id)) latestByCategory.set(row.category_id, row);
+    }
+
+    const toCarry = [...latestByCategory.values()]
+      .filter((row) => row.month < monthIso)
+      .filter((row) => toSatang(row.limit_amount) > 0)
+      // หมวดที่ถูกเปลี่ยนเป็นรายรับภายหลังไม่ยกต่อ — ตั้งงบได้เฉพาะรายจ่าย
+      .filter((row) => row.categories?.type === 'expense')
+      .map((row) => ({ categoryId: row.category_id, limitBaht: row.limit_amount }));
+
+    await insertCarriedBudgets(userId, monthIso, toCarry);
+  } catch (err) {
+    console.error('[budget] ยกงบไปเดือนใหม่ไม่สำเร็จ:', err);
+  }
+}
+
 /** งบทุกหมวดของผู้ใช้พร้อมยอดใช้จริงในเดือนนั้น เรียงหมวดที่ใช้ไปเยอะที่สุดขึ้นก่อน */
 export async function getBudgetOverview(
   userId: string,
   monthIso: string = getMonthStartIso()
 ): Promise<BudgetOverview> {
+  await carryOverBudgets(userId, monthIso);
   const [budgets, spent] = await Promise.all([
     listBudgetsByMonth(userId, monthIso),
     spentByCategoryInMonth(userId, monthIso),
@@ -224,13 +266,44 @@ export async function setBudget(
   };
 }
 
-/** ยกเลิกงบของหมวดหนึ่ง คืน true ถ้ามีงบให้ลบจริง */
+/**
+ * ยกเลิกงบของหมวดหนึ่งตั้งแต่เดือนนี้ คืน true ถ้ามีงบให้ยกเลิกจริง
+ *
+ * เก็บเป็นแถว 0 แทนการลบ ไม่งั้นงบของเดือนก่อนจะถูกยกกลับมาใหม่ (ดู carryOverBudgets)
+ */
 export async function removeBudget(
   userId: string,
   categoryId: string,
   monthIso: string = getMonthStartIso()
 ): Promise<boolean> {
-  return deleteBudget(userId, categoryId, monthIso);
+  await carryOverBudgets(userId, monthIso);
+  const existing = await findBudget(userId, categoryId, monthIso);
+  const hadBudget = existing !== null && toSatang(existing.limit_amount) > 0;
+  if (!hadBudget) return false;
+
+  try {
+    await markBudgetCleared(userId, categoryId, monthIso);
+  } catch (err) {
+    // 23514 = check_violation — ยังไม่ได้รัน 003_budget_carry_over.sql ที่อนุญาตให้ limit = 0
+    // ถอยไปลบแถวแบบเดิม ปุ่มยังใช้ได้ แค่งบอาจถูกยกกลับมาในเดือนถัดไป
+    if ((err as { code?: string } | null)?.code !== '23514') throw err;
+    console.warn('[budget] ยังไม่ได้รัน migration 003 — ยกเลิกงบด้วยการลบแถวแทน');
+    await deleteBudget(userId, categoryId, monthIso);
+  }
+  return true;
+}
+
+/**
+ * งบของหมวดในเดือนนั้น — ถ้ายังไม่มีแถว ลองยกงบล่าสุดมาก่อนแล้วอ่านใหม่
+ *
+ * รายการแรกของเดือนใหม่มักมาจากแชท ก่อนผู้ใช้เปิดหน้าเว็บ ถ้าไม่ยกงบตรงนี้
+ * การเตือน 80/100% และแถบงบบนการ์ดจะหายไปจนกว่าจะมีคนเปิดหน้างบ
+ */
+async function findBudgetCarryingOver(userId: string, categoryId: string, monthIso: string) {
+  const budget = await findBudget(userId, categoryId, monthIso);
+  if (budget) return budget;
+  await carryOverBudgets(userId, monthIso);
+  return findBudget(userId, categoryId, monthIso);
 }
 
 /**
@@ -259,7 +332,7 @@ export async function getCategoryBudgetStatus(
 ): Promise<BudgetStatus | null> {
   const monthIso = getMonthStartIso(occurredAt);
 
-  const budget = await findBudget(userId, categoryId, monthIso);
+  const budget = await findBudgetCarryingOver(userId, categoryId, monthIso);
   if (!budget) return null;
 
   const limitSatang = toSatang(budget.limit_amount);
@@ -291,7 +364,7 @@ export async function evaluateBudgetAlert(
 ): Promise<BudgetAlert | null> {
   const monthIso = getMonthStartIso(occurredAt);
 
-  const budget = await findBudget(userId, categoryId, monthIso);
+  const budget = await findBudgetCarryingOver(userId, categoryId, monthIso);
   if (!budget) return null;
 
   const limitSatang = toSatang(budget.limit_amount);

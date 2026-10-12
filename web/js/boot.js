@@ -210,12 +210,16 @@
 
   // ---------- แปลงข้อมูล API → รูปที่ app.js ใช้ ----------
 
-  function mapCategories(categories, budgets, expenseByCategory) {
+  // incomeByCategory: หมวดรายรับต้องแสดง "ได้รับแล้ว" จากยอดรายรับ — เดิมอ่านจากรายจ่ายอย่างเดียว
+  // หมวดรายรับจึงขึ้น ฿0 ทุกหมวด (|| [] เผื่อ backend รุ่นเก่าที่ยังไม่ส่งช่องนี้มา)
+  function mapCategories(categories, budgets, expenseByCategory, incomeByCategory) {
     const limitOf = new Map(budgets.items.map((b) => [b.categoryId, b.limitSatang]));
-    const spentOf = new Map(expenseByCategory.filter((e) => e.categoryId).map((e) => [e.categoryId, e.amountSatang]));
+    const toMap = (list) => new Map((list || []).filter((e) => e.categoryId).map((e) => [e.categoryId, e.amountSatang]));
+    const spentOf = toMap(expenseByCategory);
+    const receivedOf = toMap(incomeByCategory);
     return categories.map((cat, index) => {
       const limit = limitOf.get(cat.id) ?? 0;
-      const used = spentOf.get(cat.id) ?? 0;
+      const used = (cat.type === 'income' ? receivedOf : spentOf).get(cat.id) ?? 0;
       return {
         id: cat.id,
         name: cat.name,
@@ -342,7 +346,7 @@
         daysOfData: null,
       },
       transactions: mapTransactions(transactions),
-      categories: mapCategories(categories, budgets, summary.expenseByCategory),
+      categories: mapCategories(categories, budgets, summary.expenseByCategory, summary.incomeByCategory),
       monthlyHistory: history,
       plans: mapPlans(plans),
       donutData: donut,
@@ -458,6 +462,35 @@
     }
   }
 
+  /**
+   * ทำงานเดียวกันกับหลายรายการ (เลือกหลายรายการ → แก้ไข/ลบ)
+   *
+   * 🔴 เดิมปุ่มพวกนี้แก้แค่ข้อมูลบนหน้าจอ ไม่ได้ส่งไปเซิร์ฟเวอร์ ขึ้น "สำเร็จ" แต่รีเฟรชแล้วกลับเหมือนเดิม
+   * ยิงทีละรายการผ่าน endpoint เดียวกับการแก้/ลบทีละรายการ (ตรวจเจ้าของรายการครบ ⚖️ G6)
+   * ทำต่อจนครบแม้บางรายการพลาด แล้วบอกว่าพลาดกี่รายการ ไม่หยุดกลางทางแบบเงียบ ๆ
+   */
+  async function runBatch(ids, action, verb) {
+    const failures = [];
+    for (const id of ids) {
+      try {
+        await action(id);
+      } catch (err) {
+        failures.push((err && err.message) || 'เกิดข้อผิดพลาด');
+      }
+    }
+    closeModal();
+    await refresh();
+    if (failures.length === 0) {
+      showSuccessModal(`${verb} ${ids.length} รายการสำเร็จ`);
+      return;
+    }
+    const done = ids.length - failures.length;
+    showAlertModal(
+      `${verb}สำเร็จ ${done} จาก ${ids.length} รายการ — ${failures[0]}`,
+      `${verb}ไม่สำเร็จ ${failures.length} รายการ`
+    );
+  }
+
   /** ให้ผู้ใช้เลือก 1 ใน 3 ทางเลือกที่ backend คำนวณมา แล้วยืนยัน (S5.3) */
   function showPlanOptions(result) {
     const options = result.options || [];
@@ -503,6 +536,8 @@
       return 'เพิ่มรายการสำเร็จ';
     }),
     updateTransaction: (id, patch) => runWrite(() => api.updateTransaction(id, patch), 'อัปเดตรายการสำเร็จ'),
+    updateTransactions: (ids, patch) => runBatch(ids, (id) => api.updateTransaction(id, patch), 'แก้ไข'),
+    deleteTransactions: (ids) => runBatch(ids, (id) => api.deleteTransaction(id), 'ลบ'),
     deleteTransaction: async (id) => {
       // สัญญาแนะนำให้ทำปุ่ม "เลิกทำ" ค้างไว้แทนการถามยืนยันก่อนลบทุกครั้ง
       // backend ลบแบบ soft delete จึงกู้คืนได้จริงด้วย /restore

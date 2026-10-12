@@ -30,7 +30,11 @@ export type BudgetRowWithCategory = BudgetRow & {
 
 const SELECT_WITH_CATEGORY = 'id, category_id, month, limit_amount, alerted_80, alerted_100, categories(name, emoji, type)';
 
-/** งบทุกหมวดของผู้ใช้ในเดือนที่ระบุ (monthIso = `YYYY-MM-01`) */
+/**
+ * งบทุกหมวดของผู้ใช้ในเดือนที่ระบุ (monthIso = `YYYY-MM-01`)
+ *
+ * ไม่รวมแถว limit_amount = 0 ซึ่งแปลว่า "ผู้ใช้ยกเลิกงบหมวดนี้แล้ว" (ดู 003_budget_carry_over.sql)
+ */
 export async function listBudgetsByMonth(
   userId: string,
   monthIso: string
@@ -39,7 +43,8 @@ export async function listBudgetsByMonth(
     .from('budgets')
     .select(SELECT_WITH_CATEGORY)
     .eq('user_id', userId)
-    .eq('month', monthIso);
+    .eq('month', monthIso)
+    .gt('limit_amount', 0);
 
   if (error) {
     throw error;
@@ -106,6 +111,95 @@ export async function upsertBudget(
     throw new Error('upsertBudget: ตั้งงบไม่สำเร็จ');
   }
   return data as BudgetRow;
+}
+
+/** แถวงบ 1 แถวแบบย่อ ใช้ตัดสินใจเรื่องยกงบไปเดือนถัดไป */
+export type BudgetCarryRow = {
+  category_id: string;
+  month: string;
+  limit_amount: string;
+  categories: { type: 'income' | 'expense' } | null;
+};
+
+/**
+ * แถวงบทุกแถวของผู้ใช้ที่เดือน <= monthIso เรียงเดือนใหม่ไปเก่า — รวมแถวยกเลิก (0) ด้วย
+ *
+ * ผู้เรียกหยิบแถวแรกของแต่ละหมวดได้เลย = งบล่าสุดที่มีผลกับเดือนนั้น
+ * ต้องรวมแถว 0 เพราะมันคือจุดที่บอกว่า "หยุดยก" ตั้งแต่เดือนนั้น
+ */
+export async function listBudgetHistoryUpTo(
+  userId: string,
+  monthIso: string
+): Promise<BudgetCarryRow[]> {
+  const { data, error } = await supabase
+    .from('budgets')
+    .select('category_id, month, limit_amount, categories(type)')
+    .eq('user_id', userId)
+    .lte('month', monthIso)
+    .order('month', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? []) as unknown as BudgetCarryRow[];
+}
+
+/**
+ * สร้างงบของเดือนใหม่จากงบล่าสุด — ข้ามหมวดที่มีแถวของเดือนนั้นอยู่แล้ว
+ *
+ * ignoreDuplicates: ถ้าสองคำขอยกงบพร้อมกัน (เปิดเว็บกับบันทึกในแชทพร้อมกัน)
+ * ฝั่งที่มาทีหลังจะไม่ทับแถวที่อีกฝั่งเพิ่งสร้าง และไม่ไปรีเซ็ตธงเตือนที่ติดไปแล้ว
+ */
+export async function insertCarriedBudgets(
+  userId: string,
+  monthIso: string,
+  rows: { categoryId: string; limitBaht: string }[]
+): Promise<void> {
+  if (rows.length === 0) return;
+
+  const { error } = await supabase.from('budgets').upsert(
+    rows.map((row) => ({
+      user_id: userId,
+      category_id: row.categoryId,
+      month: monthIso,
+      limit_amount: row.limitBaht,
+      alerted_80: false,
+      alerted_100: false,
+    })),
+    { onConflict: 'user_id,category_id,month', ignoreDuplicates: true }
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+/**
+ * ยกเลิกงบตั้งแต่เดือนนี้ — เก็บเป็นแถว limit_amount = 0 ไม่ใช่ลบทิ้ง
+ *
+ * ถ้าลบทิ้ง การยกงบไปเดือนถัดไปจะไปเจองบเดือนก่อนแล้วคัดลอกกลับมาใหม่
+ * ต้องรัน 003_budget_carry_over.sql ก่อน ไม่งั้น DB ปฏิเสธด้วย check violation (23514)
+ */
+export async function markBudgetCleared(
+  userId: string,
+  categoryId: string,
+  monthIso: string
+): Promise<void> {
+  const { error } = await supabase.from('budgets').upsert(
+    {
+      user_id: userId,
+      category_id: categoryId,
+      month: monthIso,
+      limit_amount: '0',
+      alerted_80: false,
+      alerted_100: false,
+    },
+    { onConflict: 'user_id,category_id,month' }
+  );
+
+  if (error) {
+    throw error;
+  }
 }
 
 /** ลบงบของหมวดหนึ่งในเดือนหนึ่ง คืน true ถ้ามีแถวถูกลบจริง */
