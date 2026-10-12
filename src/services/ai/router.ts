@@ -17,12 +17,12 @@
 // ทางด่วน regex และคำสั่งตายตัวต่อได้ ไม่มีเส้นทางไหนที่ throw ออกไปถึงผู้ใช้
 
 import { AI_DISCLAIMER, CHAT_HISTORY_TURNS } from '../../config/constants';
-import { listCategoriesByUser } from '../../db/queries/categories';
 import { listTransactionsByUser } from '../../db/queries/transactions';
 import { formatBaht, toSatang } from '../../utils/money';
 import { redactSensitiveText } from '../../utils/redact';
 import { getTodayIso } from '../../utils/thaiDate';
 import { runCommand, type CommandName } from '../command.service';
+import { FALLBACK_EXPENSE_CATEGORY, resolveCategoryName } from '../category.service';
 import { answerHelpTopic } from '../help.service';
 import { createPending } from '../pending.service';
 import { simulatePurchase } from '../simulate.service';
@@ -367,35 +367,9 @@ async function runToolCall(
 // จาก 3 ข้อความ = 3 หมวดใหม่) แล้วหน้าสรุปรายหมวดของผู้ใช้จะพังในไม่กี่วัน
 // ที่นี่จึงจับคู่กับหมวดที่ผู้ใช้ "มีอยู่แล้ว" เท่านั้น ไม่เจอก็ปล่อยให้ระบบเลือกค่าเริ่มต้น
 
-/** หมวดสำรองของรายจ่ายเมื่อจับคู่ไม่ได้ (SPEC §S11.2 "ไม่เจอ = อื่นๆ") */
-export const FALLBACK_EXPENSE_CATEGORY = 'อื่นๆ';
-
-/**
- * export ออกมาเพราะ imageHandler (สลิป) ต้องเดาหมวดจากชื่อผู้รับโอนด้วยกฎเดียวกัน
- * ถ้าปล่อยให้แต่ละที่เขียนเอง กฎ "ห้ามสร้างหมวดใหม่ตามคำที่ AI เดามา" จะหลุดที่ใดที่หนึ่ง
- */
-export async function resolveCategoryName(
-  userId: string,
-  hint: string | null,
-  type: 'income' | 'expense'
-): Promise<string | null> {
-  if (!hint) return null;
-
-  const categories = await listCategoriesByUser(userId);
-  const sameType = categories.filter((category) => category.type === type);
-  const needle = hint.trim().toLowerCase();
-  if (!needle) return null;
-
-  const exact = sameType.find((category) => category.name.trim().toLowerCase() === needle);
-  if (exact) return exact.name;
-
-  // จับคู่แบบมีคำของกันและกัน เช่น hint "ค่าอาหาร" กับหมวด "อาหาร"
-  const partial = sameType.find((category) => {
-    const name = category.name.trim().toLowerCase();
-    return name.includes(needle) || needle.includes(name);
-  });
-  return partial ? partial.name : null;
-}
+// resolveCategoryName / FALLBACK_EXPENSE_CATEGORY ย้ายไปอยู่ category.service แล้ว
+// เพราะรายการประจำต้องใช้กฎเดียวกัน — export ต่อจากที่นี่ให้ผู้เรียกเดิม (textHandler, imageHandler)
+export { FALLBACK_EXPENSE_CATEGORY, resolveCategoryName };
 
 /**
  * เติมชื่อหมวดจริงลงใน entry ก่อนเก็บเป็น payload ของ pending

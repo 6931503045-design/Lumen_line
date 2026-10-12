@@ -17,6 +17,7 @@ import {
   deleteCategoryForUser,
   findCategoryOwnedByUser,
   insertCategory,
+  listCategoriesByUser,
   updateCategoryForUser,
   type UserCategory,
 } from '../db/queries/categories';
@@ -231,4 +232,53 @@ function describeBlocker(usage: CategoryUsage): string | null {
 
   // รายการที่ถูกลบไปแล้วไม่บล็อก — removeCategory ปลดออกจากหมวดให้ก่อนลบ
   return null;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// จับคู่คำกับหมวดที่ผู้ใช้ "มีอยู่แล้ว" — กฎเดียวกันทั้งแชท สลิป และรายการประจำ
+// ────────────────────────────────────────────────────────────────────────────
+//
+// 🔴 ห้ามส่งคำที่เดามาเข้า findOrCreateCategory ตรง ๆ เพราะมันจะ "สร้างหมวดใหม่" ทุกคำ
+// ("กาแฟ", "ค่ากาแฟ", "เครื่องดื่ม" จาก 3 ข้อความ = 3 หมวดใหม่) หน้าสรุปรายหมวดจะพังในไม่กี่วัน
+// ที่นี่จึงจับคู่กับหมวดที่ผู้ใช้มีอยู่แล้วเท่านั้น ไม่เจอก็ให้ผู้เรียกเลือกค่าเริ่มต้นเอง
+//
+// ย้ายมาจาก services/ai/router.ts เพราะรายการประจำ (recurring.service) ต้องใช้ด้วย
+// และบริการที่ไม่เกี่ยวกับ AI ไม่ควรต้อง import ไฟล์ของชั้น AI
+
+/** หมวดสำรองของรายจ่ายเมื่อจับคู่ไม่ได้ (SPEC §S11.2 "ไม่เจอ = อื่นๆ") */
+export const FALLBACK_EXPENSE_CATEGORY = 'อื่นๆ';
+
+/**
+ * หมวดของผู้ใช้ที่ตรงกับคำนี้ (ประเภทเดียวกันเท่านั้น) — ตรงทั้งคำก่อน แล้วค่อยแบบมีคำของกันและกัน
+ * เช่น คำ "ค่าอาหาร" กับหมวด "อาหาร" / คำ "เงินเดือน" กับหมวด "เงินเดือน"
+ */
+export async function matchExistingCategory(
+  userId: string,
+  hint: string | null,
+  type: 'income' | 'expense'
+): Promise<UserCategory | null> {
+  const needle = hint?.trim().toLowerCase();
+  if (!needle) return null;
+
+  const categories = await listCategoriesByUser(userId);
+  const sameType = categories.filter((category) => category.type === type);
+
+  const exact = sameType.find((category) => category.name.trim().toLowerCase() === needle);
+  if (exact) return exact;
+
+  return (
+    sameType.find((category) => {
+      const name = category.name.trim().toLowerCase();
+      return name.includes(needle) || needle.includes(name);
+    }) ?? null
+  );
+}
+
+/** ชื่อหมวดที่ตรงกับคำนี้ — คืน null ถ้าจับคู่ไม่ได้ (ใช้ในแชทและสลิป) */
+export async function resolveCategoryName(
+  userId: string,
+  hint: string | null,
+  type: 'income' | 'expense'
+): Promise<string | null> {
+  return (await matchExistingCategory(userId, hint, type))?.name ?? null;
 }

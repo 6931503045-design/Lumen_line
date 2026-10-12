@@ -23,6 +23,7 @@ import {
   toBangkokDayStart,
 } from '../utils/thaiDate';
 import { logger } from '../utils/logger';
+import { FALLBACK_EXPENSE_CATEGORY, matchExistingCategory } from './category.service';
 import {
   deactivateRule,
   insertRecurringRule,
@@ -233,9 +234,18 @@ export async function createRecurringRule(
     throw new RecurringError('วันในสัปดาห์ต้องอยู่ระหว่าง 0-6 (0 = อาทิตย์)', 400);
   }
 
+  // 🔴 เดิมเป็น null เสมอ ผู้ใช้ทดสอบตั้ง "เงินเดือน" เป็นรายการประจำแล้วเงินไม่ไปอยู่หมวดเงินเดือน
+  // (หน้าหมวดหมู่ขึ้น ฿0 ส่วนเงินไปกองที่ "ไม่ระบุหมวด") — จับคู่ชื่อรายการกับหมวดที่มีอยู่
+  // ด้วยกฎเดียวกับแชท รายจ่ายที่จับคู่ไม่ได้ลง "อื่นๆ" รายรับที่จับคู่ไม่ได้ปล่อยว่าง (ไม่ติดป้ายผิด)
+  const matched =
+    (await matchExistingCategory(input.userId, input.label, input.type)) ??
+    (input.type === 'expense'
+      ? await matchExistingCategory(input.userId, FALLBACK_EXPENSE_CATEGORY, 'expense')
+      : null);
+
   const rule = await insertRecurringRule({
     userId: input.userId,
-    categoryId: null,
+    categoryId: matched?.id ?? null,
     label: input.label.trim(),
     type: input.type,
     amountSatang: input.amountSatang,
@@ -256,8 +266,8 @@ export async function createRecurringRule(
     nextRun: rule.next_run,
     endDate: rule.end_date,
     categoryId: rule.category_id,
-    categoryName: null,
-    emoji: null,
+    categoryName: matched?.name ?? null,
+    emoji: matched?.emoji ?? null,
   };
 }
 

@@ -10,7 +10,7 @@ backend ตัวเดียวทำทุกอย่าง — รับ web
 ## 1. เตรียม Supabase
 
 1. สร้างโปรเจกต์ที่ [supabase.com](https://supabase.com)
-2. เปิด SQL Editor แล้วรัน `supabase/migrations/001_init.sql` ตามด้วย `002_updated_at_trigger.sql` และ `003_budget_carry_over.sql`
+2. เปิด SQL Editor แล้วรัน `supabase/migrations/001_init.sql` ตามด้วย `002_updated_at_trigger.sql` , `003_budget_carry_over.sql` และ `004_backfill_recurring_categories.sql`
 3. เก็บค่าไว้จาก Settings → API
    - Project URL → `SUPABASE_URL`
    - **service_role** key → `SUPABASE_SERVICE_ROLE_KEY` (ห้ามใช้ anon key เด็ดขาด)
