@@ -564,7 +564,12 @@
     // ---------- หมวดหมู่ ----------
     // เดิมปุ่มเพิ่ม/ลบหมวดแก้แต่ mock.categories ในหน่วยความจำแล้วขึ้นว่า "สำเร็จ"
     // ผู้ใช้รีเฟรชทีเดียวหายหมด ซึ่งแย่กว่าไม่มีปุ่มเลย
-    createCategory: (body) => runWrite(() => api.createCategory(body), 'เพิ่มหมวดหมู่สำเร็จ'),
+    // limitSatang > 0 = ตั้งงบให้หมวดใหม่ต่อเลย (ช่อง "งบต่อเดือน" ในหน้าเพิ่มหมวด)
+    createCategory: (body, limitSatang = 0) => runWrite(async () => {
+      const created = await api.createCategory(body);
+      if (limitSatang > 0 && created && created.id) await api.saveBudget(created.id, limitSatang);
+      return created;
+    }, 'เพิ่มหมวดหมู่สำเร็จ'),
     updateCategory: (categoryId, patch) => runWrite(() => api.updateCategory(categoryId, patch), 'แก้หมวดหมู่สำเร็จ'),
     // backend ตอบ 409 พร้อมบอกจำนวนรายการที่ยังผูกอยู่ ถ้าลบไม่ได้ — runWrite โชว์ข้อความนั้นให้เอง
     deleteCategory: (categoryId) => runWrite(() => api.deleteCategory(categoryId), 'ลบหมวดหมู่สำเร็จ', 'ลบไม่สำเร็จ'),

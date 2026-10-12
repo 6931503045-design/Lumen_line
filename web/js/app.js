@@ -3820,6 +3820,7 @@ function openCategoryMenu(categoryId) {
         ${category.type === 'income' ? '' : `
         <button class="settings-row" type="button" data-category-set-limit="${category.id}"><span>${category.limit ? 'แก้งบ' : 'ตั้งงบ'}</span><strong>›</strong></button>
         ${category.limit ? `<button class="settings-row" type="button" data-category-clear-limit="${category.id}"><span>ยกเลิกงบ</span><strong>›</strong></button>` : ''}`}
+        ${category.type === 'income' ? `<button class="settings-row" type="button" data-category-income-list="${category.id}"><span>ดู/แก้รายการรายรับของหมวดนี้</span><strong>›</strong></button>` : ''}
         <button class="settings-row" type="button" data-category-view-detail="${category.id}"><span>ดูรายละเอียด</span><strong>›</strong></button>
         <button class="settings-row danger" type="button" data-category-delete="${category.id}"><span>ลบหมวดหมู่</span><strong>›</strong></button>
       </div>
@@ -3844,6 +3845,17 @@ function openCategoryMenu(categoryId) {
 
   // ปุ่ม "ตั้งงบ" ใช้ data-category-set-limit ตัวเดียวกับที่ global click handler จับอยู่แล้ว
   // (ดู bindTransactionControls) ไม่ต้องผูก listener ซ้ำที่นี่ ไม่งั้น setCategoryLimit จะถูกเรียก 2 ครั้ง
+
+  // ยอดของหมวดรายรับมาจากรายการรายรับ ไม่ใช่ตัวเลขที่ตั้งเอง — ปุ่มนี้พาไปแก้ที่ต้นทาง
+  const incomeListBtn = document.querySelector('[data-category-income-list]');
+  if (incomeListBtn) {
+    incomeListBtn.addEventListener('click', () => {
+      // เดือนตามเวลาเครื่องผู้ใช้ ไม่ใช่ toISOString() (UTC) ที่ช่วงตี 0–7 ของวันที่ 1 จะได้เดือนก่อน
+      const now = new Date();
+      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      window.location.href = `transactions.html?category=${category.id}&month=${monthKey}`;
+    });
+  }
 
   const viewDetailBtn = document.querySelector('[data-category-view-detail]');
   if (viewDetailBtn) {
@@ -3969,6 +3981,9 @@ function openBatchEditModal() {
 
 function openAddCategoryModal() {
   let selectedIcon = CATEGORY_ICON_FALLBACK;
+  // เปิดจากแท็บรายรับต้องได้หมวดรายรับ — เดิมเริ่มที่ "รายจ่าย" เสมอ ผู้ใช้กดบันทึกจากแท็บรายรับ
+  // แล้วหมวดไปโผล่อีกแท็บ ดูเหมือนเพิ่มอะไรไม่ได้เลย
+  const initialType = categoryState.activeTab === 'income' ? 'income' : 'expense';
 
   const html = `
     <div class="modal-card">
@@ -3982,12 +3997,12 @@ function openAddCategoryModal() {
           <input id="newCategoryName" placeholder="เช่น ค่าอินเทอร์เน็ต" />
         </label>
         <div class="segmented-control">
-          <button type="button" class="segmented active" data-new-category-type="expense">รายจ่าย</button>
-          <button type="button" class="segmented" data-new-category-type="income">รายรับ</button>
+          <button type="button" class="segmented ${initialType === 'expense' ? 'active' : ''}" data-new-category-type="expense">รายจ่าย</button>
+          <button type="button" class="segmented ${initialType === 'income' ? 'active' : ''}" data-new-category-type="income">รายรับ</button>
         </div>
-        <label class="form-field floating">
-          <span>งบ/เป้าต่อเดือน (บาท)</span>
-          <input id="newCategoryLimit" type="number" min="0" value="1000" />
+        <label class="form-field floating" id="newCategoryLimitField" ${initialType === 'income' ? 'hidden' : ''}>
+          <span>งบต่อเดือน (บาท) — ไม่ใส่ก็ได้</span>
+          <input id="newCategoryLimit" type="number" min="0" placeholder="เช่น 1000" />
         </label>
       </div>
       <div class="field-label" style="margin-top: var(--space-2);">เลือกไอคอน (ถ้าไม่เลือก จะใช้ไอคอนกลาง)</div>
@@ -4015,6 +4030,9 @@ function openAddCategoryModal() {
   document.querySelectorAll('[data-new-category-type]').forEach((button) => {
     button.addEventListener('click', () => {
       document.querySelectorAll('[data-new-category-type]').forEach((btn) => btn.classList.toggle('active', btn === button));
+      // ตั้งงบได้เฉพาะหมวดรายจ่าย (backend ปฏิเสธหมวดรายรับ)
+      const limitField = document.getElementById('newCategoryLimitField');
+      if (limitField) limitField.hidden = button.dataset.newCategoryType === 'income';
     });
   });
 
@@ -4034,11 +4052,15 @@ function openAddCategoryModal() {
 
       if (window.jodtangPersist) {
         // DB เก็บไอคอนเป็นอีโมจิ ไม่ใช่ชื่อไอคอน — ส่งอีโมจิไปถ้าแปลงได้
-        window.jodtangPersist.createCategory({
-          name,
-          type,
-          emoji: ICON_TO_EMOJI[selectedIcon] || null,
-        });
+        // เดิมช่องงบถูกทิ้งเงียบ ๆ ตอนต่อกับ backend จริง ผู้ใช้ใส่งบแล้วหมวดใหม่ขึ้น "ยังไม่ตั้งงบ"
+        window.jodtangPersist.createCategory(
+          {
+            name,
+            type,
+            emoji: ICON_TO_EMOJI[selectedIcon] || null,
+          },
+          type === 'expense' ? limit : 0
+        );
         return;
       }
 
@@ -4094,7 +4116,7 @@ function openCategoryDetail(categoryId) {
         <div class="category-detail-card">
           ${category.type === 'income' ? '' : `<div class="summary-row"><span>งบเดือนนี้</span><strong>${limitAmount > 0 ? formatMoney(limitAmount) : 'ยังไม่ตั้ง'}</strong></div>`}
           <div class="summary-row"><span>${verb}แล้ว</span><strong>${formatMoney(usedAmount)}</strong></div>
-          ${category.type === 'income' ? '' : limitAmount > 0
+          ${category.type === 'income' ? '<p class="mini-label">ยอดนี้รวมจากรายการรายรับของเดือนนี้ เพิ่มหรือแก้ได้ที่หน้ารายการ หรือพิมพ์ในแชท เช่น "+เงินเดือน 5000"</p>' : limitAmount > 0
             ? `<div class="summary-row"><span>${verb}ไปแล้ว</span><strong>${Math.round((usedAmount / limitAmount) * 100)}% ของงบ</strong></div>`
             // ไม่มีงบ = ไม่มีอะไรให้เทียบ เดิมหารด้วย 1 แล้วขึ้นเป็นหลักแสนเปอร์เซ็นต์
             : '<p class="mini-label">งบตั้งเป็นรายเดือน ตั้งงบของเดือนนี้ได้จากเมนู ⋮ ของหมวด</p>'}
