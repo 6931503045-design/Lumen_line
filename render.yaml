@@ -18,7 +18,9 @@ services:
     name: jodtang
     runtime: node
     plan: free
-    branch: backend
+    # service จริงดึงโค้ดจาก main — เคยเขียน backend ไว้ซึ่งไม่ตรงกับของจริง
+    # ทำให้เข้าใจผิดว่า push ขึ้น main แล้วไม่ deploy
+    branch: main
 
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
