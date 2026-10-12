@@ -20,7 +20,7 @@ import { buildPlanCarousel, type PlanCardInput } from '../line/flex/planCard';
 import { buildBudgetCard, type BudgetCardRow } from '../line/flex/budgetCard';
 import { AI_DISCLAIMER } from '../config/constants';
 import { env } from '../config/env';
-import { getSafeToSpend, getUserSummary } from './summary.service';
+import { getSafeToSpend, getUserSummary, type SafeToSpend } from './summary.service';
 import { getBudgetOverview } from './budget.service';
 import { listPlansWithProgress, transferToPlan } from './plan.service';
 import { parseThaiNumber } from '../utils/thaiNumber';
@@ -183,13 +183,8 @@ async function buildRemainingTomorrow(userId: string): Promise<string> {
 
   const safe = await getSafeToSpend(userId, tomorrowIso);
   if (safe.overspentSatang > 0) {
-    return [
-      `💸 พรุ่งนี้ใช้ได้ ${formatBaht(0)}`,
-      `⚠️ เงินเดือนนี้ขาดอยู่ ${formatBaht(safe.overspentSatang)}`,
-      'พิมพ์ "เหลือ" เพื่อดูว่าขาดเพราะอะไร',
-      '',
-      AI_DISCLAIMER,
-    ].join('\n');
+    // ผู้ใช้ทดสอบได้ "พรุ่งนี้ ฿0 เงินขาด" แล้วไม่รู้ว่าเกิดอะไรขึ้น — ต้องเห็นที่มาในคำตอบเดียว
+    return describeShortfall(`💸 พรุ่งนี้ใช้ได้ ${formatBaht(0)}`, safe);
   }
 
   return [
@@ -204,6 +199,41 @@ async function buildRemainingTomorrow(userId: string): Promise<string> {
   ].join('\n');
 }
 
+/**
+ * คำตอบเมื่อเงินเดือนนี้ติดลบ — ใช้ร่วมกันทั้ง "วันนี้" และ "พรุ่งนี้"
+ *
+ * บอกสาเหตุให้ตรง: ใช้เกินรายรับจริง หรือแค่เงินไม่พอสำหรับรายจ่ายที่รออยู่
+ * แล้วแสดงที่มาทุกก้อน ผู้ใช้จะได้เห็นเองว่าตัวไหนทำให้ติดลบ
+ * ⚖️ G1: ทุกตัวเลขมาจาก S5.2 ที่นี่แค่จัดรูปแบบ
+ */
+function describeShortfall(headline: string, safe: SafeToSpend): string {
+  const { breakdown } = safe;
+  const spentMoreThanEarned =
+    breakdown.monthExpenseSatang > breakdown.monthIncomeSatang + breakdown.upcomingIncomeSatang;
+
+  const lines = [
+    headline,
+    spentMoreThanEarned
+      ? `⚠️ เดือนนี้ใช้เกินแล้ว ขาดอยู่ ${formatBaht(safe.overspentSatang)}`
+      : `⚠️ เงินเดือนนี้ไม่พอสำหรับรายจ่ายที่รออยู่ ขาดอยู่ ${formatBaht(safe.overspentSatang)}`,
+    '',
+    'คิดมาจาก',
+    `  รายรับเดือนนี้ ${formatBaht(breakdown.monthIncomeSatang)}`,
+  ];
+  if (breakdown.upcomingIncomeSatang > 0) {
+    lines.push(`  รายรับประจำที่จะเข้าอีก ${formatBaht(breakdown.upcomingIncomeSatang)}`);
+  }
+  lines.push(`  ใช้ไปแล้ว ${formatBaht(breakdown.monthExpenseSatang)}`);
+  if (breakdown.upcomingExpenseSatang > 0) {
+    lines.push(`  รายจ่ายประจำที่ยังไม่ถึงรอบ ${formatBaht(breakdown.upcomingExpenseSatang)}`);
+  }
+  if (breakdown.planCommitmentSatang > 0) {
+    lines.push(`  กันไว้ให้แผนออม ${formatBaht(breakdown.planCommitmentSatang)}`);
+  }
+  lines.push(`เหลืออีก ${safe.daysLeft} วันจะสิ้นเดือน`, '', AI_DISCLAIMER);
+  return lines.join('\n');
+}
+
 async function buildRemaining(userId: string): Promise<string> {
   const safe = await getSafeToSpend(userId, getTodayIso());
 
@@ -216,31 +246,7 @@ async function buildRemaining(userId: string): Promise<string> {
   //   2. บอกสาเหตุให้ตรง: ใช้เกินรายรับจริง หรือแค่เงินไม่พอสำหรับรายจ่ายที่รออยู่
   //   3. แสดงที่มาทุกก้อน ผู้ใช้จะได้เห็นเองว่าตัวไหนทำให้ติดลบ
   if (safe.overspentSatang > 0) {
-    const { breakdown } = safe;
-    const spentMoreThanEarned =
-      breakdown.monthExpenseSatang > breakdown.monthIncomeSatang + breakdown.upcomingIncomeSatang;
-
-    const lines = [
-      `💸 วันนี้ใช้ได้อีก ${formatBaht(0)}`,
-      spentMoreThanEarned
-        ? `⚠️ เดือนนี้ใช้เกินแล้ว ขาดอยู่ ${formatBaht(safe.overspentSatang)}`
-        : `⚠️ เงินเดือนนี้ไม่พอสำหรับรายจ่ายที่รออยู่ ขาดอยู่ ${formatBaht(safe.overspentSatang)}`,
-      '',
-      'คิดมาจาก',
-      `  รายรับเดือนนี้ ${formatBaht(breakdown.monthIncomeSatang)}`,
-    ];
-    if (breakdown.upcomingIncomeSatang > 0) {
-      lines.push(`  รายรับประจำที่จะเข้าอีก ${formatBaht(breakdown.upcomingIncomeSatang)}`);
-    }
-    lines.push(`  ใช้ไปแล้ว ${formatBaht(breakdown.monthExpenseSatang)}`);
-    if (breakdown.upcomingExpenseSatang > 0) {
-      lines.push(`  รายจ่ายประจำที่ยังไม่ถึงรอบ ${formatBaht(breakdown.upcomingExpenseSatang)}`);
-    }
-    if (breakdown.planCommitmentSatang > 0) {
-      lines.push(`  กันไว้ให้แผนออม ${formatBaht(breakdown.planCommitmentSatang)}`);
-    }
-    lines.push(`เหลืออีก ${safe.daysLeft} วันจะสิ้นเดือน`, '', AI_DISCLAIMER);
-    return lines.join('\n');
+    return describeShortfall(`💸 วันนี้ใช้ได้อีก ${formatBaht(0)}`, safe);
   }
 
   // 🔴 ผู้ใช้ทดสอบแล้วสับสนว่าเลขไหนคือคำตอบ เพราะเห็นสองยอดแล้วหยิบ

@@ -425,6 +425,28 @@ describe('พรุ่งนี้ใช้ได้เท่าไหร่ (re
     }
   });
 
+  it('🔴 พรุ่งนี้ ฿0 เพราะเงินขาด ต้องบอกที่มาในคำตอบเดียว ไม่ใช่ให้ไปพิมพ์ "เหลือ" ต่อ', async () => {
+    // ผู้ใช้ทดสอบได้ "พรุ่งนี้ ฿0 เงินขาด" แล้วถามว่าเกิดอะไรขึ้น
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T10:00:00+07:00'));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getSafeToSpend).mockResolvedValue({
+      monthRemainingSatang: -30000, perDaySatang: 0, daysLeft: 19,
+      overspentSatang: 30000,
+      breakdown: { monthIncomeSatang: 500000, upcomingIncomeSatang: 0,
+        monthExpenseSatang: 380000, upcomingExpenseSatang: 150000, planCommitmentSatang: 0 },
+    } as any);
+    try {
+      const text = await runCommand(USER, 'remaining_tomorrow');
+      expect(text.split('\n')[0]).toBe('💸 พรุ่งนี้ใช้ได้ ฿0.00');
+      expect(text).toContain('ขาดอยู่ ฿300.00');
+      expect(text).toContain('รายรับเดือนนี้ ฿5,000.00');
+      expect(text).toContain('รายจ่ายประจำที่ยังไม่ถึงรอบ ฿1,500.00');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('พรุ่งนี้ขึ้นเดือนใหม่ = บอกตรง ๆ ไม่ตอบตัวเลขที่ไม่มีความหมาย', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-31T10:00:00+07:00'));

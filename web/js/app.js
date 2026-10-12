@@ -4066,9 +4066,12 @@ function openCategoryDetail(categoryId) {
       </div>
       <div id="categoryTabOverview">
         <div class="category-detail-card">
-          <div class="summary-row"><span>งบที่ตั้ง</span><strong>${formatMoney(limitAmount)}</strong></div>
+          <div class="summary-row"><span>งบเดือนนี้</span><strong>${limitAmount > 0 ? formatMoney(limitAmount) : 'ยังไม่ตั้ง'}</strong></div>
           <div class="summary-row"><span>${verb}แล้ว</span><strong>${formatMoney(usedAmount)}</strong></div>
-          <div class="summary-row"><span>สัดส่วน</span><strong>${Math.round((usedAmount / (limitAmount || 1)) * 100 || 0)}%</strong></div>
+          ${limitAmount > 0
+            ? `<div class="summary-row"><span>${verb}ไปแล้ว</span><strong>${Math.round((usedAmount / limitAmount) * 100)}% ของงบ</strong></div>`
+            // ไม่มีงบ = ไม่มีอะไรให้เทียบ เดิมหารด้วย 1 แล้วขึ้นเป็นหลักแสนเปอร์เซ็นต์
+            : '<p class="mini-label">งบตั้งเป็นรายเดือน ตั้งงบของเดือนนี้ได้จากเมนู ⋮ ของหมวด</p>'}
         </div>
         <div class="chart-wrap small-donut">
           <canvas id="categoryDetailChart"></canvas>
