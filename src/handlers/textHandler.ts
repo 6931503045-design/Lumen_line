@@ -37,7 +37,11 @@ import {
   buildSaveFailedCard,
   buildUnreadableCard,
 } from '../line/flex/errorCard';
-import { interpretUserMessage } from '../services/ai/router';
+import {
+  FALLBACK_EXPENSE_CATEGORY,
+  interpretUserMessage,
+  resolveCategoryName,
+} from '../services/ai/router';
 import { MAX_AMOUNT_SATANG } from '../config/constants';
 import { env } from '../config/env';
 
@@ -85,12 +89,27 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
     return;
   }
 
+  // 🔴 คำที่ผู้ใช้พิมพ์ไม่ใช่ชื่อหมวด เป็นแค่ชื่อของที่ซื้อ
+  // ถ้าส่งเข้า createTransaction ตรง ๆ findOrCreateCategory จะสร้างหมวดใหม่ทุกคำ
+  // พิมพ์ "มะม่วง 500" แล้วได้หมวด "มะม่วง" เพิ่มมาหนึ่งหมวด — จด 3 วันก็มี 20 หมวด
+  // แล้วหน้าสรุปรายหมวดใช้ไม่ได้อีกเลย
+  //
+  // ใช้กฎเดียวกับฝั่ง AI (SPEC §S11.2): จับคู่กับหมวดที่ผู้ใช้ "มีอยู่แล้ว" เท่านั้น
+  // ไม่เจอ → รายจ่ายลง "อื่นๆ" ส่วนรายรับปล่อยว่างให้ระบบเลือกเอง เพราะฝั่งรายรับ
+  // ไม่มีหมวด "อื่นๆ" และการโยนเงินเดือนเข้า "รายได้เสริม" คือการติดป้ายผิด
+  const entryType = parsed.type ?? 'expense';
+  const matchedCategory = await resolveCategoryName(userId, parsed.category, entryType);
+  const categoryName =
+    matchedCategory ?? (entryType === 'expense' ? FALLBACK_EXPENSE_CATEGORY : undefined);
+
   try {
     const tx = await createTransaction({
       userId,
-      type: parsed.type ?? 'expense',
+      type: entryType,
       amountSatang: parsed.amountSatang,
-      categoryName: parsed.category,
+      ...(categoryName ? { categoryName } : {}),
+      // คำที่พิมพ์มาเก็บเป็นชื่อรายการแทน ไม่ให้หายไปเฉย ๆ
+      note: parsed.category,
       source: 'chat',
       parsedBy: 'regex',
     });
@@ -100,9 +119,9 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
         {
           transactionId: tx.id,
           type: tx.type,
-          categoryName: parsed.category,
-          // ทางด่วน regex อ่านได้แค่หมวดกับยอด ไม่มีชื่อรายการแยก จึงไม่ส่ง title
-          // การ์ดจะเว้นชื่อไว้แทนที่จะเอาชื่อหมวดมาใส่ซ้ำสองที่ติดกัน
+          categoryName,
+          // คำที่ผู้ใช้พิมพ์คือชื่อของที่ซื้อ ไม่ใช่ชื่อหมวด แสดงเป็นชื่อรายการ
+          title: parsed.category,
           amountSatang: tx.amountSatang,
           occurredAtIso: tx.occurredAt,
           budgetStatus: tx.budgetStatus,
