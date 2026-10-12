@@ -195,7 +195,9 @@ export const geminiToolDeclarations: FunctionDeclaration[] = [
           type: Type.STRING,
           enum: ['this_month', 'remaining', 'budget', 'plans'],
           description:
-            'this_month = รายรับรายจ่ายเดือนนี้, remaining = ใช้ได้อีกวันละเท่าไหร่, budget = งบรายหมวด, plans = แผนออม',
+            'remaining = เงินที่ใช้ได้ต่อวัน ใช้กับคำถามแนว "วันนี้เหลือเท่าไหร่" "ใช้ได้อีกเท่าไหร่" "พอใช้ไหม"; '
+            + 'this_month = ยอดรายรับกับรายจ่ายรวมของเดือน ใช้เฉพาะเมื่อถามถึงยอดรวมหรือใช้ไปแล้วเท่าไหร่; '
+            + 'budget = งบรายหมวด; plans = แผนออม',
         },
       },
       required: ['period'],

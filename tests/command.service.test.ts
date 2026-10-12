@@ -285,3 +285,85 @@ describe('runUndoLatest — คำสั่ง `ยกเลิก`', () => {
     expect(result.ok).toBe(false);
   });
 });
+
+describe('คำถามเรื่องเงินเหลือ — ต้องเข้า L0 ไม่ต้องรอ AI', () => {
+  // ตอนส่ง prototype ผู้ใช้พิมพ์ "เงินวันนี้เหลือเท่าไหร่" แล้วตกไปถึง AI
+  // ซึ่งเลือก tool ผิดเป็นสรุปเดือน แล้วตอบยอดรายรับ-รายจ่ายกลับมาแทน
+  it('ประโยคที่ผู้ใช้พิมพ์จริง ต้องจับเป็นคำสั่ง remaining', () => {
+    const asked = [
+      'เหลือเท่าไหร่',
+      'เหลือเท่าไร',
+      'เงินเหลือเท่าไหร่',
+      'เงินวันนี้เหลือเท่าไหร่',
+      'วันนี้เหลือเท่าไหร่',
+      'วันนี้ใช้ได้เท่าไหร่',
+      'ใช้ได้เท่าไหร่',
+      'ใช้ได้วันละเท่าไหร่',
+    ];
+    for (const text of asked) {
+      expect(matchCommand(text)).toBe('remaining');
+    }
+  });
+
+  it('คำสั่งเดิมยังใช้ได้เหมือนเดิม', () => {
+    expect(matchCommand('เหลือ')).toBe('remaining');
+  });
+
+  it('🔴 ยังต้องไม่ชนกับการบันทึกเงิน — ข้อความที่มีจำนวนเงินต้องไม่ถูกมองเป็นคำสั่ง', () => {
+    // คำที่เพิ่มเข้ามาไม่มีตัวเลขเลย จึงไม่มีทางชนกับทางด่วน L1 ที่ต้องมียอดเสมอ
+    expect(matchCommand('เหลือเท่าไหร่ 80')).toBeNull();
+    expect(matchCommand('ค่าขนมเหลือเท่าไหร่ 50')).toBeNull();
+    expect(matchCommand('จ่ายค่าสรุปโครงการ 200')).toBeNull();
+  });
+
+  it('ยังจับแบบตรงทั้งข้อความ ไม่ใช่ includes()', () => {
+    expect(matchCommand('อยากรู้ว่าเงินเหลือเท่าไหร่')).toBeNull();
+    expect(matchCommand('เหลือเท่าไหร่ครับ')).toBeNull();
+  });
+});
+
+describe('คำตอบของ remaining — ต้องบอกชัดว่าเลขไหนคือคำตอบ', () => {
+  it('ขึ้นต้นด้วยยอดที่ใช้ได้วันนี้ และบอกที่มาของการคำนวณ', async () => {
+    vi.mocked(getSafeToSpend).mockResolvedValue({
+      monthRemainingSatang: 336000,
+      perDaySatang: 24000,
+      daysLeft: 14,
+      overspentSatang: 0,
+      breakdown: {
+        monthIncomeSatang: 0,
+        upcomingIncomeSatang: 0,
+        monthExpenseSatang: 0,
+        upcomingExpenseSatang: 0,
+        planCommitmentSatang: 0,
+      },
+    });
+
+    const text = await runCommand(USER, 'remaining');
+
+    // บรรทัดแรกต้องเป็นคำตอบ ไม่ใช่ยอดรวมทั้งเดือน
+    expect(text.split('\n')[0]).toContain('฿240.00');
+    expect(text).toContain('คิดมาจาก');
+    expect(text).toContain('฿3,360.00');
+    expect(text).toContain('14 วัน');
+  });
+
+  it('ใช้เกินงบแล้ว ต้องเตือนทันที ไม่ใช่โชว์ 0', async () => {
+    vi.mocked(getSafeToSpend).mockResolvedValue({
+      monthRemainingSatang: -50000,
+      perDaySatang: 0,
+      daysLeft: 9,
+      overspentSatang: 50000,
+      breakdown: {
+        monthIncomeSatang: 0,
+        upcomingIncomeSatang: 0,
+        monthExpenseSatang: 0,
+        upcomingExpenseSatang: 0,
+        planCommitmentSatang: 0,
+      },
+    });
+
+    const text = await runCommand(USER, 'remaining');
+    expect(text).toContain('ใช้เกิน');
+    expect(text).toContain('฿500.00');
+  });
+});
