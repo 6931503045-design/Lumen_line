@@ -1,340 +1,261 @@
-// ไฟล์นี้ทำหน้าที่อะไร: การ์ด "บันทึกแล้ว" — รายการที่เพิ่งจด พร้อมแถบงบของหมวดนั้น
+// ไฟล์นี้ทำหน้าที่อะไร: Flex สำหรับแสดงสรุปรายรับ-รายจ่ายของเดือนนี้ (คำสั่ง `สรุป`)
 // ใครรับผิดชอบ: ④ Frontend
-// เขียนในสัปดาห์: W5
-// อ้างอิง: SPEC.md §3 S1 ตาราง Flex Message · SRS FR-1 / FR-4
-// ⚖️ กฎเหล็ก G1, G3, G7
+// เขียนในสัปดาห์: W2
+// อ้างอิง: SPEC.md §3 S1 ตาราง Flex Message แถว summaryCard · SRS FR-7
+// ⚖️ กฎเหล็ก G1, G7
 //
-// ⚖️ G1/G3: ยอดเงินทุกตัวรับมาเป็นสตริงที่ format จากสตางค์แล้ว การ์ดไม่แตะตัวเลขเงิน
-// เปอร์เซ็นต์ที่รับมาใช้เป็น "ความกว้างแถบ" อย่างเดียว ไม่ได้เอาไปคิดเงินต่อ
+// ⚖️ G1: ไฟล์นี้ "ห้ามคำนวณเงิน" — รับเฉพาะสตริงที่ format มาแล้วจาก service
+// แม้แต่การตัดสินว่าส่วนต่างติดลบหรือไม่ ก็ให้ผู้เรียกส่ง balanceIsNegative มา
+// ไม่ใช่มาแกะเครื่องหมายลบออกจากสตริงเอง ซึ่งจะพังทันทีที่เปลี่ยนรูปแบบการ format
 //
-// 🔴 บทเรียนจากการทดสอบบนมือถือจริง — Flex Simulator บนเดสก์ท็อปผ่อนผันกว่าแอป LINE
-// สามข้อนี้ Simulator วาดให้เห็นปกติ แต่บนเครื่องจริงพัง ห้ามแก้กลับ:
-//   1. กล่องในของแถบต้องกำหนด height เอง ไม่งั้นสูง 0 แล้วแถบหายทั้งแถบ
-//   2. ป้ายต้องเป็น layout 'vertical' + flex 0 — ถ้าใช้ 'baseline' กล่องยุบจนกลายเป็นวงกลม
-//   3. ไอคอนต้องเป็น child ตรงๆ ของแถว horizontal ห้ามห่อ box ที่ flex 0 ไม่งั้นหายไปเลย
+// ⚖️ G7: รายการ type='transfer' ไม่ถูกนับอยู่แล้วตั้งแต่ชั้น service ที่นี่ไม่ต้องทำอะไรเพิ่ม
+//
+// ⚠️ ไม่ import type FlexMessage เต็มจาก @line/bot-sdk ด้วยเหตุผลเดียวกับ confirmCard.ts
+// (namespace เปลี่ยนบ่อยระหว่างเวอร์ชัน) — ส่งเป็น object ดิบตาม Flex Message JSON schema
 
-const C = {
-  band: '#c6ff3d',
-  bandText: '#4a5c38',
-  line: '#dfe9d3',
-  text: '#1c2416',
-  strong: '#10140b',
-  muted: '#6b7a5e',
-  dark: '#14170f',
-  onDark: '#f6faf0',
-  incomeBg: '#e4f4e5',
-  bar: '#8fbf18',
-  warn: '#f5a524',
-  danger: '#e5484d',
-  track: '#dde6d2',
-} as const;
-
-const BAR_HEIGHT = '10px';
-/** ต่ำกว่านี้แถบจะมนจนดูเหมือนจุด ไม่ใช่ขีด */
-const ROUND_THRESHOLD = 14;
-/** ยกพื้นขั้นต่ำให้แถบยังอ่านออก — ยอดจริงพิมพ์อยู่ข้างแถบแล้ว จึงไม่ทำให้เข้าใจผิด */
-const MIN_BAR_WIDTH = 5;
-
-export type RecordedItem = {
-  transactionId: string;
-  /** เช่น "8 ต.ค. 2569 19:55" — format มาแล้ว */
-  occurredLabel: string;
-  /**
-   * ชื่อรายการ เช่น "กาแฟเย็น" — ไม่ใส่ก็ได้
-   * ทางด่วน (regex) อ่านได้แค่หมวดกับยอด ไม่มีชื่อรายการแยก ถ้าใส่ชื่อหมวดซ้ำลงมา
-   * จะกลายเป็นข้อความเดียวกันสองที่ติดกัน จึงปล่อยว่างแล้วให้แถวเหลือแค่เวลากับยอด
-   */
-  title?: string;
-  /** format แล้ว เช่น "฿80" */
+export type SummaryTopCategory = {
+  name: string;
+  /** format แล้ว เช่น "฿3,200.00" */
   formattedAmount: string;
+  /** 0–100 ใช้เป็นความกว้างของแถบ เป็นเรื่องแสดงผลล้วนๆ ไม่ใช่ยอดเงิน */
+  percent: number;
 };
 
-export type RecordedGroup = {
-  type: 'income' | 'expense';
-  categoryName: string;
-  items: RecordedItem[];
+export type SummaryCardInput = {
+  /** เช่น "กันยายน 2569" */
+  monthLabel: string;
+  formattedIncome: string;
+  formattedExpense: string;
+  formattedBalance: string;
+  /** true = ส่วนต่างติดลบ ผู้เรียกเป็นคนตัดสิน ไม่ใช่การ์ด (G1) */
+  balanceIsNegative: boolean;
+  /** สูงสุด 3 หมวดตาม SPEC — ถ้าส่งมามากกว่านั้นการ์ดจะตัดให้เอง */
+  topCategories: SummaryTopCategory[];
+  /** ข้อความท้ายการ์ด เช่น ชวนให้เริ่มจดเมื่อยังไม่มีรายการ */
+  footnote?: string;
 };
 
-export type RecordedBudget = {
-  categoryName: string;
-  /** format แล้ว ไม่ต้องมีสตางค์ — แถวนี้แคบ ยิ่งสั้นยิ่งไม่โดนตัด */
-  formattedSpent: string;
-  formattedLimit: string;
-  percentUsed: number;
-};
+const COLOR_INCOME = '#1DB446';
+const COLOR_EXPENSE = '#E74C3C';
+const COLOR_MUTED = '#888888';
+const COLOR_TRACK = '#EEEEEE';
+const COLOR_BAR = '#1a3a6b';
 
-export type RecordedCardInput = {
-  groups: RecordedGroup[];
-  budgets: RecordedBudget[];
-  /** เช่น "รอบงบ: รายเดือน (เริ่มวันที่ 1)" */
-  periodNote: string;
-  /** โดเมนที่เสิร์ฟ web/ — รูปใน Flex ต้องเป็น URL แบบ HTTPS เท่านั้น */
-  assetBaseUrl: string;
-};
+const MAX_TOP_CATEGORIES = 3;
 
-function barColor(percent: number): string {
-  if (percent >= 100) return C.danger;
-  if (percent >= 80) return C.warn;
-  return C.bar;
+// สเกลสีของแถบ: เขียว (0%) → เหลืองอำพัน (50%) → แดง (100%)
+// ไล่ผ่านเหลืองแทนการไล่เขียว→แดงตรงๆ เพราะจุดกึ่งกลางแบบตรงจะเป็นสีน้ำตาลขุ่น
+const GRADIENT_START = '#1DB446';
+const GRADIENT_MID = '#F5A524';
+const GRADIENT_END = '#E74C3C';
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-function progressBar(percent: number) {
-  const width = Math.max(MIN_BAR_WIDTH, Math.min(100, Math.round(percent)));
-  return {
-    type: 'box',
-    layout: 'vertical',
-    height: BAR_HEIGHT,
-    backgroundColor: C.track,
-    cornerRadius: '5px',
-    margin: 'sm',
-    contents: [
-      {
-        type: 'box',
-        layout: 'vertical',
-        contents: [],
-        width: `${width}%`,
-        height: BAR_HEIGHT, // 🔴 ดูหมายเหตุข้อ 1 ด้านบน
-        backgroundColor: barColor(percent),
-        cornerRadius: width < ROUND_THRESHOLD ? '2px' : '5px',
-      },
-    ],
-  };
+function mixHex(a: string, b: string, t: number): string {
+  const ca = hexToRgb(a);
+  const cb = hexToRgb(b);
+  return (
+    '#' +
+    ca
+      .map((v, i) => Math.round(v + (cb[i] - v) * t).toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase()
+  );
 }
 
-/** ป้ายเม็ดมน — 🔴 ต้อง vertical ไม่ใช่ baseline (หมายเหตุข้อ 2) */
-function pill(label: string, background: string, color: string) {
-  return {
-    type: 'box',
-    layout: 'vertical',
-    flex: 0,
-    backgroundColor: background,
-    cornerRadius: '12px',
-    paddingTop: '3px',
-    paddingBottom: '3px',
-    paddingStart: '10px',
-    paddingEnd: '10px',
-    contents: [{ type: 'text', text: label, size: 'xxs', weight: 'bold', color, align: 'center' }],
-  };
+/** สีบนสเกล ณ ตำแหน่ง p (0–100) ของรางทั้งเส้น */
+function scaleColor(p: number): string {
+  return p <= 50
+    ? mixHex(GRADIENT_START, GRADIENT_MID, p / 50)
+    : mixHex(GRADIENT_MID, GRADIENT_END, (p - 50) / 50);
 }
 
 /**
- * ไอคอนที่กดได้
- *
- * 🔴 ต้องเป็น image ไม่ใช่ icon — component icon ใช้ได้เฉพาะใน baseline box
- * และ action ต้องอยู่บนตัว image เอง ไม่ใช่กล่องที่ครอบ ไม่งั้นแตะแล้วไม่ติด
+ * ไล่สีของแถบยาว barWidth% โดยยึดสเกลของ "รางทั้งเส้น" ไม่ใช่ของตัวแถบ
+ * แถบสั้นจึงเขียวเกือบล้วน แถบยาวจึงค่อยแดงที่ปลาย — สีบอกสัดส่วนได้ตรงกับความยาว
+ * (เป็นการคำนวณสีของ UI ล้วนๆ ไม่ใช่ยอดเงิน — ไม่ขัด G1)
  */
-function iconButton(url: string, label: string, action: Record<string, unknown>) {
-  return {
-    type: 'image',
-    url,
-    size: '18px',
-    flex: 0,
-    margin: 'md',
-    aspectMode: 'fit',
-    action,
+function barGradient(barWidth: number) {
+  const gradient: Record<string, string> = {
+    type: 'linearGradient',
+    angle: '90deg',
+    startColor: GRADIENT_START,
+    endColor: scaleColor(barWidth),
   };
+  // เกิน 50% แถบผ่านจุดเหลืองของราง — ปักสีกลางไว้ตรงตำแหน่งนั้นของตัวแถบ
+  if (barWidth > 50) {
+    gradient.centerColor = GRADIENT_MID;
+    gradient.centerPosition = `${Math.round((50 / barWidth) * 100)}%`;
+  }
+  return gradient;
 }
 
-function groupHeader(group: RecordedGroup) {
-  const isIncome = group.type === 'income';
+/** แถวตัวเลข 1 บรรทัด: ป้ายซ้าย ยอดขวา */
+function amountRow(label: string, value: string, color?: string) {
   return {
     type: 'box',
     layout: 'horizontal',
-    margin: 'lg',
-    spacing: 'sm',
     contents: [
-      pill(
-        isIncome ? 'รายรับ' : 'รายจ่าย',
-        isIncome ? C.incomeBg : C.dark,
-        isIncome ? '#2f7a33' : C.onDark
-      ),
+      { type: 'text', text: label, size: 'sm', color: COLOR_MUTED, flex: 3 },
       {
         type: 'text',
-        text: group.categoryName,
+        text: value,
         size: 'sm',
         weight: 'bold',
-        color: C.text,
-        gravity: 'center',
+        align: 'end',
+        flex: 5,
+        ...(color ? { color } : {}),
       },
     ],
   };
 }
 
-function itemRow(item: RecordedItem, isIncome: boolean, base: string) {
+/** แถวหมวด: ชื่อ + ยอด แล้วตามด้วยแถบสัดส่วน */
+function categoryRow(item: SummaryTopCategory) {
+  // จำกัด 0–100 ก่อนเอาไปทำความกว้าง เพราะ LINE ไม่รับค่านอกช่วงนี้
+  // (ไม่ใช่การคำนวณเงิน เป็นการกันค่าเพี้ยนของ UI ล้วนๆ)
+  const width = Math.max(0, Math.min(100, Math.round(item.percent)));
+  // เหตุผลเดียวกับ planCard: แถบที่สั้นมากต้องยังอ่านออกว่าเป็น "ขีด" ไม่ใช่จุดกลม
+  // ยกพื้นขั้นต่ำ 5% แล้วลดความมนลงเมื่อสั้น — ตัวเลขจริงพิมพ์อยู่ข้างแถบแล้ว
+  const barWidth = Math.max(5, width);
+  const barRadius = barWidth < 14 ? '2px' : '3px';
   return {
     type: 'box',
     layout: 'vertical',
     margin: 'md',
+    spacing: 'xs',
     contents: [
-      { type: 'text', text: item.occurredLabel, size: 'xxs', color: C.muted },
       {
         type: 'box',
         layout: 'horizontal',
-        margin: 'xs',
         contents: [
-          {
-            type: 'text',
-            text: item.title ?? 'รายการนี้',
-            size: 'sm',
-            color: item.title ? C.text : C.muted,
-            flex: 5,
-            wrap: true,
-            gravity: 'center',
-          },
+          { type: 'text', text: item.name, size: 'sm', flex: 5, wrap: true },
           {
             type: 'text',
             text: item.formattedAmount,
             size: 'sm',
-            weight: 'bold',
-            color: isIncome ? '#2f7a33' : C.strong,
+            color: COLOR_MUTED,
             align: 'end',
             flex: 4,
-            gravity: 'center',
           },
-          // 🔴 ไอคอนอยู่ตรงนี้ ไม่ห่อ box (หมายเหตุข้อ 3)
-          //
-          // ✏️ ใช้ uri ไม่ใช่ postback โดยตั้งใจ: การแก้ไขต้องกรอกยอด/วันเวลา/หมวด
-          // ซึ่งทำในแชทลำบาก ส่วนหน้าเว็บมีฟอร์มครบอยู่แล้ว พาไปที่รายการนั้นเลยเร็วกว่า
-          // (เคยเป็น postback action=edit ซึ่ง postbackHandler ไม่มี case รองรับ
-          //  กดแล้วเงียบสนิทไม่มีอะไรเกิดขึ้น)
-          iconButton(`${base}/img/icon/pencil.png`, 'แก้ไข', {
-            type: 'uri',
-            label: 'แก้ไข',
-            uri: `${base}/transactions.html?tx=${encodeURIComponent(item.transactionId)}`,
-          }),
-          iconButton(`${base}/img/icon/trash-2.png`, 'ลบ', {
-            type: 'postback',
-            label: 'ลบ',
-            data: `action=undo&id=${item.transactionId}`,
-            displayText: 'ลบรายการนี้',
-          }),
         ],
       },
-    ],
-  };
-}
-
-function budgetRow(budget: RecordedBudget) {
-  return {
-    type: 'box',
-    layout: 'vertical',
-    margin: 'md',
-    contents: [
       {
         type: 'box',
-        layout: 'horizontal',
-        contents: [
-          // ชื่อหมวดผู้ใช้ตั้งเองได้ ยาวแค่ไหนก็ได้ จึงต้อง wrap ไม่ใช่ปล่อยให้ตัด
-          {
-            type: 'text',
-            text: budget.categoryName,
-            size: 'sm',
-            weight: 'bold',
-            color: C.text,
-            flex: 5,
-            wrap: true,
-          },
-          // ตัวเล็กกว่าชื่อเพราะแถวนี้แคบ และยอดยาวกว่าชื่อได้ง่าย
-          {
-            type: 'text',
-            text: `${budget.formattedSpent} / ${budget.formattedLimit}`,
-            size: 'xs',
-            color: C.text,
-            align: 'end',
-            flex: 5,
-            gravity: 'center',
-          },
-        ],
-      },
-      progressBar(budget.percentUsed),
-    ],
-  };
-}
-
-export function buildRecordedCard(input: RecordedCardInput) {
-  const base = input.assetBaseUrl.replace(/\/$/, '');
-  const count = input.groups.reduce((sum, group) => sum + group.items.length, 0);
-
-  const body: Record<string, unknown>[] = [];
-  input.groups.forEach((group, index) => {
-    if (index > 0) body.push({ type: 'separator', margin: 'md', color: C.line });
-    body.push(groupHeader(group));
-    group.items.forEach((item) => body.push(itemRow(item, group.type === 'income', base)));
-  });
-
-  if (input.budgets.length > 0) {
-    body.push({
-      type: 'box',
-      layout: 'vertical',
-      height: '2px',
-      backgroundColor: C.dark,
-      margin: 'xl',
-      contents: [],
-    });
-    input.budgets.forEach((budget) => body.push(budgetRow(budget)));
-    body.push({
-      type: 'text',
-      text: input.periodNote,
-      size: 'xxs',
-      color: C.muted,
-      align: 'end',
-      margin: 'lg',
-    });
-  }
-
-  const headline = count > 1 ? `บันทึกแล้ว ${count} รายการ` : 'บันทึกแล้ว';
-  const first = input.groups[0]?.items[0];
-
-  return {
-    type: 'flex' as const,
-    // altText ขึ้นใน notification และในเครื่องที่แสดง Flex ไม่ได้ ต้องมียอดให้ครบ
-    altText:
-      count === 1 && first
-        ? `บันทึก ${first.title ?? input.groups[0]?.categoryName ?? 'รายการ'} ${first.formattedAmount} แล้ว`
-        : headline,
-    contents: {
-      type: 'bubble',
-      size: 'mega',
-      header: {
-        type: 'box',
-        layout: 'horizontal',
-        backgroundColor: C.band,
-        paddingAll: '16px',
-        paddingBottom: '12px',
+        layout: 'vertical',
+        height: '6px',
+        backgroundColor: COLOR_TRACK,
+        cornerRadius: '3px',
         contents: [
           {
             type: 'box',
             layout: 'vertical',
-            flex: 5,
-            contents: [
-              { type: 'text', text: headline, size: 'lg', weight: 'bold', color: C.strong },
-              {
-                type: 'text',
-                text: 'อย่าลืมตรวจรายการที่บันทึกไว้นะ',
-                size: 'xxs',
-                color: C.bandText,
-                margin: 'xs',
-                wrap: true,
-              },
-            ],
-          },
-          {
-            type: 'image',
-            url: `${base}/img/mascot/happy.png`,
-            size: 'xs',
-            flex: 2,
-            aspectMode: 'fit',
-            gravity: 'center',
+            // 🔴 ต้องมี filler ข้างใน ห้ามปล่อย contents: [] — แอป LINE บนมือถือ
+            // ไม่วาดกล่องที่ไม่มีลูกเลย (Simulator บนเดสก์ท็อปยังวาดให้ จึงหลุดรอดตอนทดสอบ)
+            contents: [{ type: 'filler' }],
+            // 🔴 ต้องกำหนด height ซ้ำที่กล่องใน ไม่ใช่พึ่งความสูงของกล่องนอก
+            // ไม่งั้นกล่องในสูง 0 แล้วแถบหายทั้งแถบบนแอป LINE จริง
+            height: '6px',
+            width: `${barWidth}%`,
+            // backgroundColor ไว้เป็นสีสำรองให้ไคลเอนต์รุ่นเก่าที่ไม่รู้จัก gradient
+            backgroundColor: scaleColor(barWidth),
+            background: barGradient(barWidth),
+            cornerRadius: barRadius,
           },
         ],
       },
+    ],
+  };
+}
+
+export function buildSummaryCard(input: SummaryCardInput) {
+  const top = input.topCategories.slice(0, MAX_TOP_CATEGORIES);
+
+  const bodyContents: Record<string, unknown>[] = [
+    {
+      type: 'text',
+      text: '📊 สรุปเดือนนี้',
+      weight: 'bold',
+      size: 'md',
+      color: COLOR_BAR,
+    },
+    { type: 'text', text: input.monthLabel, size: 'xs', color: COLOR_MUTED },
+    { type: 'separator', margin: 'md' },
+    {
+      type: 'box',
+      layout: 'vertical',
+      margin: 'md',
+      spacing: 'sm',
+      contents: [
+        amountRow('รายรับ', input.formattedIncome, COLOR_INCOME),
+        amountRow('รายจ่าย', input.formattedExpense, COLOR_EXPENSE),
+        amountRow(
+          'ส่วนต่าง',
+          input.formattedBalance,
+          input.balanceIsNegative ? COLOR_EXPENSE : COLOR_INCOME
+        ),
+      ],
+    },
+  ];
+
+  if (top.length > 0) {
+    bodyContents.push(
+      { type: 'separator', margin: 'lg' },
+      {
+        type: 'text',
+        text: 'จ่ายมากสุด',
+        size: 'sm',
+        weight: 'bold',
+        margin: 'lg',
+      },
+      ...top.map(categoryRow)
+    );
+  }
+
+  if (input.footnote) {
+    bodyContents.push({
+      type: 'text',
+      text: input.footnote,
+      size: 'xs',
+      color: COLOR_MUTED,
+      wrap: true,
+      margin: 'lg',
+    });
+  }
+
+  return {
+    type: 'flex' as const,
+    // altText คือสิ่งที่ขึ้นใน notification และในแอปที่แสดง Flex ไม่ได้
+    // จึงต้องมีตัวเลขสำคัญครบในบรรทัดเดียว
+    altText: `สรุปเดือนนี้ รายรับ ${input.formattedIncome} รายจ่าย ${input.formattedExpense} ส่วนต่าง ${input.formattedBalance}`,
+    contents: {
+      type: 'bubble',
+      size: 'kilo',
       body: {
         type: 'box',
         layout: 'vertical',
-        paddingAll: '16px',
-        paddingTop: '8px',
-        spacing: 'none',
-        contents: body,
+        spacing: 'sm',
+        contents: bodyContents,
+      },
+      footer: {
+        type: 'box',
+        layout: 'horizontal',
+        spacing: 'sm',
+        contents: [
+          {
+            type: 'button',
+            style: 'secondary',
+            height: 'sm',
+            action: {
+              type: 'message',
+              label: 'ใช้ได้อีกเท่าไหร่',
+              text: 'เหลือ',
+            },
+          },
+        ],
       },
     },
   };
