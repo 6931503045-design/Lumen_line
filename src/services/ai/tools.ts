@@ -1,4 +1,4 @@
-// ไฟล์นี้ทำหน้าที่อะไร: ประกาศ tool ทั้ง 8 ตัวให้ Gemini เลือก และ "บังคับ" ตรวจ args ด้วย Zod
+// ไฟล์นี้ทำหน้าที่อะไร: ประกาศ tool ทั้ง 9 ตัวให้ Gemini เลือก และ "บังคับ" ตรวจ args ด้วย Zod
 // ใครรับผิดชอบ: ③ AI
 // เขียนในสัปดาห์: W2
 // อ้างอิง: SPEC.md §S11.2 ตาราง Tool catalog + หัวข้อ "การแปลง args เป็นข้อมูลจริง" + Sanity check
@@ -26,6 +26,7 @@
 import { Type, type FunctionDeclaration, type Schema } from '@google/genai';
 import { z } from 'zod';
 import { MAX_AMOUNT_SATANG } from '../../config/constants';
+import { HELP_TOPICS, HELP_TOPIC_LABELS, type HelpTopic } from '../../config/helpTopics';
 import { splitEvenly, toSatang } from '../../utils/money';
 import { parseThaiDateText } from '../../utils/thaiDateText';
 
@@ -48,6 +49,7 @@ export const AI_TOOL_NAMES = [
   'query_transactions',
   'create_recurring',
   'simulate_purchase',
+  'explain_feature',
 ] as const;
 
 export type AiToolName = (typeof AI_TOOL_NAMES)[number];
@@ -257,6 +259,24 @@ export const geminiToolDeclarations: FunctionDeclaration[] = [
       required: ['item_name', 'price'],
     },
   },
+  {
+    // ⚠️ AI เลือกแค่หัวข้อ เนื้อหาคำตอบมาจาก config/helpTopics.ts ที่ทีมเขียนเอง
+    // ไม่ให้โมเดลอธิบายวิธีใช้เอง เพราะมันไม่รู้ว่าแอปนี้มีปุ่มอะไรอยู่หน้าไหน
+    name: 'explain_feature',
+    description:
+      'อธิบายวิธีใช้แอป ใช้เมื่อผู้ใช้ถามว่า "ทำยังไง" "ตั้งค่าที่ไหน" "ใช้ไม่เป็น" เกี่ยวกับฟีเจอร์ของแอป',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        topic: {
+          type: Type.STRING,
+          enum: [...HELP_TOPICS],
+          description: HELP_TOPICS.map((topic) => `${topic} = ${HELP_TOPIC_LABELS[topic]}`).join('; '),
+        },
+      },
+      required: ['topic'],
+    },
+  },
 ];
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -315,6 +335,7 @@ const schemas = {
     item_name: itemSchema,
     price: bahtSchema,
   }),
+  explain_feature: z.object({ topic: z.enum(HELP_TOPICS) }),
 } as const;
 
 /** รายการเงิน 1 ก้อนที่ตรวจและแปลงหน่วยเสร็จแล้ว พร้อมเขียนลง pending payload */
@@ -362,7 +383,8 @@ export type ValidatedToolCall =
       dayOfMonth: number | null;
       dayOfWeek: number | null;
     }
-  | { name: 'simulate_purchase'; itemName: string; priceSatang: number };
+  | { name: 'simulate_purchase'; itemName: string; priceSatang: number }
+  | { name: 'explain_feature'; topic: HelpTopic };
 
 export type ToolValidation =
   | { ok: true; call: ValidatedToolCall }
@@ -611,6 +633,11 @@ export function validateToolCall(
         return fail('bad_amount', 'ขอราคาเป็นตัวเลขอีกครั้งนะครับ เช่น "ซื้อหูฟัง 1500 ได้ไหม"');
       }
       return { ok: true, call: { name, itemName: data.item_name, priceSatang } };
+    }
+
+    case 'explain_feature': {
+      const data = parsed.data as z.infer<typeof schemas.explain_feature>;
+      return { ok: true, call: { name, topic: data.topic } };
     }
   }
 }

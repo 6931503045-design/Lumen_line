@@ -29,6 +29,7 @@ import {
   runUndoLatest,
 } from '../services/command.service';
 import { buildConfirmCard } from '../line/flex/confirmCard';
+import { answerHelpTopic, matchHelpQuestion } from '../services/help.service';
 import { interpretUserMessage } from '../services/ai/router';
 import { AI_UNAVAILABLE_FALLBACK } from '../services/ai/prompt';
 
@@ -69,6 +70,15 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
 
   // parsed.amountSatang = จำนวนที่ผู้ใช้พิมพ์ แปลงเป็นสตางค์แล้ว (G1: ดึงตรงๆ ไม่ประมาณ)
   if (parsed.confidence !== 'high' || parsed.amountSatang === undefined || !parsed.category) {
+    // ── คำถามวิธีใช้ที่จับได้แน่ ๆ ตอบจากคู่มือเลย ────────────────────────────
+    // ไม่เปลืองโควตา AI และตอบได้แม้ปิด AI อยู่ (⚖️ G4)
+    // ที่จับไม่ได้ AI ยังเลือก tool explain_feature ให้ได้อีกทาง
+    const helpTopic = matchHelpQuestion(text);
+    if (helpTopic) {
+      await replyText(replyToken, answerHelpTopic(helpTopic));
+      return;
+    }
+
     // ── ด่าน 3: L4 AI (SRS FR-13) ────────────────────────────────────────────
     // ทางด่วนอ่านไม่ออก ไม่ได้แปลว่าผู้ใช้พิมพ์ผิด — อาจเล่าเป็นประโยคยาว
     // ถามคำถาม หรือสั่งแก้/ลบ ซึ่งเป็นงานของ AI

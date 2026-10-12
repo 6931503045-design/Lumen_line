@@ -540,6 +540,35 @@ describe('args ที่ไม่ผ่านด่าน Zod → ถามก�
   });
 });
 
+describe('explain_feature — AI เลือกหัวข้อ เนื้อหามาจากคู่มือของทีม', () => {
+  it('ตอบด้วยข้อความจากคู่มือ ไม่ใช่ข้อความที่ AI แต่ง', async () => {
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'explain_feature',
+      args: { topic: 'budget' },
+    });
+
+    const reply = await ask('อยากคุมไม่ให้ค่าข้าวเกิน ทำไงดี');
+
+    expect(reply.kind).toBe('text');
+    expect((reply as { text: string }).text).toContain('หน้าเว็บ → หมวดหมู่');
+    expect(createPending).not.toHaveBeenCalled();
+  });
+
+  it('หัวข้อที่ไม่มีในคู่มือตกด่าน Zod', async () => {
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'explain_feature',
+      args: { topic: 'crypto_trading' },
+    });
+
+    const reply = await ask('สอนเทรดคริปโตหน่อย');
+
+    expect(reply.kind).toBe('text');
+    expect((reply as { text: string }).text).toContain('ขอข้อความใหม่');
+  });
+});
+
 describe('ประวัติแชท (SPEC §S11.2 — 3 turn ล่าสุด)', () => {
   it('ข้อความแรกไม่มีประวัติ', async () => {
     vi.mocked(understandText).mockResolvedValue({ kind: 'text', text: 'ครับ' });
@@ -556,8 +585,97 @@ describe('ประวัติแชท (SPEC §S11.2 — 3 turn ล่าส�
     await ask('ข้อความที่สอง');
 
     expect(vi.mocked(understandText).mock.calls[1]?.[0].history).toEqual([
-      'ข้อความที่ปิดข้อมูลแล้ว',
+      { role: 'user', text: 'ข้อความที่ปิดข้อมูลแล้ว' },
+      { role: 'model', text: 'ครับ' },
     ]);
+  });
+
+  it('จำคำถามกลับของ AI เอง — ผู้ใช้ตอบ "3" แล้วโมเดลรู้ว่าตอบคำถามอะไร', async () => {
+    vi.mocked(understandText).mockResolvedValueOnce({ kind: 'text', text: 'หารกันกี่คนครับ' });
+    vi.mocked(understandText).mockResolvedValueOnce({ kind: 'text', text: 'ครับ' });
+
+    await ask('ค่าข้าวหารกับเพื่อน');
+    await ask('3');
+
+    expect(vi.mocked(understandText).mock.calls[1]?.[0].history).toEqual([
+      { role: 'user', text: 'ข้อความที่ปิดข้อมูลแล้ว' },
+      { role: 'model', text: 'หารกันกี่คนครับ' },
+    ]);
+  });
+
+  it('จำคำถามกลับของด่าน Zod ด้วย', async () => {
+    vi.mocked(understandText).mockResolvedValueOnce({
+      kind: 'tool',
+      name: 'create_transaction',
+      args: { type: 'expense', amount: 300, item: 'ค่าข้าว', split_count: 99 },
+    });
+    vi.mocked(understandText).mockResolvedValueOnce({ kind: 'text', text: 'ครับ' });
+
+    const first = await ask('ค่าข้าว 300 หารเพื่อนเยอะมาก');
+    await ask('3 คน');
+
+    expect(first.kind).toBe('text');
+    const history = vi.mocked(understandText).mock.calls[1]?.[0].history;
+    expect(history?.[1]).toEqual({ role: 'model', text: (first as { text: string }).text });
+  });
+
+  it('🔴 ผลของ tool อ่านข้อมูลไม่ถูกส่งกลับเข้าโมเดล — เก็บแค่โน้ตที่ไม่มีตัวเลข (⚖️ G1, G5)', async () => {
+    vi.mocked(runCommand).mockResolvedValue('📊 สรุปเดือนนี้\nรายรับ ฿35,000.00\nรายจ่าย ฿12,345.00');
+    vi.mocked(understandText).mockResolvedValueOnce({
+      kind: 'tool',
+      name: 'get_summary',
+      args: { period: 'this_month' },
+    });
+    vi.mocked(understandText).mockResolvedValueOnce({ kind: 'text', text: 'ครับ' });
+
+    await ask('เดือนนี้ใช้ไปเท่าไหร่');
+    await ask('แล้วเดือนก่อนล่ะ');
+
+    const modelTurn = vi.mocked(understandText).mock.calls[1]?.[0].history?.[1];
+    expect(modelTurn?.role).toBe('model');
+    expect(modelTurn?.text).toContain('get_summary');
+    expect(modelTurn?.text).not.toMatch(/\d/);
+  });
+
+  it('pending ถูกบันทึกเป็นโน้ตว่ารอผู้ใช้ยืนยัน ไม่มียอดเงิน', async () => {
+    vi.mocked(understandText).mockResolvedValueOnce({
+      kind: 'tool',
+      name: 'create_transaction',
+      args: { type: 'expense', amount: 120, item: 'กาแฟ' },
+    });
+    vi.mocked(understandText).mockResolvedValueOnce({ kind: 'text', text: 'ครับ' });
+
+    await ask('กินกาแฟไปร้อยยี่สิบ');
+    await ask('ไม่ใช่ เป็นชานม');
+
+    const modelTurn = vi.mocked(understandText).mock.calls[1]?.[0].history?.[1];
+    expect(modelTurn?.text).toContain('รอผู้ใช้กดยืนยัน');
+    expect(modelTurn?.text).not.toMatch(/\d/);
+  });
+
+  it('AI ล่มแล้ว ข้อความนั้นไม่ค้างในประวัติ', async () => {
+    vi.mocked(understandText).mockResolvedValueOnce({ kind: 'error', errorCode: 'timeout' });
+    vi.mocked(understandText).mockResolvedValueOnce({ kind: 'text', text: 'ครับ' });
+
+    await ask('ข้อความที่ล่ม');
+    await ask('ข้อความใหม่');
+
+    expect(vi.mocked(understandText).mock.calls[1]?.[0].history).toEqual([]);
+  });
+
+  it('คำถามกลับที่ทวนตัวเลขจากข้อความก่อนหน้าไม่ถูกทิ้ง', async () => {
+    // ให้ guard คืนข้อความเดิม เพื่อให้ตัวเลขของข้อความแรกอยู่ในประวัติจริง
+    vi.mocked(checkAiAllowed).mockImplementation(async ({ text }) => ({ ok: true, safeText: text }));
+    vi.mocked(understandText).mockResolvedValueOnce({ kind: 'text', text: 'ซื้ออะไรครับ' });
+    vi.mocked(understandText).mockResolvedValueOnce({
+      kind: 'text',
+      text: 'จ่ายไป 1500 ใช่ไหมครับ',
+    });
+
+    await ask('เมื่อวานจ่ายไป 1500');
+    const reply = await ask('ใช่');
+
+    expect(reply).toEqual({ kind: 'text', text: 'จ่ายไป 1500 ใช่ไหมครับ' });
   });
 
   it('เก็บไม่เกิน 3 turn', async () => {
@@ -567,8 +685,10 @@ describe('ประวัติแชท (SPEC §S11.2 — 3 turn ล่าส�
       await ask(`ข้อความที่ ${i}`);
     }
 
+    // 3 turn = ผู้ใช้ 3 ข้อความ + คำตอบของบอท 3 ข้อความ
     const lastCall = vi.mocked(understandText).mock.calls[4]?.[0];
-    expect(lastCall?.history).toHaveLength(3);
+    expect(lastCall?.history).toHaveLength(6);
+    expect(lastCall?.history?.[0]?.role).toBe('user');
   });
 
   it('ประวัติของแต่ละคนแยกกัน (⚖️ G6)', async () => {

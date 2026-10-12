@@ -29,12 +29,15 @@ export type UnderstandResult =
   | { kind: 'text'; text: string }
   | { kind: 'error'; errorCode: 'timeout' | 'provider_error' | 'empty_response' };
 
+/** 1 ข้อความในประวัติแชท — user = ผู้ใช้พิมพ์, model = สิ่งที่บอทตอบ (redact แล้วทั้งคู่) */
+export type ChatTurn = { role: 'user' | 'model'; text: string };
+
 export type UnderstandInput = {
   userId: string;
   /** ข้อความที่ผ่าน redact จาก guard มาแล้ว (⚖️ G5) */
   safeText: string;
-  /** ข้อความก่อนหน้าไม่เกิน CHATHISTORY turn ล่าสุด เรียงเก่าไปใหม่ (redact แล้ว) */
-  history?: string[];
+  /** ข้อความก่อนหน้าไม่เกิน CHAT_HISTORY_TURNS turn ล่าสุด เรียงเก่าไปใหม่ (redact แล้ว) */
+  history?: ChatTurn[];
   /** วันนี้ — ส่งเข้ามาเพื่อให้เทสต์ล็อกวันได้ */
   today?: Date;
 };
@@ -197,12 +200,11 @@ export async function understandText(input: UnderstandInput): Promise<Understand
 /**
  * ประกอบ contents ให้ SDK — ประวัติเก่าก่อน ข้อความล่าสุดท้ายสุด
  *
- * ประวัติถูกส่งเป็น role 'user' ทั้งหมด ไม่แยก model/user เพราะเราไม่เก็บคำตอบของบอท
- * (⚖️ G5 เก็บน้อยที่สุดเท่าที่ทำงานได้) โมเดลยังเข้าใจบริบทได้จากลำดับข้อความ
+ * ฝั่ง model มีแค่คำถามกลับกับโน้ตว่าทำอะไรไป ไม่มีผลของ tool (ดู router.ts)
  */
 function buildContents(input: UnderstandInput) {
-  const turns = [...(input.history ?? []), input.safeText];
-  return turns.map((text) => ({ role: 'user' as const, parts: [{ text }] }));
+  const turns: ChatTurn[] = [...(input.history ?? []), { role: 'user', text: input.safeText }];
+  return turns.map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] }));
 }
 
 /** วันนี้ตามเวลาไทยในรูป ISO date — ใช้ร่วมกันระหว่าง router และ tools */

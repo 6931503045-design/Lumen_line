@@ -20,11 +20,13 @@ import { AI_DISCLAIMER, CHAT_HISTORY_TURNS } from '../../config/constants';
 import { listCategoriesByUser } from '../../db/queries/categories';
 import { listTransactionsByUser } from '../../db/queries/transactions';
 import { formatBaht, toSatang } from '../../utils/money';
+import { redactSensitiveText } from '../../utils/redact';
 import { getTodayIso } from '../../utils/thaiDate';
 import { runCommand, type CommandName } from '../command.service';
+import { answerHelpTopic } from '../help.service';
 import { createPending } from '../pending.service';
 import { simulatePurchase } from '../simulate.service';
-import { understandText } from './gemini';
+import { understandText, type ChatTurn } from './gemini';
 import { checkAiAllowed, describeBlockReason } from './guard';
 import { validateToolCall, type ValidatedEntry, type ValidatedToolCall } from './tools';
 
@@ -48,19 +50,32 @@ export type InterpretInput = {
 // ประวัติแชทในหน่วยความจำ (SPEC §S11.2: 3 turn ล่าสุด หมดอายุ 30 นาที)
 // ────────────────────────────────────────────────────────────────────────────
 //
+// 1 turn = ข้อความผู้ใช้ 1 ข้อความ + สิ่งที่บอทตอบกลับ
+//
+// ทำไมต้องเก็บฝั่งบอทด้วย: เดิมเก็บแต่ข้อความผู้ใช้ บอทถามว่า "หารกันกี่คนครับ"
+// ผู้ใช้ตอบ "3" แล้วโมเดลเห็นแค่ "ค่าข้าว 300 หารเพื่อน" ตามด้วย "3" โดยไม่รู้ว่า
+// ตัวเองเพิ่งถามอะไรไป บทสนทนาจึงต่อกันไม่ติด
+//
+// 🔴 ฝั่งบอทเก็บแค่ 2 แบบ:
+//   • คำถามกลับ (ของ AI เอง หรือของด่าน Zod) — เป็นข้อความที่ไม่มีข้อมูลจากฐานข้อมูล
+//   • โน้ตสั้น ๆ ว่าทำอะไรไปแล้ว เช่น "(เสนอบันทึกรายการ รอผู้ใช้กดยืนยัน)" — ไม่มีตัวเลข
+// ห้ามเก็บคำตอบของ tool อ่านข้อมูล (ยอดสรุป รายการ ผลจำลอง) เพราะนั่นคือการส่ง
+// ผลของ tool กลับเข้าโมเดล ซึ่ง SPEC §S11.2 ห้ามไว้ และเป็นยอดเงินจริงของผู้ใช้ (⚖️ G1, G5)
+//
 // ⚠️ จงใจเก็บใน memory ไม่ลง DB (⚖️ G5 เก็บน้อยที่สุดเท่าที่ทำงานได้)
 // ผลที่ตามมาและยอมรับ: deploy ใหม่หรือ Render ปลุกเครื่องจากหลับ ประวัติจะหาย
 // ผู้ใช้จะต้องพูดให้ครบในข้อความเดียว ซึ่งไม่ร้ายแรงเท่าการเก็บข้อความผู้ใช้ไว้ถาวร
 //
-// ⚠️ เก็บเฉพาะข้อความที่ redact แล้ว ไม่เก็บข้อความดิบ
+// ⚠️ เก็บเฉพาะข้อความที่ redact แล้ว ไม่เก็บข้อความดิบ — ทั้งฝั่งผู้ใช้และฝั่งบอท
+// (คำถามกลับของ AI มักทวนคำของผู้ใช้ จึง redact ซ้ำอีกรอบก่อนเก็บ)
 
 const HISTORY_TTL_MS = 30 * 60 * 1000;
 
-type HistoryEntry = { turns: string[]; updatedAt: number };
+type HistoryEntry = { turns: ChatTurn[]; updatedAt: number };
 
 const history = new Map<string, HistoryEntry>();
 
-function readHistory(userId: string, now: number): string[] {
+function readHistory(userId: string, now: number): ChatTurn[] {
   const entry = history.get(userId);
   if (!entry) return [];
   if (now - entry.updatedAt > HISTORY_TTL_MS) {
@@ -70,9 +85,29 @@ function readHistory(userId: string, now: number): string[] {
   return entry.turns;
 }
 
-function pushHistory(userId: string, safeText: string, now: number): void {
-  const turns = [...readHistory(userId, now), safeText].slice(-CHAT_HISTORY_TURNS);
+function pushExchange(userId: string, safeText: string, botText: string, now: number): void {
+  const turns = [
+    ...readHistory(userId, now),
+    { role: 'user' as const, text: safeText },
+    { role: 'model' as const, text: redactSensitiveText(botText) },
+  ].slice(-CHAT_HISTORY_TURNS * 2);
   history.set(userId, { turns, updatedAt: now });
+}
+
+/**
+ * โน้ตฝั่งบอทของคำตอบที่มาจาก tool — บอกว่าทำอะไรไป โดยไม่มีตัวเลขหรือข้อมูลจาก DB
+ *
+ * พอให้โมเดลเข้าใจข้อความถัดไปอย่าง "ไม่ใช่ เป็น 90" หรือ "แล้วเดือนนี้ล่ะ" ได้
+ * แต่ไม่ได้ส่งยอดเงินจริงของผู้ใช้กลับเข้าไป (⚖️ G1, G5)
+ */
+function describeToolOutcome(call: ValidatedToolCall, reply: AiReply): string {
+  if (reply.kind === 'pending') {
+    return `(เรียก ${call.name} แล้ว ระบบแสดงสรุปให้ผู้ใช้ และรอผู้ใช้กดยืนยันหรือยกเลิก)`;
+  }
+  if (call.name === 'explain_feature') {
+    return `(อธิบายวิธีใช้เรื่อง ${call.topic} จากคู่มือให้ผู้ใช้แล้ว)`;
+  }
+  return `(เรียก ${call.name} แล้ว ระบบตอบผู้ใช้ด้วยข้อมูลจริงจากฐานข้อมูล)`;
 }
 
 /** ใช้ในเทสต์เท่านั้น — ล้างประวัติทั้งหมด */
@@ -102,28 +137,34 @@ export async function interpretUserMessage(input: InterpretInput): Promise<AiRep
   }
 
   // ── ถาม AI ว่าควรใช้ tool ไหน ─────────────────────────────────────────────
+  const priorTurns = readHistory(input.userId, now.getTime());
   const understood = await understandText({
     userId: input.userId,
     safeText: allowed.safeText,
-    history: readHistory(input.userId, now.getTime()),
+    history: priorTurns,
     today: now,
   });
 
-  // เก็บประวัติหลังเรียกสำเร็จ ไม่ใช่ก่อน — ไม่งั้นข้อความที่ AI ล่มตอนอ่าน
-  // จะค้างในประวัติแล้วไปกวนบริบทของข้อความถัดไปโดยไม่มีประโยชน์
-  pushHistory(input.userId, allowed.safeText, now.getTime());
-
+  // ประวัติถูกเก็บเฉพาะเมื่อมีคำตอบจริงให้ผู้ใช้ — ข้อความที่ AI ล่มตอนอ่าน
+  // หรือคำตอบที่ถูกทิ้ง ไม่ควรค้างในประวัติไปกวนบริบทของข้อความถัดไป
   if (understood.kind === 'error') {
     return { kind: 'unavailable' };
   }
 
   if (understood.kind === 'text') {
     // ⚖️ G1 ด่านสุดท้าย: AI ตอบเป็นข้อความได้เฉพาะ "ถามกลับ" ถ้ามีตัวเลขเงิน
-    // ที่ไม่ได้อยู่ในข้อความของผู้ใช้ ให้ทิ้งทั้งคำตอบ (SPEC §S11.2)
-    if (mentionsUnseenNumber(understood.text, input.text)) {
+    // ที่ผู้ใช้ไม่เคยพิมพ์ในบทสนทนานี้ ให้ทิ้งทั้งคำตอบ (SPEC §S11.2)
+    // นับรวมข้อความก่อนหน้าด้วย เพราะคำถามกลับอย่าง "กาแฟ 120 เมื่อวานใช่ไหมครับ"
+    // มักทวนตัวเลขจากข้อความที่แล้ว ไม่ใช่จากคำตอบ "ใช่" ล่าสุด
+    const userTexts = [
+      ...priorTurns.filter((turn) => turn.role === 'user').map((turn) => turn.text),
+      input.text,
+    ];
+    if (mentionsUnseenNumber(understood.text, userTexts.join('\n'))) {
       console.warn('[ai/router] ทิ้งคำตอบของ AI เพราะมีตัวเลขที่ผู้ใช้ไม่ได้พิมพ์');
       return { kind: 'unavailable' };
     }
+    pushExchange(input.userId, allowed.safeText, understood.text, now.getTime());
     return { kind: 'text', text: understood.text };
   }
 
@@ -131,11 +172,20 @@ export async function interpretUserMessage(input: InterpretInput): Promise<AiRep
   const validated = validateToolCall(understood.name, understood.args, todayIso);
   if (!validated.ok) {
     console.info('[ai/router] args ไม่ผ่านด่าน:', validated.errorCode);
+    // คำถามกลับของด่าน Zod ต้องอยู่ในประวัติด้วย ไม่งั้นคำตอบ "3 คน" ของผู้ใช้
+    // จะลอยมาโดยโมเดลไม่รู้ว่าตอบคำถามอะไร
+    pushExchange(input.userId, allowed.safeText, validated.askUser, now.getTime());
     return { kind: 'text', text: validated.askUser };
   }
 
   try {
     const reply = await runToolCall(input.userId, validated.call, todayIso, now);
+    pushExchange(
+      input.userId,
+      allowed.safeText,
+      describeToolOutcome(validated.call, reply),
+      now.getTime()
+    );
 
     // ⚖️ G5: log ได้แค่ชื่อ tool กับผลลัพธ์ปลายทาง ห้ามใส่เนื้อหาคำตอบ
     // (คำตอบของ tool อ่านข้อมูลมียอดเงินจริงของผู้ใช้อยู่)
@@ -288,6 +338,9 @@ async function runToolCall(
       const result = await simulatePurchase(userId, call.priceSatang, todayIso);
       return { kind: 'text', text: describeSimulation(call.itemName, result) };
     }
+
+    case 'explain_feature':
+      return { kind: 'text', text: answerHelpTopic(call.topic) };
   }
 }
 

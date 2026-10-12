@@ -35,9 +35,9 @@ function expectFail(result: ReturnType<typeof validateToolCall>) {
 }
 
 describe('ทะเบียน tool', () => {
-  it('ประกาศให้ Gemini ครบทั้ง 8 ตัวและชื่อตรงกับทะเบียน', () => {
-    expect(AI_TOOL_NAMES).toHaveLength(8);
-    expect(geminiToolDeclarations).toHaveLength(8);
+  it('ประกาศให้ Gemini ครบทั้ง 9 ตัวและชื่อตรงกับทะเบียน', () => {
+    expect(AI_TOOL_NAMES).toHaveLength(9);
+    expect(geminiToolDeclarations).toHaveLength(9);
     expect(geminiToolDeclarations.map((tool) => tool.name).sort()).toEqual(
       [...AI_TOOL_NAMES].sort()
     );
