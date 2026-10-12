@@ -38,6 +38,13 @@ export type AiReply =
   /** ต้องให้ผู้ใช้กดยืนยันก่อน (⚖️ G2) */
   | { kind: 'pending'; pendingId: string; text: string };
 
+/** คำตอบแทนคำตอบของ AI ที่ถูกทิ้งเพราะมีตัวเลขที่ผู้ใช้ไม่ได้พิมพ์ */
+export const AI_ANSWER_DROPPED_REPLY = [
+  'ขอรายละเอียดเพิ่มอีกนิดครับ 🙏 พิมพ์ให้ครบในข้อความเดียวได้เลย เช่น',
+  '   "ค่าข้าว 300 หาร 3 คน"',
+  '   "เดือนนี้ใช้ไปเท่าไหร่"',
+].join('\n');
+
 export type InterpretInput = {
   userId: string;
   text: string;
@@ -161,8 +168,13 @@ export async function interpretUserMessage(input: InterpretInput): Promise<AiRep
       input.text,
     ];
     if (mentionsUnseenNumber(understood.text, userTexts.join('\n'))) {
+      // ทิ้งคำตอบของ AI แต่ไม่ตอบว่า "AI ใช้ไม่ได้" — AI ทำงานปกติ แค่ใส่ตัวเลขที่เราไม่ยอมให้ผ่าน
+      // ส่วนใหญ่เป็นคำถามกลับที่ยกตัวอย่างมีตัวเลข ("เช่น ค่าข้าว 300 หาร 3 คน")
+      // ผู้ใช้ทดสอบพิมพ์ "ค่าข้าวหารกับเพื่อน" แล้วได้การ์ด "ตัวช่วยใช้ไม่ได้" ซึ่งทั้งผิดและพาไปทางตัน
+      // จึงถามกลับด้วยข้อความของเราเองแทน — ตัวเลขที่โมเดลแต่งยังไม่ถึงมือผู้ใช้ (⚖️ G1)
       console.warn('[ai/router] ทิ้งคำตอบของ AI เพราะมีตัวเลขที่ผู้ใช้ไม่ได้พิมพ์');
-      return { kind: 'unavailable' };
+      pushExchange(input.userId, allowed.safeText, AI_ANSWER_DROPPED_REPLY, now.getTime());
+      return { kind: 'text', text: AI_ANSWER_DROPPED_REPLY };
     }
     pushExchange(input.userId, allowed.safeText, understood.text, now.getTime());
     return { kind: 'text', text: understood.text };

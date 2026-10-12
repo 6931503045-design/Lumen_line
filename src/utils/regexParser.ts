@@ -69,6 +69,30 @@ function matchIncomePrefix(text: string): boolean {
   return INCOME_PREFIXES.some((word) => text.startsWith(word));
 }
 
+/**
+ * ข้อความที่ทางด่วนห้ามบันทึกเอง แม้จะดึงตัวเลขออกมาได้ — ต้องให้ L4 (AI) อ่านแล้วถามยืนยัน
+ *
+ * 🔴 ทำไมต้องมี: ทางด่วนเอาตัวเลขตัวเดียวเป็นยอด แล้วเอาที่เหลือทั้งหมดเป็นชื่อรายการ
+ * และบันทึกทันทีโดยไม่ถาม ข้อความพวกนี้จึงกลายเป็นเงินผิดจำนวนในฐานข้อมูล:
+ *   "ค่าข้าวหาร3คน 300"     → บันทึก 300 ทั้งที่ส่วนของผู้ใช้คือ 100
+ *   "ค่าข้าว 300 หาร 3"     → บันทึก 3 บาท
+ *   "ค่าหอ 3500 ทุกวันที่ 1" → บันทึก 1 บาท แทนที่จะตั้งรายการประจำ
+ *   "ไม่ใช่ เป็น 90"        → บันทึกรายการใหม่ แทนที่จะแก้รายการเมื่อกี้
+ *
+ * ⚠️ "หาร" ต้องไม่ใช่ส่วนหนึ่งของ "อาหาร" "ทหาร" "บริหาร" "ประหาร"
+ * ไม่งั้น "อาหาร 80" ซึ่งเป็นข้อความที่พบบ่อยที่สุดจะหลุดไปเปลือง AI ทุกครั้ง
+ */
+const NEEDS_SENTENCE_READING: readonly RegExp[] = [
+  /(?<!อา|ท|ริ|ระ)หาร|แชร์|คนละ/, // หารบิล
+  /ทุก\s*(วัน|เดือน|สัปดาห์|อาทิตย์|ปี)/, // รายการประจำ
+  /^(ไม่ใช่|แก้|เปลี่ยน|ลบ|ตั้ง)/, // แก้รายการ หรือขอตั้งค่า ไม่ใช่การจดเงิน
+];
+
+/** มีตัวเลขแยกกันมากกว่า 1 ชุด = ไม่รู้ว่าตัวไหนคือยอด ("1,250" กับ "1.5k" นับเป็นชุดเดียว) */
+function hasSeveralNumbers(text: string): boolean {
+  return (text.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).length > 1;
+}
+
 export type ParseConfidence = 'high' | 'none';
 
 export type ParseResult = {
@@ -104,6 +128,10 @@ export function parseQuickExpenseText(input: string): ParseResult {
     }
   } else if (matchIncomePrefix(text)) {
     type = 'income';
+  }
+
+  if (hasSeveralNumbers(text) || NEEDS_SENTENCE_READING.some((pattern) => pattern.test(text))) {
+    return { rawText, confidence: 'none' };
   }
 
   const tokens = text.split(/\s+/).filter(Boolean);

@@ -86,7 +86,7 @@ describe('matchCommand — ต้องตรงทั้งข้อควา�
     // ถ้าใช้ includes() ข้อความพวกนี้จะกลายเป็นคำสั่งแทนที่จะเป็นการบันทึกเงิน
     expect(matchCommand('จ่ายค่าสรุปโครงการ 200')).toBeNull();
     expect(matchCommand('ค่างบการเงิน 500')).toBeNull();
-    expect(matchCommand('เหลือเงินเท่าไหร่')).toBeNull();
+    expect(matchCommand('อยากรู้ว่าเหลือเงินเท่าไหร่')).toBeNull();
   });
 });
 
@@ -125,6 +125,23 @@ describe('runCommand — ข้อความตอบกลับ', () => {
     const text = await runCommand(USER, 'remaining');
     expect(text).toContain('ใช้เกินแล้ว');
     expect(text).toContain('฿500.00');
+  });
+
+  it('🔴 เหลือ: ติดลบเพราะรายจ่ายประจำ/แผนออม ต้องไม่บอกว่า "ใช้เกิน" และต้องตอบยอดวันนี้ก่อน', async () => {
+    // ผู้ใช้ทดสอบถาม "วันนี้เหลือเงินเท่าไหร่" แล้วได้ "ใช้เกินแล้ว" ทั้งที่ยังใช้ไม่ถึงรายรับ
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getSafeToSpend).mockResolvedValue({
+      monthRemainingSatang: -20000, perDaySatang: 0, daysLeft: 10,
+      overspentSatang: 20000,
+      breakdown: { monthIncomeSatang: 500000, upcomingIncomeSatang: 0,
+        monthExpenseSatang: 300000, upcomingExpenseSatang: 150000, planCommitmentSatang: 70000 },
+    } as any);
+    const text = await runCommand(USER, 'remaining');
+    expect(text.split('\n')[0]).toBe('💸 วันนี้ใช้ได้อีก ฿0.00');
+    expect(text).not.toContain('ใช้เกินแล้ว');
+    expect(text).toContain('ไม่พอสำหรับรายจ่ายที่รออยู่');
+    expect(text).toContain('รายจ่ายประจำที่ยังไม่ถึงรอบ ฿1,500.00');
+    expect(text).toContain('กันไว้ให้แผนออม ฿700.00');
   });
 
   it('เหลือ: มี disclaimer ตาม SPEC', async () => {
@@ -299,6 +316,12 @@ describe('คำถามเรื่องเงินเหลือ — ต�
       'วันนี้ใช้ได้เท่าไหร่',
       'ใช้ได้เท่าไหร่',
       'ใช้ได้วันละเท่าไหร่',
+      // ประโยคที่ผู้ใช้ทดสอบพิมพ์แล้วหลุดไปถึง AI
+      'วันนี้เหลือเงินเท่าไหร่',
+      'วันนี้เหลือเงินเท่าไหร่ครับ',
+      'เหลือเท่าไหร่คะ',
+      'เหลือ เท่าไร?',
+      'วันนี้ใช้ได้อีกเท่าไหร่นะ',
     ];
     for (const text of asked) {
       expect(matchCommand(text)).toBe('remaining');
@@ -318,7 +341,13 @@ describe('คำถามเรื่องเงินเหลือ — ต�
 
   it('ยังจับแบบตรงทั้งข้อความ ไม่ใช่ includes()', () => {
     expect(matchCommand('อยากรู้ว่าเงินเหลือเท่าไหร่')).toBeNull();
-    expect(matchCommand('เหลือเท่าไหร่ครับ')).toBeNull();
+    expect(matchCommand('งบอาหารเหลือเท่าไหร่ครับ')).toBeNull();
+  });
+
+  it('ตัดคำสุภาพ ช่องว่าง และเครื่องหมายคำถามท้ายประโยคก่อนเทียบ', () => {
+    expect(matchCommand('เหลือเท่าไหร่ครับ')).toBe('remaining');
+    expect(matchCommand('สรุปครับ')).toBe('summary');
+    expect(matchCommand('งบ?')).toBe('budget');
   });
 });
 
@@ -356,7 +385,7 @@ describe('คำตอบของ remaining — ต้องบอกชัด�
       breakdown: {
         monthIncomeSatang: 0,
         upcomingIncomeSatang: 0,
-        monthExpenseSatang: 0,
+        monthExpenseSatang: 50000,
         upcomingExpenseSatang: 0,
         planCommitmentSatang: 0,
       },

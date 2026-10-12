@@ -31,7 +31,11 @@ import { createPending } from '../src/services/pending.service';
 import { simulatePurchase } from '../src/services/simulate.service';
 import { understandText } from '../src/services/ai/gemini';
 import { checkAiAllowed } from '../src/services/ai/guard';
-import { interpretUserMessage, resetAiHistoryForTest } from '../src/services/ai/router';
+import {
+  AI_ANSWER_DROPPED_REPLY,
+  interpretUserMessage,
+  resetAiHistoryForTest,
+} from '../src/services/ai/router';
 
 const TODAY = '2026-10-07';
 const NOW = new Date('2026-10-07T10:00:00+07:00');
@@ -478,7 +482,10 @@ describe('⚖️ G1 ด่านสุดท้าย — AI ตอบตัว�
     });
 
     // ผู้ใช้ไม่ได้พิมพ์เลข 3200 มาเลย ตัวเลขนี้จึงเป็นของที่โมเดลแต่งขึ้น
-    expect(await ask('เดือนนี้ใช้ไปเท่าไหร่')).toEqual({ kind: 'unavailable' });
+    // ตอบด้วยคำถามกลับของเราเอง ไม่ใช่การ์ด "AI ใช้ไม่ได้" เพราะ AI ไม่ได้ล่ม
+    const reply = await ask('เดือนนี้ใช้ไปเท่าไหร่');
+    expect(reply).toEqual({ kind: 'text', text: AI_ANSWER_DROPPED_REPLY });
+    expect((reply as { text: string }).text).not.toContain('3,200');
   });
 
   it('ตัวเลขที่ผู้ใช้พิมพ์มาเอง ทวนกลับได้', async () => {

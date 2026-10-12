@@ -30,6 +30,8 @@ describe('matchHelpQuestion — คำถามที่ต้องจับไ
     ['เปิดสรุปรายวันตรงไหน', 'daily_summary'],
     ['เข้าเว็บยังไง', 'web'],
     ['ใช้ยังไง', 'basics'],
+    ['จดย้อนหลังได้ไหม', 'basics'],
+    ['ลืมจดเมื่อวานทำไงดี', 'basics'],
   ])('"%s" → %s', (text, topic) => {
     expect(matchHelpQuestion(text)).toBe(topic);
   });

@@ -56,6 +56,11 @@ const COMMANDS: Record<string, CommandName> = {
   'วันนี้ใช้ได้เท่าไหร่': 'remaining',
   'ใช้ได้เท่าไหร่': 'remaining',
   'ใช้ได้วันละเท่าไหร่': 'remaining',
+  'วันนี้เหลือเงินเท่าไหร่': 'remaining',
+  'วันนี้มีเงินเหลือเท่าไหร่': 'remaining',
+  'วันนี้ใช้ได้อีกเท่าไหร่': 'remaining',
+  'เหลือเงินเท่าไหร่': 'remaining',
+  'ใช้ได้อีกเท่าไหร่': 'remaining',
   // SPEC §S11.4 / NFR-6: ผู้ใช้ต้องอ่านประกาศความเป็นส่วนตัวซ้ำได้
   // ข้อความต้อนรับเลื่อนหายไปในแชทภายในไม่กี่วัน ถ้าไม่มีทางเรียกอ่านอีก
   // การแจ้งครั้งแรกก็เท่ากับแจ้งแล้วหายไป
@@ -65,7 +70,25 @@ const COMMANDS: Record<string, CommandName> = {
 
 /** คำสั่งนี้คืออะไร — null ถ้าไม่ใช่คำสั่ง (ให้ไปเข้าทางด่วนบันทึกเงินแทน) */
 export function matchCommand(text: string): CommandName | null {
-  return COMMANDS[text.trim()] ?? null;
+  return COMMANDS[text.trim()] ?? COMMANDS[normalizeCommandText(text)] ?? null;
+}
+
+/**
+ * ทำให้ประโยคคำถามที่พิมพ์ต่างกันนิดหน่อยตรงคำสั่งเดียวกัน
+ *
+ * ผู้ใช้จริงพิมพ์ "วันนี้เหลือเงินเท่าไหร่ครับ" "เหลือ เท่าไร?" ซึ่งไม่ตรงตารางแบบตัวต่อตัว
+ * แล้วไปตกที่ AI (ช้า เปลืองโควตา และใช้ไม่ได้เลยตอนปิด AI)
+ *
+ * ⚠️ ยังเป็นการเทียบ "ทั้งข้อความ" หลังตัดหางคำสุภาพกับช่องว่าง ไม่ใช่ includes()
+ * "อยากรู้ว่าเงินเหลือเท่าไหร่" จึงยังไม่ใช่คำสั่ง
+ */
+function normalizeCommandText(text: string): string {
+  return text
+    .replace(/\s+/g, '')
+    .replace(/[?？!.ๆ]+$/u, '')
+    .replace(/(ครับ|คับ|ค่ะ|คะ|ค่า|จ้า|จ้ะ|จ๊ะ|นะ|ล่ะ|อะ)+$/u, '')
+    .replace(/เท่าไร่|เท่าไร|เท่าไหร/g, 'เท่าไหร่')
+    .replace(/เท่าไหร่่/g, 'เท่าไหร่');
 }
 
 const HELP_TEXT = [
@@ -116,15 +139,40 @@ async function buildSummary(userId: string): Promise<string> {
 async function buildRemaining(userId: string): Promise<string> {
   const safe = await getSafeToSpend(userId, getTodayIso());
 
-  // S5.2: ผลติดลบต้องเตือนทันทีว่าใช้เกินแล้วเท่าไหร่ ไม่ใช่แสดง 0 เฉยๆ
+  // S5.2: ผลติดลบต้องเตือนทันทีว่าขาดเท่าไหร่ ไม่ใช่แสดง 0 เฉยๆ
+  //
+  // 🔴 ผู้ใช้ทดสอบถาม "วันนี้เหลือเงินเท่าไหร่" แล้วได้แค่ "เดือนนี้ใช้เกินแล้ว เกินไป ..."
+  // ซึ่งไม่ตอบคำถาม และบ่อยครั้งไม่จริงด้วย — ยอดติดลบอาจมาจากรายจ่ายประจำที่ยังไม่ถึงรอบ
+  // หรือเงินที่กันไว้ให้แผนออม ไม่ใช่เพราะใช้จ่ายเกิน จึงต้อง:
+  //   1. ตอบคำถามก่อน: วันนี้ใช้ได้อีก ฿0
+  //   2. บอกสาเหตุให้ตรง: ใช้เกินรายรับจริง หรือแค่เงินไม่พอสำหรับรายจ่ายที่รออยู่
+  //   3. แสดงที่มาทุกก้อน ผู้ใช้จะได้เห็นเองว่าตัวไหนทำให้ติดลบ
   if (safe.overspentSatang > 0) {
-    return [
-      '⚠️ เดือนนี้ใช้เกินแล้ว',
-      `เกินไป ${formatBaht(safe.overspentSatang)}`,
-      `เหลืออีก ${safe.daysLeft} วันจะสิ้นเดือน`,
+    const { breakdown } = safe;
+    const spentMoreThanEarned =
+      breakdown.monthExpenseSatang > breakdown.monthIncomeSatang + breakdown.upcomingIncomeSatang;
+
+    const lines = [
+      `💸 วันนี้ใช้ได้อีก ${formatBaht(0)}`,
+      spentMoreThanEarned
+        ? `⚠️ เดือนนี้ใช้เกินแล้ว ขาดอยู่ ${formatBaht(safe.overspentSatang)}`
+        : `⚠️ เงินเดือนนี้ไม่พอสำหรับรายจ่ายที่รออยู่ ขาดอยู่ ${formatBaht(safe.overspentSatang)}`,
       '',
-      AI_DISCLAIMER,
-    ].join('\n');
+      'คิดมาจาก',
+      `  รายรับเดือนนี้ ${formatBaht(breakdown.monthIncomeSatang)}`,
+    ];
+    if (breakdown.upcomingIncomeSatang > 0) {
+      lines.push(`  รายรับประจำที่จะเข้าอีก ${formatBaht(breakdown.upcomingIncomeSatang)}`);
+    }
+    lines.push(`  ใช้ไปแล้ว ${formatBaht(breakdown.monthExpenseSatang)}`);
+    if (breakdown.upcomingExpenseSatang > 0) {
+      lines.push(`  รายจ่ายประจำที่ยังไม่ถึงรอบ ${formatBaht(breakdown.upcomingExpenseSatang)}`);
+    }
+    if (breakdown.planCommitmentSatang > 0) {
+      lines.push(`  กันไว้ให้แผนออม ${formatBaht(breakdown.planCommitmentSatang)}`);
+    }
+    lines.push(`เหลืออีก ${safe.daysLeft} วันจะสิ้นเดือน`, '', AI_DISCLAIMER);
+    return lines.join('\n');
   }
 
   // 🔴 ผู้ใช้ทดสอบแล้วสับสนว่าเลขไหนคือคำตอบ เพราะเห็นสองยอดแล้วหยิบ
