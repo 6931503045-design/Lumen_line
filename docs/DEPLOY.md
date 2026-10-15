@@ -65,7 +65,7 @@ CRON_SECRET=...                    # สร้างด้วย: openssl rand -
 
 **ไม่ต้องตั้ง `PORT`** — host ตั้งให้เอง โค้ดอ่านจาก env อยู่แล้ว
 
-deploy เสร็จแล้ว **ก๊อป domain ที่ได้มา** เช่น `https://jodtang.onrender.com`
+deploy เสร็จแล้ว **ก๊อป domain ที่ได้มา** เช่น `https://lumen-line.onrender.com`
 
 ---
 

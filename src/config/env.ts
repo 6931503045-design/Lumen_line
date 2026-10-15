@@ -71,7 +71,7 @@ const envSchema = z.object({
 
   // ── งานที่ยังไม่ได้ทำ แต่ .env.example ประกาศไว้แล้ว ───────────────────────
   // URL ที่ผู้ใช้เปิดเว็บนี้ ใช้ประกอบ redirect_uri ตอน OAuth และเช็ค Origin กัน CSRF
-  // เช่น "https://jodtang.onrender.com" (ไม่ต้องมี / ปิดท้าย)
+  // เช่น "https://lumen-line.onrender.com" (ไม่ต้องมี / ปิดท้าย)
   APP_BASE_URL: z.string().optional().default(''),
 
   // กุญแจเซ็น session cookie — สุ่มเองด้วย `openssl rand -hex 32`
