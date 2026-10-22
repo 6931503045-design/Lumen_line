@@ -18,6 +18,19 @@
   // เพราะตอนนั้นยังไม่รู้ว่ามี backend ไหม — ถ้าไม่มีจะถอนคืนใน enterPreviewMode())
   window.__jodtangApiWired = true;
 
+  // 🔴 ตั้งก่อนหน้าถูกวาด: app.js วาดหน้าด้วยข้อมูลตัวอย่างจาก mock-data.js ทันทีที่
+  // DOMContentLoaded ทำให้ผู้ใช้เห็น "ยอดที่ใช้ได้วันนี้" เป็นตัวเลขของคนสมมติ
+  // (วัดแล้วค้างอยู่ราว 8 วินาทีบนเน็ตช้า) ก่อนจะสลับเป็นของจริง
+  //
+  // ทั้งโปรเจกต์มีไว้เพื่อให้ผู้ใช้เชื่อตัวเลขเดียวบนหน้าจอได้ การโชว์เลขผิดแม้ชั่วครู่
+  // จึงแย่กว่าการยังไม่โชว์อะไรเลย — ซ่อนไว้ก่อนแล้วขึ้นโครงร่างแทน
+  document.documentElement.classList.add('jt-loading');
+
+  /** เลิกซ่อน — เรียกทุกทางที่จบการโหลด ไม่ว่าจะสำเร็จ ล้มเหลว หรือเข้าโหมดตัวอย่าง */
+  function stopLoading() {
+    document.documentElement.classList.remove('jt-loading');
+  }
+
   /** true = ไม่มี backend ให้เรียก กำลังโชว์ข้อมูลตัวอย่างอย่างเดียว */
   let previewMode = false;
 
@@ -95,6 +108,7 @@
   }
 
   function showLogin() {
+    stopLoading();
     const reason = new URLSearchParams(window.location.search).get('login');
     const notes = {
       'no-account': 'ล็อกอินสำเร็จแล้ว แต่ยังไม่ได้แอดเพื่อนบอทใน LINE — แอดเพื่อนก่อนแล้วเข้ามาใหม่',
@@ -129,6 +143,7 @@
   }
 
   function showOffline() {
+    stopLoading();
     replaceShell(`
       <main class="page-content">
         <section class="an-card">
@@ -141,6 +156,7 @@
   }
 
   function showError(message) {
+    stopLoading();
     replaceShell(`
       <main class="page-content">
         <section class="an-card">
@@ -159,6 +175,7 @@
    */
   function enterPreviewMode() {
     previewMode = true;
+    stopLoading();
     // คืนค่าให้ app.js ทำงานแบบเดิมทุกอย่าง: ไม่มี backend ให้บันทึก การแก้ข้อมูลในเครื่องจึงเป็นทางเดียว
     window.__jodtangApiWired = false;
     delete window.jodtangPersist;
@@ -278,6 +295,9 @@
   /** เดือนที่ยังไม่ได้ดึงงบมา จะไม่มี usage — ใช้เช็คก่อน render */
   const loadedMonths = new Set();
 
+  /** ตั้งเดือนให้การ์ดงบแล้วหรือยัง — ใช้แยก "โหลดครั้งแรก" ออกจาก "รีเฟรชหลังบันทึก" */
+  let monthKeyApplied = false;
+
   function monthKeyOf(isoMonth) { return isoMonth.slice(0, 7); }
 
   async function loadMonthBudgets(monthKey) {
@@ -314,6 +334,23 @@
       budgets.items.forEach((item) => { current.usage[item.categoryId] = item.spentSatang; });
       loadedMonths.clear();
       loadedMonths.add(thisMonthKey);
+    }
+
+    // 🔴 app.js ตั้ง dashboardState.activeMonthKey ตอนไฟล์ถูกโหลด โดยอ่านจากข้อมูลตัวอย่าง
+    // (mock-data.js) ซึ่งเดือนสุดท้ายเป็นค่าตายตัวที่ไม่เกี่ยวกับวันนี้เลย ถ้าไม่ตั้งใหม่
+    // การ์ด "งบประมาณรายเดือน" บนหน้าแรกจะโชว์เดือนนั้นค้างไว้ ทั้งที่ผู้ใช้ไม่ได้เลือก
+    // อาการที่เห็นคือยอดของเดือนเก่า หรือ "0% ของงบ ฿0.00" ทั้งที่เดือนนี้ใช้ไปแล้วจริง
+    //
+    // ไม่ทับเดือนที่ผู้ใช้กดเลือกเอง: ตั้งเฉพาะตอนโหลดครั้งแรก หรือตอนที่เดือนเดิม
+    // ไม่มีอยู่ในชุดข้อมูลใหม่แล้ว ไม่งั้นพอบันทึกรายการระหว่างดูเดือนเก่า
+    // หน้าจะเด้งกลับมาเดือนนี้เองโดยผู้ใช้ไม่ได้สั่ง
+    if (typeof dashboardState !== 'undefined') {
+      const chosen = dashboardState.activeMonthKey;
+      const stillThere = chosen && history.some((m) => m.key === chosen);
+      if (!monthKeyApplied || !stillThere) {
+        dashboardState.activeMonthKey = thisMonthKey;
+        monthKeyApplied = true;
+      }
     }
 
     // โดนัท: สัดส่วนรายจ่ายตามหมวดของเดือนนี้ — เปอร์เซ็นต์คิดจากยอดที่ API ส่งมาเพื่อแสดงผลเท่านั้น
@@ -361,6 +398,7 @@
 
   /** วาดหน้าใหม่หลังข้อมูลเปลี่ยน */
   function renderCurrentPage() {
+    stopLoading();
     const page = document.body.dataset.page;
     if (page === 'dashboard') renderDashboard();
     if (page === 'transactions') {
@@ -927,6 +965,9 @@
       } else {
         await refresh();
       }
+      // หน้าตั้งค่าไม่ได้ผ่าน renderCurrentPage() จึงต้องเลิกซ่อนตรงนี้เอง
+      // ถ้าลืม หน้าจะค้างอยู่ที่โครงร่างตลอดไปทั้งที่ข้อมูลมาถึงแล้ว
+      stopLoading();
     } catch (err) {
       showError((err && err.message) || 'โหลดข้อมูลไม่สำเร็จ');
     }

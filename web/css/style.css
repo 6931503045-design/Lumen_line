@@ -4167,3 +4167,51 @@ button.an-legend-row:hover { background: var(--surface-soft); }
 .proto-screen-head .proto-chip {
   max-width: 100%;
 }
+
+/* ───────── สถานะกำลังโหลดข้อมูลจริง ─────────
+   app.js วาดหน้าด้วยข้อมูลตัวอย่างทันทีที่ DOMContentLoaded เพราะเขียนไว้ตั้งแต่ตอนยัง
+   ไม่มี backend ถ้าปล่อยไว้ ผู้ใช้จะเห็นยอดเงินของคนสมมติก่อนราว 8 วินาทีบนเน็ตช้า
+   boot.js จึงใส่ .jt-loading ไว้ที่ <html> ตั้งแต่ก่อนหน้าถูกวาด แล้วถอดออกเมื่อ
+   ข้อมูลจริงมาถึง (หรือเมื่อเข้าโหมดตัวอย่าง / ขึ้นจอเข้าสู่ระบบ / จอเออเรอร์)
+
+   ซ่อนทั้งเนื้อหาแทนที่จะซ่อนเฉพาะตัวเลข เพราะตัวเลขกระจายอยู่หลายสิบจุด
+   ถ้าไล่ซ่อนทีละจุดจะหลุดจุดใดจุดหนึ่งแน่นอนเมื่อมีคนเพิ่มการ์ดใหม่ */
+.jt-loading .page-content > *,
+/* ชื่อกับรูปโปรไฟล์อยู่ใน .topbar นอก .page-content — ถ้าไม่ซ่อนด้วย
+   ผู้ใช้จะเห็นชื่อของคนในข้อมูลตัวอย่างขึ้นต้อนรับตัวเอง */
+.jt-loading .topbar .profile-meta {
+  visibility: hidden;
+}
+
+.jt-loading .page-content {
+  position: relative;
+  min-height: 60vh;
+}
+
+.jt-loading .page-content::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  visibility: visible;
+  border-radius: var(--radius-lg, 18px);
+  /* แถบไล่สีวิ่งซ้ายไปขวา สื่อว่ากำลังโหลด ไม่ใช่ค้าง */
+  background:
+    linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.65) 45%, transparent 70%),
+    repeating-linear-gradient(
+      to bottom,
+      var(--surface) 0 108px,
+      transparent 108px 124px
+    );
+  background-size: 220% 100%, 100% 100%;
+  animation: jt-shimmer 1.3s linear infinite;
+}
+
+@keyframes jt-shimmer {
+  from { background-position: 120% 0, 0 0; }
+  to   { background-position: -120% 0, 0 0; }
+}
+
+/* ผู้ใช้ที่ตั้งค่าลดการเคลื่อนไหว: คงโครงร่างไว้แต่ไม่ขยับ */
+@media (prefers-reduced-motion: reduce) {
+  .jt-loading .page-content::before { animation: none; }
+}
