@@ -25,6 +25,24 @@ import { MoneyError } from './utils/money';
 
 const app = express();
 
+// ไม่บอกคนนอกว่าใช้ Express เวอร์ชันไหน ลดข้อมูลที่ผู้โจมตีใช้เลือกช่องโหว่ได้
+app.disable('x-powered-by');
+
+// header ความปลอดภัยพื้นฐาน — เขียนเองแทน helmet เพราะต้องการแค่ไม่กี่ตัวและไม่อยากเพิ่ม dependency
+//
+// ⚠️ ยังไม่ใส่ Content-Security-Policy เต็มรูปแบบ เพราะหน้าเว็บยังมี onclick แบบ inline (boot.js)
+// ถ้าใส่ CSP ตอนนี้ปุ่มพวกนั้นจะกดไม่ติด — ใช้ frame-ancestors อย่างเดียวพอสำหรับกัน clickjacking
+app.use((_req, res, next) => {
+  // กันเว็บอื่นฝังหน้าเราใน iframe แล้วหลอกให้ผู้ใช้กดปุ่มลบ/โอนเงิน (clickjacking)
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+  // ห้ามเบราว์เซอร์เดาชนิดไฟล์เอง ไฟล์ที่ประกาศเป็น text จะไม่ถูกรันเป็นสคริปต์
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // ไม่ส่ง URL เต็ม (ซึ่งอาจมี code/state ของ OAuth) ไปให้เว็บภายนอกที่ลิงก์ออกไป
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 app.use('/webhook', webhookRouter);
 app.use('/health', healthRouter);
 app.use('/auth', express.urlencoded({ extended: false }), authRouter);
