@@ -170,14 +170,21 @@ describe('ทางที่ผิดของ create_transaction', () => {
     ).errorCode).toBe('bad_amount');
   });
 
-  it('ยอดเป็น NaN หรือ Infinity ถูกปฏิเสธ (ต่างด่านกัน แต่ไปต่อไม่ได้ทั้งคู่)', () => {
-    // NaN ตกที่ Zod เพราะ z.number() ไม่รับ NaN
+  it('ยอดเป็น NaN หรือ Infinity ถูกปฏิเสธที่ด่าน Zod', () => {
+    // z.number() ของ Zod 4 ไม่รับทั้ง NaN และ Infinity
+    // (สมัย Zod 3 Infinity หลุดผ่าน Zod ไปตกที่ด่านแปลงหน่วยเงินแทน — ด่านนั้นยังอยู่เป็นชั้นสำรอง)
     expect(expectFail(
       validateToolCall('create_transaction', { type: 'expense', amount: NaN, item: 'x' }, TODAY)
     ).errorCode).toBe('invalid_args');
-    // Infinity ผ่าน Zod ได้ (z.number() ไม่ได้ห้าม) แล้วตกที่ด่านแปลงหน่วยเงิน
     expect(expectFail(
       validateToolCall('create_transaction', { type: 'expense', amount: Infinity, item: 'x' }, TODAY)
+    ).errorCode).toBe('invalid_args');
+  });
+
+  it('ยอดเป็นข้อความ "Infinity" ผ่าน Zod ได้แต่ตกที่ด่านแปลงหน่วยเงิน', () => {
+    // bahtSchema รับ string ด้วย จึงต้องมีด่านแปลงหน่วยเงินเป็นชั้นที่สองเสมอ
+    expect(expectFail(
+      validateToolCall('create_transaction', { type: 'expense', amount: 'Infinity', item: 'x' }, TODAY)
     ).errorCode).toBe('bad_amount');
   });
 
