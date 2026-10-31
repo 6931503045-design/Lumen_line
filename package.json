@@ -22,7 +22,7 @@
     "@supabase/supabase-js": "^2.116.0",
     "dayjs": "^1.11.23",
     "dotenv": "^17.4.2",
-    "express": "^4.22.2",
+    "express": "^4.22.3",
     "imapflow": "^2.0.2",
     "mailparser": "^3.9.26",
     "node-cron": "^3.0.3",
