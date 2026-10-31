@@ -45,44 +45,29 @@ G7	transfer ไม่นับเป็นรายรับ/รายจ่า�
                           เข้า pending → ผู้ใช้กดยืนยัน → ถึงจะบันทึก (G2)
 ทำไมต้อง 4 ชั้น? — ประหยัดเงิน ตอบเร็วกว่า และถ้า Gemini ล่มก็ยังใช้งานได้ (G4)
 
-ระบบเรียนรู้เอง: ทุกครั้งที่บันทึกสำเร็จ DB trigger จะจำคำนั้นไว้ใน user_keyword_map → ครั้งหน้า L3 จับได้เอง ไม่ต้องเรียก AI อีก ยิ่งใช้นาน ยิ่งเปลืองน้อยลง
+> ⚠️ สถานะจริงตอนนี้: **L2/L3 ยังไม่ได้เขียน** (`services/keyword.service.ts` ยังว่าง และตาราง `user_keyword_map` ยังไม่มีโค้ดหรือ trigger แตะ)
+> ข้อความที่ regex อ่านได้จะจับคู่กับหมวดที่ผู้ใช้มีอยู่แล้วแทน ส่วนที่ regex อ่านไม่ออกจะไป L4 เลย
+> แผนเดิมคือให้ระบบเรียนรู้คำของผู้ใช้ลง `user_keyword_map` เพื่อให้ L3 จับได้เองครั้งหน้า
 
 4. ไฟล์อยู่ตรงไหน
 
-> ⚠️ หัวข้อนี้เขียนไว้ตอนออกแบบเป็นไฟล์เดียว (`jodtang.ts`) ซึ่ง**ไม่ตรงกับโครงสร้างปัจจุบันแล้ว**
-> โครงสร้างจริงตอนนี้:
->
-> | โฟลเดอร์ | มีอะไร |
-> |---|---|
-> | `src/routes/` | webhook, api, auth, jobs, health |
-> | `src/handlers/` | แปล event ของ LINE |
-> | `src/services/` | ตรรกะธุรกิจ + คำนวณเงิน (โซนห้ามมี AI) |
-> | `src/db/queries/` | ประตูเข้า DB ทุกบาน กรอง user_id |
-> | `src/utils/money.ts` | ไฟล์เดียวที่แตะเลขเงินดิบได้ |
-> | `web/` | หน้าเว็บที่ backend เสิร์ฟเอง |
-> | `supabase/migrations/` | schema SQL (001–004) |
->
-> ส่วนตาราง §1–§19 ด้านล่างยังใช้อ้างอิงแนวคิดได้ แต่เลขบรรทัด/ชื่อไฟล์ไม่ตรงแล้ว
+| ที่ไหน | มีอะไร | ควรอ่านเมื่อ |
+|---|---|---|
+| `src/utils/money.ts` | ไฟล์เดียวที่แตะเลขเงินดิบได้ | อ่านก่อนเลย — หัวใจของ G3 |
+| `src/utils/regexParser.ts`, `thaiNumber.ts` | L1 อ่านข้อความไทย | จะแก้การอ่าน "กาแฟ 80" |
+| `src/routes/` | webhook, api, auth (LINE Login), jobs, health | จะเพิ่ม endpoint |
+| `src/handlers/` | แปล event ของ LINE (ข้อความ รูป ปุ่ม follow) | จะแก้การตอบในแชท |
+| `src/services/` | ตรรกะธุรกิจ + คำนวณเงิน (โซนห้ามมี AI) | จะแตะสรุป/งบ/แผนออม |
+| `src/services/ai/` | Gemini, guard, tools (Zod), router L4, vision (สลิป) | จะแตะอะไรที่เกี่ยว AI |
+| `src/services/pending.service.ts` | ประตูเดียวที่ผลของ AI กลายเป็นข้อมูลจริง | เกี่ยวกับ G2 |
+| `src/services/dedup.service.ts` | กันบันทึกซ้ำข้ามช่องทาง | เจอปัญหาบันทึกซ้ำ |
+| `src/db/queries/` | ประตูเข้า DB ทุกบาน กรอง user_id | จะเพิ่ม query |
+| `src/line/flex/` | การ์ด Flex ในแชท | จะแก้หน้าตาข้อความ |
+| `src/jobs/` | งานตามเวลา (ดูข้อ 6) | |
+| `web/` | หน้าเว็บที่ backend เสิร์ฟเอง | |
+| `supabase/migrations/` | schema SQL (001–004) 12 ตาราง + views + triggers + RLS | |
+| `.env.example` | ตัวแปรที่ต้องตั้งค่า | |
 
-
-ไฟล์	มีอะไร
-jodtang.ts	โค้ดทั้งหมด แบ่งเป็น §1–§19 (ดูตารางข้างล่าง)
-001_init.sql	ตาราง 13 ตัว + views + triggers + RLS
-.env.example	ตัวแปรที่ต้องตั้งค่า
-แผนที่ภายใน jodtang.ts
-
-§	ส่วน	ควรอ่านเมื่อ
-§1–3	config, utils, money	อ่านก่อนเลย — money.ts คือหัวใจ G3
-§4	L1 parser	จะแก้การอ่านข้อความไทย
-§5–7	tools, Gemini, guard 7 ด่าน	จะแตะอะไรที่เกี่ยว AI
-§8	Router L1→L4	จะเปลี่ยน logic การตัดสินใจ
-§9	Dedup 3 ชั้น	เจอปัญหาบันทึกซ้ำ
-§10	สรุป/งบ/แผนออม	โซนห้ามมี AI — คำนวณเงินทั้งหมดอยู่ที่นี่
-§11	pending + executor	ประตูเดียวที่เขียน DB ได้
-§12–13	สลิป, อีเมล	
-§14–16	Flex card, push, handler	จะแก้หน้าตาข้อความ
-§17	webhook + LIFF API	
-§18–19	cron jobs, bootstrap	
 5. เริ่มรันยังไง
 bash
 
@@ -105,15 +90,18 @@ ngrok http 3000             # เอา URL ไปใส่ใน LINE Developer
 09:00	planCheck	เช็คแผนออม ถ้าตามหลังค่อยเตือน
 21:00	dailySummary	ส่งสรุปรายวัน (เฉพาะคนที่เปิด)
 03:00	cleanup	ล้าง pending หมดอายุ + log เก่า
-ทุก job ห่อด้วย guardJob → พังแล้วไม่ล้มทั้งแอป
+ทุก 5 นาที	emailPoll	ดึงอีเมลแจ้งเตือนจากธนาคาร (K PLUS)
+
+ตัวจับเวลาคือ GitHub Actions (`.github/workflows/cron.yml`) ยิง `POST /jobs/run?job=<ชื่อ>` พร้อม header `x-cron-secret`
+job ที่พังจะตอบ 500 ให้ workflow แดง แต่ไม่ล้มทั้งแอป
 
 7. กฎการเขียนโค้ด
 ✅ ทำ
 
-เงินทุกบาททุกสตางค์ผ่าน §2 (toSatang, add, formatBaht) เท่านั้น
+เงินทุกบาททุกสตางค์ผ่าน utils/money.ts (toSatang, add, formatBaht) เท่านั้น
 ทุก query ต้องมี .eq('user_id', userId) — ไม่มีข้อยกเว้น
-เรียก AI ผ่าน guardedAiCall() ทางเดียว
-เขียน DB ผ่าน executeTool() ทางเดียว
+เรียก AI ผ่าน services/ai/router.ts ทางเดียว (ผ่าน checkAiAllowed() ใน guard.ts ก่อนเสมอ)
+ผลของ AI ที่จะเขียน DB ต้องผ่าน createPending() → confirmPending() ใน pending.service.ts ทางเดียว
 ❌ ห้าม
 
 parseFloat กับเงิน / คูณหาร 100 เอง
@@ -122,7 +110,7 @@ fetch ไป Gemini ตรงๆ ข้าม guard
 เอา transfer ไปรวมในยอดสรุป
 8. ก่อน Deploy ต้องผ่าน
  ตั้ง AI_ENABLED=false แล้ว npm test เขียวหมด ← ข้อสอบใหญ่สุด
- RLS เปิดครบทั้ง 13 ตาราง
+ RLS เปิดครบทั้ง 12 ตาราง
  ลองยิง webhook ด้วยลายเซ็นผิด → ต้องได้ 401
  กดปุ่มยืนยันรัวๆ 5 ครั้ง → ต้องบันทึกแค่ครั้งเดียว
  0.1 + 0.2 ต้องได้ 0.30 ไม่ใช่ 0.30000000000000004
@@ -132,7 +120,7 @@ fetch ไป Gemini ตรงๆ ข้าม guard
 บันทึกซ้ำ 2 รายการ	webhook_events ไม่ทำงาน หรือ LINE retry
 AI ไม่ตอบ	เช็ค ai_usage_log — น่าจะโควตาเต็มหรือ timeout
 ยอดเพี้ยนหลักสตางค์	มีใครใช้ float ที่ไหนสักที่ — หา parseFloat
-กดยืนยันแล้วไม่บันทึก	pending หมดอายุ (15 นาที)
+กดยืนยันแล้วไม่บันทึก	pending หมดอายุ (24 ชั่วโมง — PENDING_EXPIRE_HOURS ใน config/constants.ts)
 ยอดสรุปสูงผิดปกติ	transfer หลุดเข้าไปรวม (G7)
 10. คำถามที่ทีมถามบ่อย
 Q: ทำไมไม่ให้ AI คำนวณเลย มันก็คิดเลขได้นี่? A: LLM ทายคำถัดไป ไม่ได้คิดเลข พลาดครั้งเดียวกับเงินคนอื่น = จบ

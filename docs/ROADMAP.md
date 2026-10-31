@@ -2,6 +2,16 @@
 
 สถานะ ณ 17 ก.ย. 2026 — ตรวจจากโค้ดจริง ไม่ใช่จากแผนที่วางไว้
 
+> **อัปเดต 31 ต.ค. 2026** — หลายข้อด้านล่างทำเสร็จแล้วหลังวันที่ 17 ก.ย. (ตรวจจากโค้ดบน branch `fix/security-hardening`)
+> - ✅ S11 AI ทั้ง 6 ไฟล์ใน `services/ai/` มีโค้ดจริงแล้ว (gemini, guard, tools, router, vision, prompt)
+> - ✅ S12 pending_actions — `pending.service.ts` + ปุ่ม `ai_confirm` / `ai_cancel`
+> - ✅ S9 อ่านสลิป — `handlers/imageHandler.ts` + `services/ai/vision.ts`
+> - ✅ job `dailySummary` · S5.7 จำลองการซื้อ (`simulate.service.ts`) · `PATCH /api/categories/:id` · rich menu (`scripts/install-richmenu.ts`)
+> - ✅ security headers (กัน clickjacking) + อัปเดต dependency ที่มีช่องโหว่
+> - 🟡 ยังค้าง: S4 L2/L3 พจนานุกรม (`keyword.service.ts` ยังว่าง) · rate limit `/api` (ต้องเพิ่ม dependency)
+>
+> ตาราง "ความคืบหน้าตาม SPEC" ด้านล่างอัปเดตแล้ว ส่วนตารางอื่นเก็บไว้เป็นประวัติ
+
 ---
 
 ## ✅ ใช้ได้แล้ววันนี้
@@ -65,22 +75,21 @@
 
 | หัวข้อ | สถานะ | หมายเหตุ |
 |---|---|---|
-| S1 LINE Gateway | ✅ | คำสั่งแชทครบแล้ว / ขาดรับรูป (`imageHandler` ว่าง) และ rich menu |
-| S2 Frontend | ✅ | กำลังเปลี่ยนเป็น UI ใหม่ |
+| S1 LINE Gateway | ✅ | คำสั่งแชท + รับรูป + rich menu ครบ |
+| S2 Frontend | ✅ | |
 | S3 Core API | ✅ | |
-| S4 Text Parser | 🟡 | มีแต่ regex L1 |
-| S5 Money Engine | 🟡 | ครบหมดยกเว้น S5.7 จำลองการซื้อ |
+| S4 Text Parser | 🟡 | มีแต่ regex L1 + L4 (AI) — L2/L3 ยังไม่ได้เขียน |
+| S5 Money Engine | ✅ | รวม S5.7 จำลองการซื้อแล้ว |
 | S6 Database | ✅ | |
-| S7 Scheduler | 🟡 | **4 จาก 5 job** — เหลือ dailySummary |
+| S7 Scheduler | ✅ | ครบ 5 job |
 | S8 Email Ingestion | ✅ | ทดสอบกับเงินจริงแล้ว |
-| S9 Slip Reader | ❌ | |
+| S9 Slip Reader | ✅ | |
 | S10 Dedup | ✅ | |
-| S11 AI Service | ❌ | 6 ไฟล์ยังว่าง |
-| S12 Pending Actions | ❌ | ตาราง `pending_actions` ยังไม่มีโค้ดแตะ |
+| S11 AI Service | ✅ | |
+| S12 Pending Actions | ✅ | |
 | S13 Push & Quota | ✅ | |
 
-ตารางที่ยังไม่มีโค้ดแตะเลย: `user_keyword_map`
-(`pending_actions` · `push_log` · `ai_usage_log` มีโค้ดแตะแล้วจาก cleanup/push)
+ตารางที่ยังไม่มีโค้ดแตะเลย: `user_keyword_map` (รอ S4 L2/L3)
 
 ---
 

@@ -857,7 +857,7 @@ Render free tier ไม่มี cron ให้ เราจึงใช้ **Gi
 
 | ส่วน | ที่ไหน | จุดที่ต้องรู้ |
 |---|---|---|
-| Backend + หน้าเว็บ | **Render** free tier · deploy จาก branch `backend` | **หลับเมื่อไม่มีคนใช้ ~15 นาที** ตื่นใช้ 30-60 วินาที |
+| Backend + หน้าเว็บ | **Render** free tier · deploy จาก branch `main` | **หลับเมื่อไม่มีคนใช้ ~15 นาที** ตื่นใช้ 30-60 วินาที |
 | ฐานข้อมูล | **Supabase** free tier | |
 | งานตามเวลา | **GitHub Actions** | `.github/workflows/cron.yml` |
 | AI | **Google Gemini** free tier · `gemini-3.5-flash-lite` | |
@@ -1077,11 +1077,9 @@ npm run dev              # http://localhost:3000
 
 | ข้อจำกัด | สถานะ · เหตุผล |
 |---|---|
-| **FR-17 สรุปรายวันเข้า LINE** | ⬜ `jobs/dailySummary.ts` เป็นไฟล์ว่าง · Could ตัดได้ตาม MoSCoW |
-| **FR-18 Rich Menu** | ⬜ `line/richmenu.ts` เป็นไฟล์ว่าง · Could |
-| **Flex card 4 ใบ** | ⬜ `summaryCard` `planCard` `errorCard` `pendingCard` ยังว่าง → คำตอบในแชทเป็นข้อความล้วน **ใช้งานได้ครบ แต่หน้าตาไม่ตรงที่ SPEC §S1 วาดไว้** |
 | **L2/L3 พจนานุกรมหมวด** | ⬜ `keyword.service.ts` ว่าง · ตารางมีแล้ว · ตอนนี้จับคู่กับหมวดที่ผู้ใช้มีอยู่แทน |
-| **`web/js/charts.js`** | 🗑️ ซากที่ไม่ได้ใช้ (กราฟวาดใน `app.js`) ควรลบ |
+| **ไม่มี rate limit ที่ `/api`** | ต้องเพิ่ม dependency ซึ่ง SPEC ให้ขออนุมัติก่อน · ตอนนี้มีแค่โควตา AI ต่อคน/ต่อวัน |
+| **ยังไม่มี Content-Security-Policy เต็มรูปแบบ** | มีแค่ `frame-ancestors` กัน clickjacking · ใส่เต็มไม่ได้จนกว่าจะเอา `onclick` แบบ inline ออกจาก `boot.js` |
 | **`app.js` ยังมีโค้ด mock ค้าง** | ผลจากการเลือกทำชั้น `boot.js` แทนการรื้อทั้งไฟล์ — รู้ตัวและยอมรับ |
 | **Render หลับ** | free tier · ข้อความแรกหลังหลับอาจไม่มีคำตอบเพราะ reply token หมดอายุก่อน |
 | **ลบข้อมูลตัวเองไม่ได้** | ต้องแจ้งทีม · ควรทำเป็นฟีเจอร์ (สิทธิตาม PDPA) |
