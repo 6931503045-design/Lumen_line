@@ -66,8 +66,17 @@ const INCOME_PREFIXES = [
  * ตัดคำนั้นออกไม่ได้ เพราะมันเป็นส่วนหนึ่งของชื่อรายการ ("เงินเดือน", "ได้ค่าขนม")
  */
 function matchIncomePrefix(text: string): boolean {
-  return INCOME_PREFIXES.some((word) => text.startsWith(word));
+  return INCOME_PREFIXES.some((word) => text.startsWith(word)) || ENGLISH_INCOME_PREFIX.test(text);
 }
+
+/**
+ * คำขึ้นต้นภาษาอังกฤษที่บอกว่าเป็นรายรับ — กฎเดียวกับฝั่งไทย: ต้อง "ขึ้นต้น" เท่านั้น
+ *
+ * ⚠️ \b กันไม่ให้ "incomes" หรือ "bonuses" หลุด และกัน "salaryman" ไม่ให้เป็นรายรับ
+ * ⚠️ จงใจไม่ใส่ "got" เดี่ยว ๆ — "got a haircut 200" เป็นรายจ่าย ใส่แค่ "got paid"
+ */
+const ENGLISH_INCOME_PREFIX =
+  /^(salary|bonus|income|received|receive|earned|refund|cashback|got\s+paid|sold)\b/i;
 
 /**
  * ข้อความที่ทางด่วนห้ามบันทึกเอง แม้จะดึงตัวเลขออกมาได้ — ต้องให้ L4 (AI) อ่านแล้วถามยืนยัน
@@ -86,6 +95,13 @@ const NEEDS_SENTENCE_READING: readonly RegExp[] = [
   /(?<!อา|ท|ริ|ระ)หาร|แชร์|คนละ/, // หารบิล
   /ทุก\s*(วัน|เดือน|สัปดาห์|อาทิตย์|ปี)/, // รายการประจำ
   /^(ไม่ใช่|แก้|เปลี่ยน|ลบ|ตั้ง)/, // แก้รายการ หรือขอตั้งค่า ไม่ใช่การจดเงิน
+  // ── ภาษาอังกฤษ: เหตุผลเดียวกับข้างบน ──────────────────────────────────────
+  /\b(split|share|each)\b/i, // "dinner 300 split with friends"
+  /\bevery\s*(day|week|month|year)\b|\b(daily|weekly|monthly|yearly)\b/i,
+  /^(no|not|edit|change|delete|remove|cancel|undo)\b/i,
+  // ทางด่วนตัดได้แต่คำบอกวันที่ภาษาไทย — "coffee yesterday 50" ถ้าไม่ส่งต่อ
+  // จะได้รายการชื่อ "coffee yesterday" ลงวันนี้ ผิดแบบเงียบ ๆ
+  /\b(yesterday|tomorrow|ago|last\s+\w+)\b/i,
 ];
 
 /** มีตัวเลขแยกกันมากกว่า 1 ชุด = ไม่รู้ว่าตัวไหนคือยอด ("1,250" กับ "1.5k" นับเป็นชุดเดียว) */
