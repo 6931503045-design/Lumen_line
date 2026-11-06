@@ -80,6 +80,24 @@ const COMMANDS: Record<string, CommandName> = {
   // การแจ้งครั้งแรกก็เท่ากับแจ้งแล้วหายไป
   'ความเป็นส่วนตัว': 'privacy',
   'privacy': 'privacy',
+
+  // ── ภาษาอังกฤษ ─────────────────────────────────────────────────────────────
+  // ตัวพิมพ์เล็ก/ใหญ่ไม่มีผล (normalizeCommandText แปลงเป็นตัวเล็ก) และช่องว่างถูกตัดทิ้ง
+  // "How much left?" จึงตรง 'how much left' ได้เลย — ยังเทียบทั้งข้อความเหมือนเดิม
+  'summary': 'summary',
+  'monthly summary': 'summary',
+  'remaining': 'remaining',
+  'balance': 'remaining',
+  'left': 'remaining',
+  'how much left': 'remaining',
+  'how much is left': 'remaining',
+  'how much can i spend': 'remaining',
+  'how much can i spend today': 'remaining',
+  'how much can i spend tomorrow': 'remaining_tomorrow',
+  'plan': 'plans',
+  'plans': 'plans',
+  'budget': 'budget',
+  'budgets': 'budget',
 };
 
 /** คำสั่งนี้คืออะไร — null ถ้าไม่ใช่คำสั่ง (ให้ไปเข้าทางด่วนบันทึกเงินแทน) */
@@ -101,6 +119,7 @@ export function matchCommand(text: string): CommandName | null {
  */
 function normalizeCommandText(text: string): string {
   return text
+    .toLowerCase()
     .replace(/\s+/g, '')
     .replace(/[?？!.ๆ]+$/u, '')
     .replace(/(ครับ|คับ|ค่ะ|คะ|ค่า|จ้า|จ้ะ|จ๊ะ|นะ|ล่ะ|อะ)+$/u, '')
@@ -121,6 +140,7 @@ const HELP_TEXT = [
   '💰 บันทึกเงิน — พิมพ์ "ชื่อ จำนวน"',
   '   กาแฟ 80 · กาแฟ ห้าสิบ · ค่าเน็ต 1.2k',
   '   ขึ้นต้นด้วย + คือรายรับ เช่น +เงินเดือน 35000',
+  '   พิมพ์อังกฤษก็ได้ เช่น coffee 80 · salary 35000 · summary',
   '',
   '📊 คำสั่ง',
   '   สรุป — รายรับรายจ่ายเดือนนี้',
