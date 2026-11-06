@@ -21,7 +21,7 @@ import {
   updateCategoryForUser,
   type UserCategory,
 } from '../db/queries/categories';
-import { englishCategoryHint } from '../config/keywords';
+import { categoryHint } from '../config/keywords';
 
 /** error ที่รู้ว่าจะตอบ status อะไร ให้ชั้น route แปลงเป็น HTTP ได้ตรงๆ */
 export class CategoryError extends Error {
@@ -284,10 +284,10 @@ export async function resolveCategoryName(
   const direct = await matchExistingCategory(userId, hint, type);
   if (direct) return direct.name;
 
-  // ไม่เจอ → ถ้าเป็นคำอังกฤษ ลองแปลเป็นชื่อหมวดไทยแล้วจับคู่อีกรอบ ("coffee" → "อาหาร")
-  // ลองคำตรง ๆ ก่อนเสมอ เผื่อผู้ใช้ตั้งหมวดชื่ออังกฤษเอง
-  // ยังจับคู่กับหมวดที่มีอยู่จริงเท่านั้น ไม่สร้างหมวดใหม่
-  const englishHint = hint ? englishCategoryHint(hint) : null;
-  if (!englishHint) return null;
-  return (await matchExistingCategory(userId, englishHint, type))?.name ?? null;
+  // ไม่เจอ → แปลคำที่ใช้บ่อยเป็นชื่อหมวด แล้วจับคู่อีกรอบ ("coffee"/"กาแฟ" → "อาหาร")
+  // ลองคำตรง ๆ ก่อนเสมอ เผื่อผู้ใช้ตั้งหมวดชื่อนั้นเอง
+  // ยังจับคู่กับหมวดที่มีอยู่จริง และประเภทเดียวกัน (รายรับ/รายจ่าย) เท่านั้น ไม่สร้างหมวดใหม่
+  const mapped = hint ? categoryHint(hint) : null;
+  if (!mapped) return null;
+  return (await matchExistingCategory(userId, mapped, type))?.name ?? null;
 }

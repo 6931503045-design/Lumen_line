@@ -12,7 +12,7 @@ vi.mock('../src/db/queries/categories', () => ({
 }));
 
 import { listCategoriesByUser } from '../src/db/queries/categories';
-import { englishCategoryHint } from '../src/config/keywords';
+import { categoryHint } from '../src/config/keywords';
 import { matchCommand } from '../src/services/command.service';
 import { resolveCategoryName } from '../src/services/category.service';
 import { parseQuickExpenseText } from '../src/utils/regexParser';
@@ -77,7 +77,7 @@ describe('ทางด่วน (L1) กับข้อความภาษา�
   });
 });
 
-describe('แปลคำใบ้หมวดภาษาอังกฤษ', () => {
+describe('แปลคำใบ้หมวด (อังกฤษ)', () => {
   it.each([
     ['coffee', 'อาหาร'],
     ['Iced Coffee', 'อาหาร'],
@@ -85,12 +85,41 @@ describe('แปลคำใบ้หมวดภาษาอังกฤษ', (
     ['water bill', 'ที่พัก/บิล'],
     ['salary', 'เงินเดือน'],
   ])('%s -> %s', (text, category) => {
-    expect(englishCategoryHint(text)).toBe(category);
+    expect(categoryHint(text)).toBe(category);
   });
 
-  it('ภาษาไทย / คำที่ไม่รู้จัก -> null (พฤติกรรมเดิมไม่เปลี่ยน)', () => {
-    expect(englishCategoryHint('กาแฟ')).toBeNull();
-    expect(englishCategoryHint('mango')).toBeNull();
+  it('คำที่ไม่รู้จัก -> null (พฤติกรรมเดิมไม่เปลี่ยน)', () => {
+    expect(categoryHint('mango')).toBeNull();
+    expect(categoryHint('มะม่วง')).toBeNull();
+  });
+});
+
+describe('แปลคำใบ้หมวด (ไทย)', () => {
+  it.each([
+    ['กาแฟ', 'อาหาร'],
+    ['ข้าวมันไก่', 'อาหาร'],
+    ['ชาไข่มุก', 'อาหาร'],
+    ['ค่าหอ', 'ที่พัก/บิล'],
+    ['แท็กซี่', 'เดินทาง'],
+    ['ดูหนัง', 'บันเทิง'],
+    ['ยา', 'สุขภาพ'],
+    ['เงินเดือน', 'เงินเดือน'],
+  ])('%s -> %s', (text, category) => {
+    expect(categoryHint(text)).toBe(category);
+  });
+
+  it.each([
+    ['ค่าน้ำ', 'ที่พัก/บิล'], // ไม่ใช่ "น้ำ" เครื่องดื่ม
+    ['น้ำมัน', 'เดินทาง'],
+    ['ค่าน้ำมัน', 'เดินทาง'],
+    ['หนังสือ', 'การศึกษา'], // ไม่ใช่ "หนัง" ดูหนัง
+  ])('🔴 คำยาวชนะคำสั้น: %s -> %s', (text, category) => {
+    expect(categoryHint(text)).toBe(category);
+  });
+
+  it('คำไทยสั้น ๆ จับแค่ตรงทั้งข้อความ — "ยาง" ไม่ใช่ "ยา"', () => {
+    expect(categoryHint('ยางรถจักรยาน')).not.toBe('สุขภาพ');
+    expect(categoryHint('ชาร์จแบต')).toBeNull();
   });
 });
 
@@ -114,6 +143,14 @@ describe('resolveCategoryName ใช้คำใบ้ภาษาอังก�
 
   it('"coffee" -> หมวด "อาหาร" ที่ผู้ใช้มีอยู่', async () => {
     expect(await resolveCategoryName('u1', 'coffee', 'expense')).toBe('อาหาร');
+  });
+
+  it('"กาแฟ" -> "อาหาร" (เดิมตกไป "อื่นๆ")', async () => {
+    expect(await resolveCategoryName('u1', 'กาแฟ', 'expense')).toBe('อาหาร');
+  });
+
+  it('คำใบ้คนละประเภทไม่ถูกใช้ — "โบนัส" ที่เป็นรายจ่าย ไม่ได้หมวดรายรับ', async () => {
+    expect(await resolveCategoryName('u1', 'โบนัส', 'expense')).toBeNull();
   });
 
   it('"salary" รายรับ -> "เงินเดือน"', async () => {
