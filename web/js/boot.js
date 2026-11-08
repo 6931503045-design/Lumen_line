@@ -107,8 +107,14 @@
     if (shell) shell.innerHTML = html;
   }
 
+  /** แถบ PROTOTYPE ของคนตรวจงาน — แสดงเฉพาะคนที่ยังไม่ได้ล็อกอิน (ดู prototype-bar.js) */
+  function showPrototypeBar() {
+    if (window.jodtangProtoBar) window.jodtangProtoBar.show();
+  }
+
   function showLogin() {
     stopLoading();
+    showPrototypeBar();
     const reason = new URLSearchParams(window.location.search).get('login');
     const notes = {
       'no-account': 'ล็อกอินสำเร็จแล้ว แต่ยังไม่ได้แอดเพื่อนบอทใน LINE — แอดเพื่อนก่อนแล้วเข้ามาใหม่',
@@ -176,6 +182,7 @@
   function enterPreviewMode() {
     previewMode = true;
     stopLoading();
+    showPrototypeBar();
     // คืนค่าให้ app.js ทำงานแบบเดิมทุกอย่าง: ไม่มี backend ให้บันทึก การแก้ข้อมูลในเครื่องจึงเป็นทางเดียว
     window.__jodtangApiWired = false;
     delete window.jodtangPersist;

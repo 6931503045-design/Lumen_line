@@ -11,6 +11,13 @@
 //
 // ⚠️ แถบนี้เป็นของสำหรับการตรวจงาน ไม่ใช่ฟีเจอร์ของผู้ใช้
 // จึงปิดได้และจำค่าไว้ เพื่อให้คนที่ใช้จริงไม่ต้องเห็นตลอดเวลา
+//
+// 🔴 ผู้ใช้ที่ล็อกอินแล้วต้องไม่เห็นแถบนี้เลย — เดิมแสดงทุกหน้าทุกคน ผู้ใช้กดลิงก์จากการ์ดใน LINE
+// แล้วเจอป้าย "PROTOTYPE · M3" เต็มหัวจอ เข้าใจว่าเป็นหน้าตัวอย่าง ทั้งที่ตัวเลขเป็นของจริง
+// ตอนนี้แสดงเฉพาะเส้นทางของคนตรวจ:
+//   • หน้าสารบัญ prototype.html
+//   • โหมดดูตัวอย่าง (?preview=1) หรือสั่งเปิดเอง (?proto=1)
+//   • หน้าล็อกอินของคนที่ยังไม่มีบัญชี — boot.js เรียก window.jodtangProtoBar.show()
 
 (function () {
   const HIDE_KEY = 'jodtang.protoBarHidden';
@@ -87,7 +94,26 @@
     return file || 'index.html';
   }
 
+  function urlFlag(name) {
+    return new URLSearchParams(window.location.search).get(name) === '1';
+  }
+
+  /** เปิดแถบได้ทันทีโดยไม่ต้องรอ boot.js รู้ว่าล็อกอินหรือยัง */
+  function shownWithoutLogin() {
+    return document.body.dataset.page === 'prototype' || urlFlag('preview') || urlFlag('proto');
+  }
+
+  /** ลิงก์ระหว่างหน้าในโหมดดูตัวอย่างต้องพา ?preview=1 ไปด้วย ไม่งั้นคนตรวจเจอกำแพงล็อกอินทุกหน้า */
+  function screenHref(href) {
+    return urlFlag('preview') && href !== 'prototype.html' ? `${href}?preview=1` : href;
+  }
+
+  let built = false;
+
   function build() {
+    if (built) return;
+    built = true;
+
     // อ่านจาก data-covers เช่น data-covers="FR-04, FR-05"
     const raw = document.body.dataset.covers || '';
     const ids = raw.split(',').map((item) => item.trim()).filter(Boolean);
@@ -95,7 +121,7 @@
     const here = currentFile();
     const nav = SCREENS.map((screen) => {
       const active = screen.href === here;
-      return `<a class="proto-nav-link ${active ? 'active' : ''}" href="${screen.href}">${escapeHtml(screen.label)}</a>`;
+      return `<a class="proto-nav-link ${active ? 'active' : ''}" href="${screenHref(screen.href)}">${escapeHtml(screen.label)}</a>`;
     }).join('');
 
     // หน้าสารบัญไม่ได้ตอบ FR ข้อไหนเอง — มันคือแผนที่ ไม่ใช่หน้าจอของผู้ใช้
@@ -156,9 +182,14 @@
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', build);
-  } else {
-    build();
-  }
+  // boot.js เรียกตอนรู้แล้วว่าคนนี้ยังไม่ได้ล็อกอิน (หน้าล็อกอิน / โหมดดูตัวอย่าง)
+  // เรียกก่อนหน้าโหลดเสร็จก็ได้ จะรอ DOM ให้เอง และเรียกซ้ำก็ไม่สร้างแถบซ้อน
+  window.jodtangProtoBar = {
+    show() {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
+      else build();
+    },
+  };
+
+  if (shownWithoutLogin()) window.jodtangProtoBar.show();
 })();
