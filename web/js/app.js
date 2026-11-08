@@ -1357,7 +1357,7 @@ function renderTransactionsPage() {
     categoryFilterChips.innerHTML = `
       <button type="button" class="tab category-tab ${!transactionState.categoryFilter ? 'active' : ''}" data-category-chip="">ทุกหมวดหมู่</button>
       ${categoryNames.map((name) => `
-        <button type="button" class="tab category-tab ${transactionState.categoryFilter === name ? 'active' : ''}" data-category-chip="${name}">${name}</button>
+        <button type="button" class="tab category-tab ${transactionState.categoryFilter === name ? 'active' : ''}" data-category-chip="${escapeHtml(name)}">${escapeHtml(name)}</button>
       `).join('')}
     `;
     categoryFilterChips.querySelectorAll('[data-category-chip]').forEach((button) => {
@@ -1396,7 +1396,7 @@ function renderTransactionsPage() {
       const monthLabel = monthEntry ? ` · ${monthEntry.label}` : '';
       activeFilterChip.innerHTML = `
         <span class="date-chip">
-          ${transactionState.categoryFilter}${monthLabel}
+          ${escapeHtml(transactionState.categoryFilter)}${monthLabel}
           <button type="button" data-clear-deep-link="true">×</button>
         </span>
       `;
@@ -2853,13 +2853,13 @@ function renderAnalyzeDonut() {
         : Math.round(safeNumber(mock.summary.expense) * share);
       analyzeDonutTip.data.set(key, {
         tipHtml: `
-          <span class="overview-tip-title"><i class="legend-dot" style="background: ${colors[i]}"></i>${labels[i]}</span>
+          <span class="overview-tip-title"><i class="legend-dot" style="background: ${colors[i]}"></i>${escapeHtml(labels[i])}</span>
           <span class="overview-tip-amount">${formatMoney(amount)}</span>
           <span class="overview-tip-meta">${Math.round(share * 100)}% ของรายจ่ายเดือนนี้</span>
         `,
         anchor: { x: 100 + outer * Math.cos(angle), y: 100 + outer * Math.sin(angle), below: Math.sin(angle) > 0.2 },
       });
-      const circle = `<circle class="an-donut-seg" data-overview-seg="${key}" tabindex="0" role="button" aria-label="${labels[i]} ${Math.round(share * 100)}%" cx="100" cy="100" r="${DONUT_RADIUS}" fill="none" stroke="${colors[i]}" stroke-width="${DONUT_STROKE}" stroke-dasharray="${length} ${circumference - length}" stroke-dashoffset="${-cursor * circumference}" transform="rotate(-90 100 100)"/>`;
+      const circle = `<circle class="an-donut-seg" data-overview-seg="${key}" tabindex="0" role="button" aria-label="${escapeHtml(labels[i])} ${Math.round(share * 100)}%" cx="100" cy="100" r="${DONUT_RADIUS}" fill="none" stroke="${colors[i]}" stroke-width="${DONUT_STROKE}" stroke-dasharray="${length} ${circumference - length}" stroke-dashoffset="${-cursor * circumference}" transform="rotate(-90 100 100)"/>`;
       cursor += share;
       return circle;
     }).join('');
@@ -2875,7 +2875,7 @@ function renderAnalyzeDonut() {
     legend.innerHTML = labels.map((label, i) => `
       <button type="button" class="an-legend-row" data-donut-legend="donut-${i}">
         <i class="legend-dot" style="background: ${colors[i]}"></i>
-        <span>${label}</span>
+        <span>${escapeHtml(label)}</span>
         <strong>${values[i]}%</strong>
       </button>
     `).join('');
