@@ -95,6 +95,10 @@ ngrok http 3000             # เอา URL ไปใส่ใน LINE Developer
 ตัวจับเวลาคือ GitHub Actions (`.github/workflows/cron.yml`) ยิง `POST /jobs/run?job=<ชื่อ>` พร้อม header `x-cron-secret`
 job ที่พังจะตอบ 500 ให้ workflow แดง แต่ไม่ล้มทั้งแอป
 
+⚠️ GitHub Actions ยิงช้าได้หลายชั่วโมง จึงเรียกทุกงานในทุกรอบ แล้วให้ backend ตัดสินเอง
+งานที่ส่ง push มีช่วงเวลาที่ยอมทำงาน (planCheck 08:00–20:59 · dailySummary 20:00–23:59) นอกช่วงจะข้ามไป
+อยากให้ตรงเวลาจริง → ตั้ง cron ภายนอก ดู docs/DEPLOY.md หัวข้อ 4.1
+
 7. กฎการเขียนโค้ด
 ✅ ทำ
 

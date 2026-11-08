@@ -44,6 +44,32 @@ export function formatThaiDate(date: Date = new Date()): string {
   return THAI_DISPLAY.format(date);
 }
 
+const THAI_HOUR = new Intl.DateTimeFormat('en-GB', {
+  timeZone: TIMEZONE,
+  hour: '2-digit',
+  hourCycle: 'h23',
+});
+
+/**
+ * ชั่วโมงปัจจุบันตามเวลาไทย 0–23
+ * ใช้ตัดสินว่างานตามเวลาควรทำงานไหม (ดู config/constants.ts JOB_WINDOWS) — เซิร์ฟเวอร์เป็น UTC
+ */
+export function getThaiHour(date: Date = new Date()): number {
+  return Number(THAI_HOUR.format(date));
+}
+
+/**
+ * อยู่ในช่วงชั่วโมง [startHour, endHour) ตามเวลาไทยไหม
+ * endHour = 24 แปลว่าถึงเที่ยงคืน (ไม่รวม 00:00 ของวันถัดไป)
+ */
+export function isWithinThaiHours(
+  window: { startHour: number; endHour: number },
+  date: Date = new Date()
+): boolean {
+  const hour = getThaiHour(date);
+  return hour >= window.startHour && hour < window.endHour;
+}
+
 const THAI_DISPLAY_TIME = new Intl.DateTimeFormat('th-TH', {
   timeZone: TIMEZONE,
   year: 'numeric',
