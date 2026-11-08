@@ -102,8 +102,38 @@ Settings → Secrets and variables → Actions → New repository secret
 | `BACKEND_URL` | `https://<domain>` |
 | `CRON_SECRET` | ค่าเดียวกับ env ของ backend |
 
-- `cron.yml` ยิง `/jobs/run?job=emailPoll` ทุก 5 นาที
-- `ping.yml` ปลุก `/health` ทุก 5 นาที — **ปิดได้ถ้าใช้ host ที่ไม่หลับ**
+- `cron.yml` ทุกรอบที่ยิงมาจะเรียกครบทุกงาน (emailPoll, recurring, planCheck, dailySummary, cleanup)
+  แล้วให้ backend ตัดสินเองว่าควรทำอะไร — งานที่ส่ง push จะข้ามไปถ้าอยู่นอกช่วงเวลา
+- `ping.yml` ปลุก `/health` — **ปิดได้ถ้าใช้ host ที่ไม่หลับ**
+
+> ⚠️ **GitHub Actions ไม่ตรงเวลา** ข้อมูลจริง 31 ต.ค.–8 พ.ย. 2026: ตั้งไว้ทุก 5 นาที แต่ยิงจริงห่างกัน
+> เฉลี่ย ~2.5 ชม. (Ping ~5 ชม.) ผลคือ อีเมลธนาคารเข้าช้าเป็นชั่วโมง, Render หลับเกือบตลอด,
+> และสรุปประจำวันอาจไม่ถูกส่งในวันที่ไม่มีรอบไหนตกช่วง 20:00–23:59 เลย
+> ถ้าจะเปิดให้คนใช้จริง ให้ตั้ง cron ภายนอกตามหัวข้อถัดไป
+
+---
+
+## 4.1 ตั้ง cron ภายนอก (แนะนำก่อนเปิดใช้จริง)
+
+ใช้บริการที่ยิงตรงเวลา เช่น [cron-job.org](https://cron-job.org) (ฟรี ยิงได้ถี่สุดทุก 1 นาที)
+สร้าง job ตามตารางนี้ ตั้ง timezone ของแต่ละ job เป็น **Asia/Bangkok**
+
+| ชื่อ | URL | Method | เวลา (ไทย) |
+|---|---|---|---|
+| ping | `https://<domain>/health` | GET | ทุก 10 นาที |
+| emailPoll | `https://<domain>/jobs/run?job=emailPoll` | POST | ทุก 5 นาที |
+| recurring | `https://<domain>/jobs/run?job=recurring` | POST | ทุกวัน 06:00 |
+| planCheck | `https://<domain>/jobs/run?job=planCheck` | POST | ทุกวัน 09:00 |
+| dailySummary | `https://<domain>/jobs/run?job=dailySummary` | POST | ทุกวัน 21:00 |
+| cleanup | `https://<domain>/jobs/run?job=cleanup` | POST | ทุกวัน 03:00 |
+
+ทุก job ที่เป็น `/jobs/run` ต้องเพิ่ม header `x-cron-secret: <ค่า CRON_SECRET>` (ping ไม่ต้อง)
+
+ตั้งเสร็จแล้ว **ไม่ต้องปิด GitHub Actions** — ยิงซ้ำกันได้เพราะทุกงานกันซ้ำในตัว
+ถ้า cron ภายนอกล่ม GitHub Actions จะยังเป็นตัวสำรองให้
+
+ตรวจว่าถูกต้อง: กด "Test run" ของ job dailySummary ตอนกลางวัน ต้องได้ HTTP 200 พร้อม
+`"skipped":"outside_window"` (ถูกต้อง — ยังไม่ถึงเวลาส่ง) ถ้าได้ 401 แปลว่า header ผิด
 
 ---
 
@@ -142,7 +172,9 @@ Settings → Secrets and variables → Actions → New repository secret
 | กดล็อกอินแล้วขึ้น 503 พร้อมชื่อ env | env ตัวนั้นยังไม่ได้ตั้ง |
 | LINE ขึ้น error เรื่อง `redirect_uri` | Callback URL ไม่ตรงเป๊ะกับ `APP_BASE_URL` + `/auth/callback` |
 | ล็อกอินผ่านแต่เด้งไป `?login=no-account` | ยังไม่ได้แอดเพื่อนบอท **หรือ** สอง channel อยู่คนละ provider |
-| บอทไม่ตอบข้อความแรกหลังเงียบนาน | instance หลับ — ตั้ง `BACKEND_URL` ให้ `ping.yml` |
+| บอทไม่ตอบข้อความแรกหลังเงียบนาน | instance หลับ — GitHub Actions ปลุกไม่ทัน ให้ตั้ง ping ใน cron ภายนอก (หัวข้อ 4.1) |
+| สรุปประจำวันไม่มา / มาไม่ทุกวัน | GitHub Actions ไม่มีรอบไหนตกช่วง 20:00–23:59 ในวันนั้น — ตั้ง cron ภายนอก (หัวข้อ 4.1) |
+| `/jobs/run` ตอบ `"skipped":"outside_window"` | ปกติ — งานนั้นยังไม่ถึงช่วงเวลาที่ยอมส่ง push (`JOB_WINDOWS` ใน `src/config/constants.ts`) |
 | อีเมลไม่เข้าเลย | ดู log หาบรรทัด `[email] ข้าม:` จะบอกว่าตกด่านไหน (token/DKIM/ธนาคารไม่รองรับ) |
 | build พัง `TS7016 Could not find a declaration file for module 'express'` | devDependencies ถูกข้าม — build command ต้องมี `--include=dev` |
 | build พัง `TS5108 ... moduleResolution ... has been removed` | อาการเดียวกัน: ไม่มี typescript ใน node_modules เลยไปใช้ tsc ตัว global ของ image |

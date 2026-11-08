@@ -1,11 +1,11 @@
 name: Cron
 
-# ตารางตาม SPEC.md ตาราง "งานตามเวลา":
-#   emailPoll  ทุก 5 นาที  (*/5 * * * *)
-#   recurring  06:00 ไทย = 23:00 UTC ของวันก่อนหน้า (0 23 * * *)
-#   cleanup    03:00 ไทย = 20:00 UTC ของวันก่อนหน้า (0 20 * * *)
-#   planCheck  09:00 ไทย = 02:00 UTC (0 2 * * *)
-#   dailySummary 21:00 ไทย = 14:00 UTC (0 14 * * *)
+# ตารางตาม SPEC.md ตาราง "งานตามเวลา" (เวลาไทย):
+#   emailPoll    ทุก 5 นาที
+#   recurring    06:00
+#   cleanup      03:00
+#   planCheck    09:00   (ส่ง push ได้เฉพาะ 08:00–20:59 — JOB_WINDOWS ใน src/config/constants.ts)
+#   dailySummary 21:00   (ส่ง push ได้เฉพาะ 20:00–23:59)
 #
 # ต้องตั้ง 2 secrets ในหน้า Settings > Secrets and variables > Actions ของ repo:
 #   BACKEND_URL  - URL ของ backend ที่ deploy แล้ว เช่น https://lumen-line.onrender.com
@@ -15,10 +15,17 @@ name: Cron
 # ⚠️ workflow ที่มี schedule จะถูกลงทะเบียนจาก "default branch" เท่านั้น
 # แก้ไฟล์นี้บน branch อื่นแล้วไม่เห็นผล = ปกติ ต้อง merge เข้า default branch ก่อน
 #
-# ⚠️ GitHub Actions ไม่รับประกันเวลาของ schedule โดยเฉพาะ */5 ที่อาจถูกเลื่อนหรือรวบรอบได้
-# ทุกงานจึงต้อง idempotent: emailPoll กันซ้ำด้วย Message-ID + S10 dedup
-# ส่วน recurring กันซ้ำด้วย unique (recurring_rule_id, recurring_run_date)
-# planCheck กับ dailySummary กันซ้ำด้วย dedup_key ของ push_log
+# 🔴 GitHub Actions ไม่ตรงเวลาเลย — ข้อมูลจริง 31 ต.ค.–8 พ.ย. 2026:
+#   */5 นาที ยิงจริงห่างกันเฉลี่ย ~2.5 ชม. · รอบ 21:00 ไปยิงจริง 01:30–04:00 ของวันถัดไป
+# จึงเลิกผูกงานกับรอบ schedule แต่ละรอบแล้ว: "ทุกรอบที่ยิงมา เรียกทุกงาน"
+# ให้ backend ตัดสินเองว่าตอนนี้ควรทำอะไร (งานที่ส่ง push จะข้ามไปถ้าอยู่นอกช่วงเวลา)
+# ปลอดภัยเพราะทุกงาน idempotent:
+#   emailPoll กันซ้ำด้วย Message-ID + S10 dedup
+#   recurring กันซ้ำด้วย unique (recurring_rule_id, recurring_run_date)
+#   planCheck กับ dailySummary กันซ้ำด้วย dedup_key ของ push_log
+#   cleanup ลบเฉพาะของที่หมดอายุแล้ว
+#
+# ถ้าต้องการให้ตรงเวลาจริง ใช้ cron ภายนอกยิง /jobs/run แทน — ดู docs/DEPLOY.md หัวข้อ "ตั้ง cron ภายนอก"
 
 on:
   schedule:
@@ -30,162 +37,39 @@ on:
   workflow_dispatch:
 
 jobs:
-  email-poll:
-    # รอบ 23:00 UTC เป็นของ recurring อย่างเดียว ไม่ต้องยิง emailPoll ซ้ำ
-    # (รอบ */5 ครอบคลุมเวลานั้นอยู่แล้ว)
-    if: >-
-      github.event.schedule != '0 23 * * *' &&
-      github.event.schedule != '0 20 * * *' &&
-      github.event.schedule != '0 2 * * *' &&
-      github.event.schedule != '0 14 * * *'
+  run-jobs:
     runs-on: ubuntu-latest
     steps:
-      - name: เรียก emailPoll
+      - name: เรียกงานทั้งหมด
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          JOB_NAME: emailPoll
         run: |
           if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
             echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
             exit 0
           fi
 
-          status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
-            -X POST "$BACKEND_URL/jobs/run?job=$JOB_NAME" \
-            -H "x-cron-secret: $CRON_SECRET" \
-            --max-time 120)
+          failed=""
+          # ทำต่อให้ครบทุกงานแม้งานก่อนหน้าจะพัง แล้วค่อยทำให้ workflow แดงตอนจบ
+          for job in emailPoll recurring planCheck dailySummary cleanup; do
+            status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
+              -X POST "$BACKEND_URL/jobs/run?job=$job" \
+              -H "x-cron-secret: $CRON_SECRET" \
+              --max-time 120) || status="curl-error"
 
-          echo "HTTP $status"
-          cat /tmp/jobs-response.json
-          echo
+            echo "[$job] HTTP $status"
+            cat /tmp/jobs-response.json 2>/dev/null
+            echo
 
-          # 200 เท่านั้นที่ถือว่าสำเร็จ — งานที่ไม่เจออีเมลเลยก็ยังตอบ 200
-          # ส่วน 401/404/500 ต้องทำให้ workflow แดง ไม่ใช่ผ่านไปเงียบๆ
-          if [ "$status" != "200" ]; then
-            echo "::error::เรียก $JOB_NAME ไม่สำเร็จ (HTTP $status)"
-            exit 1
-          fi
+            # 200 เท่านั้นที่ถือว่าสำเร็จ — รอบที่ข้ามเพราะนอกช่วงเวลาก็ตอบ 200 (skipped: outside_window)
+            if [ "$status" != "200" ]; then
+              echo "::error::เรียก $job ไม่สำเร็จ (HTTP $status)"
+              failed="$failed $job"
+            fi
+          done
 
-  recurring:
-    # ยิงเฉพาะรอบ 23:00 UTC (06:00 ไทย) และตอนกดรันเอง
-    # ถ้าปล่อยให้ทำงานทุก 5 นาทีก็ไม่พัง (งานเป็น idempotent) แต่เปลืองโควตา Actions เปล่าๆ
-    if: github.event.schedule == '0 23 * * *' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: เรียก recurring
-        env:
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          JOB_NAME: recurring
-        run: |
-          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
-            exit 0
-          fi
-
-          status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
-            -X POST "$BACKEND_URL/jobs/run?job=$JOB_NAME" \
-            -H "x-cron-secret: $CRON_SECRET" \
-            --max-time 120)
-
-          echo "HTTP $status"
-          cat /tmp/jobs-response.json
-          echo
-
-          if [ "$status" != "200" ]; then
-            echo "::error::เรียก $JOB_NAME ไม่สำเร็จ (HTTP $status)"
-            exit 1
-          fi
-
-  cleanup:
-    # ยิงเฉพาะรอบ 20:00 UTC (03:00 ไทย) และตอนกดรันเอง
-    if: github.event.schedule == '0 20 * * *' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: เรียก cleanup
-        env:
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          JOB_NAME: cleanup
-        run: |
-          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
-            exit 0
-          fi
-
-          status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
-            -X POST "$BACKEND_URL/jobs/run?job=$JOB_NAME" \
-            -H "x-cron-secret: $CRON_SECRET" \
-            --max-time 120)
-
-          echo "HTTP $status"
-          cat /tmp/jobs-response.json
-          echo
-
-          if [ "$status" != "200" ]; then
-            echo "::error::เรียก $JOB_NAME ไม่สำเร็จ (HTTP $status)"
-            exit 1
-          fi
-
-  plan-check:
-    # ยิงเฉพาะรอบ 02:00 UTC (09:00 ไทย) และตอนกดรันเอง
-    if: github.event.schedule == '0 2 * * *' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: เรียก planCheck
-        env:
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          JOB_NAME: planCheck
-        run: |
-          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
-            exit 0
-          fi
-
-          status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
-            -X POST "$BACKEND_URL/jobs/run?job=$JOB_NAME" \
-            -H "x-cron-secret: $CRON_SECRET" \
-            --max-time 120)
-
-          echo "HTTP $status"
-          cat /tmp/jobs-response.json
-          echo
-
-          if [ "$status" != "200" ]; then
-            echo "::error::เรียก $JOB_NAME ไม่สำเร็จ (HTTP $status)"
-            exit 1
-          fi
-
-  daily-summary:
-    # ยิงเฉพาะรอบ 14:00 UTC (21:00 ไทย) — ไม่รวมตอนกดรันเองต่างจากงานอื่น
-    # เพราะ dedup_key ผูกกับวันที่: ถ้ากดรันตอนเช้าเพื่อทดสอบงานอื่น ผู้ใช้จะได้ "สรุปวันนี้"
-    # ตั้งแต่เช้าทั้งที่วันยังไม่จบ แล้วรอบ 21:00 จริงจะถูกมองว่าส่งไปแล้วและข้ามไป
-    if: github.event.schedule == '0 14 * * *'
-    runs-on: ubuntu-latest
-    steps:
-      - name: เรียก dailySummary
-        env:
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          JOB_NAME: dailySummary
-        run: |
-          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
-            echo "ยังไม่ได้ตั้ง BACKEND_URL หรือ CRON_SECRET — ข้ามรอบนี้"
-            exit 0
-          fi
-
-          status=$(curl -sS -o /tmp/jobs-response.json -w '%{http_code}' \
-            -X POST "$BACKEND_URL/jobs/run?job=$JOB_NAME" \
-            -H "x-cron-secret: $CRON_SECRET" \
-            --max-time 120)
-
-          echo "HTTP $status"
-          cat /tmp/jobs-response.json
-          echo
-
-          if [ "$status" != "200" ]; then
-            echo "::error::เรียก $JOB_NAME ไม่สำเร็จ (HTTP $status)"
+          if [ -n "$failed" ]; then
+            echo "งานที่ล้มเหลว:$failed"
             exit 1
           fi
