@@ -7,33 +7,20 @@
 // ⚖️ G1/G3: ยอดเงินทุกตัวรับมาเป็นสตริงที่ format จากสตางค์แล้ว การ์ดไม่แตะตัวเลขเงิน
 // เปอร์เซ็นต์ที่รับมาใช้เป็น "ความกว้างแถบ" อย่างเดียว ไม่ได้เอาไปคิดเงินต่อ
 //
-// 🔴 บทเรียนจากการทดสอบบนมือถือจริง — Flex Simulator บนเดสก์ท็อปผ่อนผันกว่าแอป LINE
-// สามข้อนี้ Simulator วาดให้เห็นปกติ แต่บนเครื่องจริงพัง ห้ามแก้กลับ:
-//   1. กล่องในของแถบต้องกำหนด height เอง ไม่งั้นสูง 0 แล้วแถบหายทั้งแถบ
-//   2. ป้ายต้องเป็น layout 'vertical' + flex 0 — ถ้าใช้ 'baseline' กล่องยุบจนกลายเป็นวงกลม
-//   3. ไอคอนต้องเป็น child ตรงๆ ของแถว horizontal ห้ามห่อ box ที่ flex 0 ไม่งั้นหายไปเลย
+// การ์ดนี้คือแม่แบบของการ์ดทุกใบ — ชิ้นส่วนที่ใช้ร่วมกัน (หัวการ์ด แถบ ป้าย) ย้ายไปอยู่ที่ theme.ts
+// บทเรียนจากการทดสอบบนมือถือจริง 3 ข้อ (แถบหาย / ป้ายกลม / ไอคอนหาย) ดูที่หัวไฟล์ theme.ts
+//   ข้อ 3 เกี่ยวกับไฟล์นี้โดยตรง: ไอคอนต้องเป็น child ตรงๆ ของแถว horizontal ห้ามห่อ box
 
-const C = {
-  band: '#c6ff3d',
-  bandText: '#4a5c38',
-  line: '#dfe9d3',
-  text: '#1c2416',
-  strong: '#10140b',
-  muted: '#6b7a5e',
-  dark: '#14170f',
-  onDark: '#f6faf0',
-  incomeBg: '#e4f4e5',
-  bar: '#8fbf18',
-  warn: '#f5a524',
-  danger: '#e5484d',
-  track: '#dde6d2',
-} as const;
-
-const BAR_HEIGHT = '10px';
-/** ต่ำกว่านี้แถบจะมนจนดูเหมือนจุด ไม่ใช่ขีด */
-const ROUND_THRESHOLD = 14;
-/** ยกพื้นขั้นต่ำให้แถบยังอ่านออก — ยอดจริงพิมพ์อยู่ข้างแถบแล้ว จึงไม่ทำให้เข้าใจผิด */
-const MIN_BAR_WIDTH = 5;
+import {
+  bubble,
+  cardBody,
+  cardHeader,
+  FLEX_THEME as C,
+  heavyDivider,
+  pill,
+  progressBar,
+  trimBase,
+} from './theme';
 
 export type RecordedItem = {
   transactionId: string;
@@ -72,51 +59,6 @@ export type RecordedCardInput = {
   assetBaseUrl: string;
 };
 
-function barColor(percent: number): string {
-  if (percent >= 100) return C.danger;
-  if (percent >= 80) return C.warn;
-  return C.bar;
-}
-
-function progressBar(percent: number) {
-  const width = Math.max(MIN_BAR_WIDTH, Math.min(100, Math.round(percent)));
-  return {
-    type: 'box',
-    layout: 'vertical',
-    height: BAR_HEIGHT,
-    backgroundColor: C.track,
-    cornerRadius: '5px',
-    margin: 'sm',
-    contents: [
-      {
-        type: 'box',
-        layout: 'vertical',
-        contents: [],
-        width: `${width}%`,
-        height: BAR_HEIGHT, // 🔴 ดูหมายเหตุข้อ 1 ด้านบน
-        backgroundColor: barColor(percent),
-        cornerRadius: width < ROUND_THRESHOLD ? '2px' : '5px',
-      },
-    ],
-  };
-}
-
-/** ป้ายเม็ดมน — 🔴 ต้อง vertical ไม่ใช่ baseline (หมายเหตุข้อ 2) */
-function pill(label: string, background: string, color: string) {
-  return {
-    type: 'box',
-    layout: 'vertical',
-    flex: 0,
-    backgroundColor: background,
-    cornerRadius: '12px',
-    paddingTop: '3px',
-    paddingBottom: '3px',
-    paddingStart: '10px',
-    paddingEnd: '10px',
-    contents: [{ type: 'text', text: label, size: 'xxs', weight: 'bold', color, align: 'center' }],
-  };
-}
-
 /**
  * ไอคอนที่กดได้
  *
@@ -146,7 +88,7 @@ function groupHeader(group: RecordedGroup) {
       pill(
         isIncome ? 'รายรับ' : 'รายจ่าย',
         isIncome ? C.incomeBg : C.dark,
-        isIncome ? '#2f7a33' : C.onDark
+        isIncome ? C.income : C.onDark
       ),
       {
         type: 'text',
@@ -186,7 +128,7 @@ function itemRow(item: RecordedItem, isIncome: boolean, base: string) {
             text: item.formattedAmount,
             size: 'sm',
             weight: 'bold',
-            color: isIncome ? '#2f7a33' : C.strong,
+            color: isIncome ? C.income : C.strong,
             align: 'end',
             flex: 4,
             gravity: 'center',
@@ -252,7 +194,7 @@ function budgetRow(budget: RecordedBudget) {
 }
 
 export function buildRecordedCard(input: RecordedCardInput) {
-  const base = input.assetBaseUrl.replace(/\/$/, '');
+  const base = trimBase(input.assetBaseUrl);
   const count = input.groups.reduce((sum, group) => sum + group.items.length, 0);
 
   const body: Record<string, unknown>[] = [];
@@ -263,14 +205,7 @@ export function buildRecordedCard(input: RecordedCardInput) {
   });
 
   if (input.budgets.length > 0) {
-    body.push({
-      type: 'box',
-      layout: 'vertical',
-      height: '2px',
-      backgroundColor: C.dark,
-      margin: 'xl',
-      contents: [],
-    });
+    body.push(heavyDivider());
     input.budgets.forEach((budget) => body.push(budgetRow(budget)));
     body.push({
       type: 'text',
@@ -292,50 +227,13 @@ export function buildRecordedCard(input: RecordedCardInput) {
       count === 1 && first
         ? `บันทึก ${first.title ?? input.groups[0]?.categoryName ?? 'รายการ'} ${first.formattedAmount} แล้ว`
         : headline,
-    contents: {
-      type: 'bubble',
-      size: 'mega',
-      header: {
-        type: 'box',
-        layout: 'horizontal',
-        backgroundColor: C.band,
-        paddingAll: '16px',
-        paddingBottom: '12px',
-        contents: [
-          {
-            type: 'box',
-            layout: 'vertical',
-            flex: 5,
-            contents: [
-              { type: 'text', text: headline, size: 'lg', weight: 'bold', color: C.strong },
-              {
-                type: 'text',
-                text: 'อย่าลืมตรวจรายการที่บันทึกไว้นะ',
-                size: 'xxs',
-                color: C.bandText,
-                margin: 'xs',
-                wrap: true,
-              },
-            ],
-          },
-          {
-            type: 'image',
-            url: `${base}/img/mascot/happy.png`,
-            size: 'xs',
-            flex: 2,
-            aspectMode: 'fit',
-            gravity: 'center',
-          },
-        ],
-      },
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        paddingAll: '16px',
-        paddingTop: '8px',
-        spacing: 'none',
-        contents: body,
-      },
-    },
+    contents: bubble({
+      header: cardHeader({
+        title: headline,
+        subtitle: 'อย่าลืมตรวจรายการที่บันทึกไว้นะ',
+        assetBaseUrl: base,
+      }),
+      body: cardBody(body),
+    }),
   };
 }

@@ -9,7 +9,16 @@
 // มีโอกาสสูงที่จะเป็นข้อความที่ผู้ใช้ส่งผิดห้อง เช่น เลขบัญชี เลขบัตร หรือเบอร์โทร
 // การสะท้อนกลับจะทำให้ข้อมูลนั้นถูกบันทึกลง log ของเราโดยไม่จำเป็น
 
-import { FLEX_THEME } from './theme';
+import {
+  actionButton,
+  bubble,
+  cardBody,
+  cardFooter,
+  cardHeader,
+  FLEX_THEME,
+  sectionTitle,
+  softPanel,
+} from './theme';
 
 export type ErrorCardInput = {
   /** หัวเรื่องสั้นๆ เช่น "อ่านข้อความไม่ออก" */
@@ -20,81 +29,40 @@ export type ErrorCardInput = {
   examples?: string[];
 };
 
-const COLOR_WARN = FLEX_THEME.warnText;
-const COLOR_MUTED = FLEX_THEME.muted;
-const COLOR_EXAMPLE_BG = FLEX_THEME.soft;
-
+/**
+ * หน้าตาตามแม่แบบการ์ด "บันทึกแล้ว" แต่หัวเป็นแถบเหลืองอ่อน (tone 'warn') ไม่ใช่มะนาว
+ * และไม่มี mascot หน้ายิ้ม — ข้อความผิดพลาดต้องไม่ดูเหมือนข่าวดี
+ */
 export function buildErrorCard(input: ErrorCardInput) {
-  const bodyContents: Record<string, unknown>[] = [
-    {
-      type: 'text',
-      text: `⚠️ ${input.title}`,
-      weight: 'bold',
-      size: 'md',
-      color: COLOR_WARN,
-      wrap: true,
-    },
-    {
-      type: 'text',
-      text: input.reason,
-      size: 'sm',
-      wrap: true,
-      margin: 'md',
-    },
+  const body: Record<string, unknown>[] = [
+    { type: 'text', text: input.reason, size: 'sm', color: FLEX_THEME.text, wrap: true, margin: 'sm' },
   ];
 
   if (input.examples && input.examples.length > 0) {
-    bodyContents.push(
-      {
-        type: 'text',
-        text: 'ลองพิมพ์แบบนี้',
-        size: 'xs',
-        color: COLOR_MUTED,
-        margin: 'lg',
-      },
-      {
-        type: 'box',
-        layout: 'vertical',
-        margin: 'sm',
-        spacing: 'xs',
-        paddingAll: '8px',
-        backgroundColor: COLOR_EXAMPLE_BG,
-        cornerRadius: '4px',
-        contents: input.examples.map((example) => ({
+    body.push(
+      sectionTitle('ลองพิมพ์แบบนี้', 'lg'),
+      softPanel(
+        input.examples.map((example) => ({
           type: 'text',
           text: example,
           size: 'sm',
+          weight: 'bold',
+          color: FLEX_THEME.strong,
           wrap: true,
         })),
-      }
+        'sm'
+      )
     );
   }
 
   return {
     type: 'flex' as const,
     altText: `${input.title} — ${input.reason}`,
-    contents: {
-      type: 'bubble',
-      size: 'kilo',
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        spacing: 'sm',
-        contents: bodyContents,
-      },
-      footer: {
-        type: 'box',
-        layout: 'horizontal',
-        contents: [
-          {
-            type: 'button',
-            style: 'secondary',
-            height: 'sm',
-            action: { type: 'message', label: 'ดูวิธีใช้', text: 'ช่วยเหลือ' },
-          },
-        ],
-      },
-    },
+    contents: bubble({
+      header: cardHeader({ title: input.title, subtitle: 'ยังไม่ได้บันทึกอะไร', tone: 'warn' }),
+      body: cardBody(body),
+      footer: cardFooter([actionButton('ดูวิธีใช้', { type: 'message', text: 'ช่วยเหลือ' })]),
+    }),
   };
 }
 

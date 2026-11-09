@@ -268,7 +268,11 @@ async function handleWithAi(replyToken: string, userId: string, text: string): P
     // ⚖️ G2: ปุ่มในการ์ดคือจุดที่ "คน" ยืนยัน ก่อนหน้านี้ยังไม่มีอะไรถูกเขียนลงฐาน
     await replyFlex(
       replyToken,
-      buildPendingCard({ pendingId: reply.pendingId, summary: reply.text })
+      buildPendingCard({
+        pendingId: reply.pendingId,
+        summary: reply.text,
+        assetBaseUrl: env.appBaseUrl,
+      })
     );
     return;
   }

@@ -372,6 +372,7 @@ async function buildSummaryFlex(userId: string) {
       summary.transactionCount === 0
         ? 'ยังไม่มีรายการเลย — ลองพิมพ์ "กาแฟ 80" ดูครับ'
         : undefined,
+    assetBaseUrl: env.appBaseUrl,
   });
 }
 
@@ -390,6 +391,7 @@ async function buildPlansFlex(userId: string) {
     confidence: plan.confidence,
     dueMonth: thaiMonthYear(plan.targetDate),
     offTrack: plan.offTrack,
+    assetBaseUrl: env.appBaseUrl,
   }));
   return buildPlanCarousel(cards);
 }

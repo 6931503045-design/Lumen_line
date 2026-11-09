@@ -18,9 +18,11 @@
 // ไม่มีบรรทัดไหน log เนื้อรูป และไม่ส่งรูปต่อให้ใครนอกจาก readSlip
 // ตาม SPEC §S9 "MUST NOT เก็บไฟล์รูปไว้ที่ใดเลย"
 
+import { env } from '../config/env';
 import { getUserIdByLineUserId } from '../db/queries/users';
 import { lineBlobClient, lineClient } from '../line/client';
-import { replyText, replyTextWithQuickReply } from '../line/reply';
+import { buildPendingCard } from '../line/flex/pendingCard';
+import { replyFlex, replyText } from '../line/reply';
 import { checkDuplicate } from '../services/dedup.service';
 import { createPending } from '../services/pending.service';
 import { FALLBACK_EXPENSE_CATEGORY, resolveCategoryName } from '../services/ai/router';
@@ -172,40 +174,31 @@ async function proposeSlip(replyToken: string, userId: string, slip: SlipData): 
     },
   });
 
-  const lines = ['อ่านสลิปได้แล้วครับ ✨', '', pending.summary];
+  const notes: string[] = [];
 
   // ยอดเท่ากันและเวลาใกล้กันมาก = "น่าจะซ้ำ" แต่ไม่แน่ (SPEC §S9 "คำเตือนถ้าอาจซ้ำ")
   // ไม่ปฏิเสธให้เอง เพราะคนโอนยอดเดิมสองครั้งติดกันก็มีจริง ให้ผู้ใช้ตัดสิน
-  if (verdict.kind === 'probable') {
-    lines.push(
-      '',
-      '⚠️ มีรายการยอดเท่ากันในช่วงเวลาใกล้กันอยู่แล้ว',
-      'ถ้าเป็นรายการเดียวกัน กด "ไม่ใช่" เพื่อไม่ให้บันทึกซ้ำนะครับ'
+  const probableDuplicate = verdict.kind === 'probable';
+  if (probableDuplicate) {
+    notes.push(
+      'มีรายการยอดเท่ากันในช่วงเวลาใกล้กันอยู่แล้ว ถ้าเป็นรายการเดียวกัน กด "ไม่ใช่" เพื่อไม่ให้บันทึกซ้ำนะครับ'
     );
   }
 
   if (slip.bank) {
-    lines.push('', `ธนาคาร: ${slip.bank}`);
+    notes.push(`ธนาคาร: ${slip.bank}`);
   }
 
-  await replyTextWithQuickReply(replyToken, lines.join('\n'), [
-    {
-      type: 'action',
-      action: {
-        type: 'postback',
-        label: 'ยืนยัน',
-        data: `action=ai_confirm&id=${pending.id}`,
-        displayText: 'ยืนยัน',
-      },
-    },
-    {
-      type: 'action',
-      action: {
-        type: 'postback',
-        label: 'ไม่ใช่',
-        data: `action=ai_cancel&id=${pending.id}`,
-        displayText: 'ไม่ใช่',
-      },
-    },
-  ]);
+  // การ์ดยืนยันใบเดียวกับข้อความที่ AI ตีความ — ปุ่มยิง ai_confirm / ai_cancel เหมือนกัน (⚖️ G2)
+  await replyFlex(
+    replyToken,
+    buildPendingCard({
+      pendingId: pending.id,
+      summary: pending.summary,
+      title: 'อ่านสลิปได้แล้วครับ',
+      notes,
+      warnFirstNote: probableDuplicate,
+      assetBaseUrl: env.appBaseUrl,
+    })
+  );
 }
