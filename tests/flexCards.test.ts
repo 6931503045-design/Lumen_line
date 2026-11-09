@@ -457,6 +457,62 @@ describe('budgetCard', () => {
   });
 });
 
+describe('ทุกการ์ดหน้าตาชุดเดียวกัน (แม่แบบ: การ์ดบันทึกแล้ว)', () => {
+  // บั๊กที่เคยเกิด: การ์ดแต่ละใบวาดเอง บางใบไม่มีหัว บางใบขนาด kilo บางใบใช้ปุ่มเทาของ LINE
+  // ผู้ใช้วางการ์ดเรียงกันในแชทแล้วดูไม่ใช่แอปเดียวกัน
+  const base = 'https://example.test';
+  const bubbles: Record<string, Record<string, unknown>> = {
+    recordedCard: buildRecordedCard({
+      groups: [{ type: 'expense', categoryName: 'อาหาร', items: [
+        { transactionId: 't1', occurredLabel: 'x', title: 'กาแฟ', formattedAmount: '฿80' }]}],
+      budgets: [], periodNote: '', assetBaseUrl: base,
+    }).contents as Record<string, unknown>,
+    summaryCard: buildSummaryCard({ ...summaryInput, assetBaseUrl: base }).contents,
+    planCard: buildPlanCard({ ...planInput, assetBaseUrl: base }).contents,
+    pendingCard: buildPendingCard({ pendingId: 'p1', summary: 'ทดสอบ', assetBaseUrl: base }).contents,
+    budgetCard: buildBudgetCard({
+      monthLabel: 'ต.ค. 2569', rows: [], formattedTotalSpent: '฿1', formattedTotalLimit: '฿2',
+      totalPercentUsed: 50, assetBaseUrl: base,
+    }).contents as Record<string, unknown>,
+  };
+
+  for (const [name, bubble] of Object.entries(bubbles)) {
+    it(`${name}: ขนาด mega และมีหัวแถบมะนาวพร้อม mascot`, () => {
+      expect(bubble.size).toBe('mega');
+      const header = bubble.header as Record<string, unknown>;
+      expect(header.backgroundColor).toBe(FLEX_THEME.band);
+      expect(collect(header, 'url')).toContain(`${base}/img/mascot/happy.png`);
+    });
+  }
+
+  it('การ์ดแจ้งปัญหาใช้แถบเหลืองอ่อน ไม่ใช่มะนาว และไม่มี mascot หน้ายิ้ม', () => {
+    const header = (buildUnreadableCard().contents as Record<string, unknown>).header;
+    expect((header as Record<string, unknown>).backgroundColor).toBe(FLEX_THEME.warnBand);
+    expect(collect(header, 'url')).toEqual([]);
+  });
+
+  it('ปุ่มหลักเป็นพื้นดำตัวหนังสือมะนาวแบบ .primary-btn ของเว็บ', () => {
+    const footer = (bubbles.pendingCard as Record<string, unknown>).footer;
+    const confirm = (collect(footer, 'contents')[0] as Record<string, unknown>[]).find(
+      (b) => (b.action as { data?: string }).data?.startsWith('action=ai_confirm')
+    );
+    expect(confirm?.backgroundColor).toBe(FLEX_THEME.dark);
+    expect(collect(confirm, 'color')).toContain(FLEX_THEME.band);
+  });
+
+  it('ไม่ส่ง assetBaseUrl มาก็ยังสร้างการ์ดได้ แค่ไม่มี mascot และปุ่มเปิดเว็บ', () => {
+    const card = buildSummaryCard(summaryInput);
+    expect(collect(card, 'url')).toEqual([]);
+    expect(collect(card, 'uri')).toEqual([]);
+  });
+
+  it('ปุ่มเปิดเว็บพาไปหน้าที่ตรงเรื่อง', () => {
+    expect(collect(bubbles.summaryCard, 'uri')).toContain(`${base}/index.html`);
+    expect(collect(bubbles.planCard, 'uri')).toContain(`${base}/analyze.html`);
+    expect(collect(bubbles.budgetCard, 'uri')).toContain(`${base}/categories.html`);
+  });
+});
+
 describe('ปุ่มบนการ์ดต้องกดแล้วเกิดอะไรขึ้นจริง', () => {
   // 🔴 บั๊กที่เคยเกิด: ปุ่ม ✏️ ยิง action=edit ออกไปแต่ postbackHandler ไม่มี case นี้
   // ตกไปที่ default ซึ่งตอนนั้นแค่ log ลง console ผู้ใช้กดแล้วเงียบสนิท

@@ -22,7 +22,7 @@ vi.mock('../src/line/client', () => ({
 }));
 vi.mock('../src/line/reply', () => ({
   replyText: vi.fn(),
-  replyTextWithQuickReply: vi.fn(),
+  replyFlex: vi.fn(),
 }));
 vi.mock('../src/services/ai/vision', () => ({ readSlip: vi.fn() }));
 vi.mock('../src/services/dedup.service', () => ({ checkDuplicate: vi.fn() }));
@@ -34,7 +34,7 @@ vi.mock('../src/services/ai/router', () => ({
 
 import { getUserIdByLineUserId } from '../src/db/queries/users';
 import { lineBlobClient, lineClient } from '../src/line/client';
-import { replyText, replyTextWithQuickReply } from '../src/line/reply';
+import { replyFlex, replyText } from '../src/line/reply';
 import { readSlip } from '../src/services/ai/vision';
 import { checkDuplicate } from '../src/services/dedup.service';
 import { createPending } from '../src/services/pending.service';
@@ -55,11 +55,31 @@ const EVENT = {
   message: { type: 'image', id: 'msg1' },
 };
 
-/** ข้อความที่ถูกส่งกลับไป ไม่ว่าจะผ่าน replyText หรือ replyTextWithQuickReply */
+/** เดินทั้ง object หาค่าทุกตัวของ key ที่สนใจ — ใช้อ่านข้อความในการ์ด Flex ที่ซ้อนหลายชั้น */
+function collect(node: unknown, key: string, found: unknown[] = []): unknown[] {
+  if (Array.isArray(node)) {
+    for (const item of node) collect(item, key, found);
+  } else if (node && typeof node === 'object') {
+    for (const [k, v] of Object.entries(node)) {
+      if (k === key) found.push(v);
+      collect(v, key, found);
+    }
+  }
+  return found;
+}
+
+/** การ์ดยืนยันที่ส่งกลับไป (ถ้ามี) */
+function repliedCard(): unknown {
+  return vi.mocked(replyFlex).mock.calls[0]?.[1];
+}
+
+/** ข้อความที่ถูกส่งกลับไป ไม่ว่าจะเป็นข้อความธรรมดาหรือข้อความในการ์ด */
 function repliedText(): string {
   const plain = vi.mocked(replyText).mock.calls.map((call) => call[1]);
-  const withButtons = vi.mocked(replyTextWithQuickReply).mock.calls.map((call) => call[1]);
-  return [...plain, ...withButtons].join('\n---\n');
+  const inCards = vi.mocked(replyFlex).mock.calls.flatMap(
+    (call) => collect(call[1], 'text') as string[]
+  );
+  return [...plain, ...inCards].join('\n---\n');
 }
 
 beforeEach(() => {
@@ -114,13 +134,16 @@ describe('ทางปกติ — อ่านสลิปได้แล้�
     expect(payload.type).toBe('expense');
   });
 
-  it('ตอบพร้อมปุ่มยืนยันและปุ่มไม่ใช่', async () => {
+  it('ตอบเป็นการ์ดยืนยันใบเดียวกับของ AI พร้อมปุ่มยืนยันและปุ่มไม่ใช่', async () => {
     await handleImage(EVENT);
 
-    const items = vi.mocked(replyTextWithQuickReply).mock.calls[0]?.[2];
-    expect(items?.map((item) => item.action.label)).toEqual(['ยืนยัน', 'ไม่ใช่']);
-    expect(items?.[0]?.action.data).toBe('action=ai_confirm&id=p1');
-    expect(items?.[1]?.action.data).toBe('action=ai_cancel&id=p1');
+    const card = repliedCard();
+    expect(card).toMatchObject({ type: 'flex' });
+    expect(collect(card, 'label')).toEqual(['ไม่ใช่', 'ยืนยัน']);
+    expect(collect(card, 'data')).toEqual(['action=ai_cancel&id=p1', 'action=ai_confirm&id=p1']);
+    expect(repliedText()).toContain('อ่านสลิปได้แล้ว');
+    // ⚖️ G2: ต้องบอกชัดว่ายังไม่ได้บันทึก
+    expect(repliedText()).toContain('ยังไม่ได้บันทึก');
   });
 
   it('โชว์ loading animation ก่อน เพราะ Vision ใช้เวลาหลายวินาที', async () => {

@@ -9,8 +9,21 @@
 //
 // 🔴 ป้ายระดับความมั่นใจเป็นของบังคับ ไม่ใช่ของตกแต่ง: SRS §3.6 กำหนดว่าทุกทางเลือกของแผน
 // ต้องบอก "ระดับความมั่นใจ" เพราะแผนที่คำนวณจากข้อมูล 3 วันไม่ควรถูกนำเสนอเท่ากับ 3 เดือน
+//
+// หน้าตาตามแม่แบบการ์ด "บันทึกแล้ว" — ชิ้นส่วนทั้งหมดมาจาก theme.ts
 
-import { FLEX_THEME } from './theme';
+import {
+  actionButton,
+  bubble,
+  cardBody,
+  cardFooter,
+  cardHeader,
+  FLEX_THEME,
+  labelValueRow,
+  pill,
+  progressBar,
+  trimBase,
+} from './theme';
 
 export type PlanConfidence = 'low' | 'medium' | 'high';
 
@@ -26,131 +39,106 @@ export type PlanCardInput = {
   dueMonth: string;
   /** true = ออมช้ากว่าเป้า ผู้เรียกเป็นคนตัดสิน (G1) */
   offTrack?: boolean;
+  /** โดเมนที่เสิร์ฟ web/ — ใช้กับ mascot และปุ่มเปิดหน้าเว็บ ไม่ส่งมาก็ยังสร้างการ์ดได้ */
+  assetBaseUrl?: string;
 };
-
-const COLOR_MUTED = FLEX_THEME.muted;
-const COLOR_TRACK = FLEX_THEME.track;
-const COLOR_BAR = FLEX_THEME.bar;
-const COLOR_BAR_OFFTRACK = FLEX_THEME.warn;
-const COLOR_WARN = FLEX_THEME.warnText;
-const COLOR_TITLE = FLEX_THEME.strong;
 
 /** LINE ให้ carousel สูงสุด 12 bubble */
 const MAX_BUBBLES = 12;
 
-const CONFIDENCE_LABEL: Record<PlanConfidence, string> = {
-  low: '🔴 ความมั่นใจต่ำ',
-  medium: '🟡 ความมั่นใจกลาง',
-  high: '🟢 ความมั่นใจสูง',
+/** ป้ายความมั่นใจ — สีพื้นกับสีตัวหนังสือคู่กัน บอกระดับได้แม้อ่านไม่ทัน */
+const CONFIDENCE: Record<PlanConfidence, { label: string; bg: string; color: string }> = {
+  low: { label: 'ความมั่นใจต่ำ', bg: FLEX_THEME.dangerBg, color: FLEX_THEME.danger },
+  medium: { label: 'ความมั่นใจกลาง', bg: FLEX_THEME.warnBg, color: FLEX_THEME.warnText },
+  high: { label: 'ความมั่นใจสูง', bg: FLEX_THEME.incomeBg, color: FLEX_THEME.income },
 };
-
-const CONFIDENCE_COLOR: Record<PlanConfidence, string> = {
-  low: FLEX_THEME.danger,
-  medium: FLEX_THEME.warnText,
-  high: FLEX_THEME.income,
-};
-
-function infoRow(label: string, value: string) {
-  return {
-    type: 'box',
-    layout: 'horizontal',
-    contents: [
-      { type: 'text', text: label, size: 'sm', color: COLOR_MUTED, flex: 4 },
-      { type: 'text', text: value, size: 'sm', weight: 'bold', align: 'end', flex: 5 },
-    ],
-  };
-}
 
 /** bubble เดียว ใช้ทั้งเดี่ยวและใน carousel */
 function planBubble(input: PlanCardInput) {
   const width = Math.max(0, Math.min(100, Math.round(input.percentComplete)));
-  // แถบสั้นมากต้องยังอ่านออกว่าเป็น "ขีด" ไม่ใช่จุดกลม: ยกพื้นขั้นต่ำ 5%
-  // แล้วลดความมนลงเมื่อสั้น เพราะ cornerRadius 4px บนแถบกว้าง 6px กลายเป็นวงกลม
-  // (ทดสอบบนมือถือจริงแล้วเจอ — ตัวเลขจริงพิมพ์อยู่ข้างบนแถบอยู่แล้ว จึงไม่ทำให้เข้าใจผิด)
-  const barWidth = Math.max(5, width);
-  const barRadius = barWidth < 14 ? '2px' : '4px';
-  const barColor = input.offTrack ? COLOR_BAR_OFFTRACK : COLOR_BAR;
+  const barColor = input.offTrack ? FLEX_THEME.warn : FLEX_THEME.bar;
+  const confidence = CONFIDENCE[input.confidence];
 
-  const bodyContents: Record<string, unknown>[] = [
-    {
-      type: 'text',
-      text: `🎯 ${input.title}`,
-      weight: 'bold',
-      size: 'md',
-      color: COLOR_TITLE,
-      wrap: true,
-    },
-    {
-      type: 'text',
-      text: CONFIDENCE_LABEL[input.confidence],
-      size: 'xxs',
-      color: CONFIDENCE_COLOR[input.confidence],
-      margin: 'xs',
-    },
-    // แถบความคืบหน้า: กล่องนอกเป็นราง กล่องในคือส่วนที่ออมได้แล้ว
+  const body: Record<string, unknown>[] = [
     {
       type: 'box',
-      layout: 'vertical',
-      height: '8px',
-      backgroundColor: COLOR_TRACK,
-      cornerRadius: '4px',
-      margin: 'md',
+      layout: 'horizontal',
+      margin: 'sm',
       contents: [
+        pill(confidence.label, confidence.bg, confidence.color),
         {
-          type: 'box',
-          layout: 'vertical',
-          contents: [],
-          // 🔴 ต้องกำหนด height ซ้ำที่กล่องใน ไม่ใช่พึ่งความสูงของกล่องนอก
-          // กล่องที่ contents ว่างและไม่มี height ของตัวเองจะสูง 0 แล้วแถบหายทั้งแถบ
-          // บนแอป LINE จริง (Flex Simulator บนเดสก์ท็อปยังวาดให้เห็น จึงหลุดรอดตอนทดสอบ)
-          height: '8px',
-          width: `${barWidth}%`,
-          backgroundColor: barColor,
-          cornerRadius: barRadius,
+          type: 'text',
+          text: `${width}%`,
+          size: 'lg',
+          weight: 'bold',
+          color: input.offTrack ? FLEX_THEME.warnText : FLEX_THEME.strong,
+          align: 'end',
+          gravity: 'center',
         },
       ],
     },
+    // 🔴 แถบต้องเป็นลูกตรงของ body — เทสต์ตรวจ height ของกล่องในจากตำแหน่งนี้
+    progressBar(input.percentComplete, barColor),
     {
       type: 'text',
-      text: `${input.formattedSaved} / ${input.formattedTarget} (${width}%)`,
+      text: `ออมแล้ว ${input.formattedSaved} / ${input.formattedTarget}`,
       size: 'xs',
-      color: COLOR_MUTED,
+      color: FLEX_THEME.muted,
       margin: 'sm',
+      wrap: true,
     },
-    { type: 'separator', margin: 'md' },
+    { type: 'separator', margin: 'lg', color: FLEX_THEME.line },
     {
       type: 'box',
       layout: 'vertical',
-      margin: 'md',
+      margin: 'lg',
       spacing: 'sm',
       contents: [
-        infoRow('ออมเดือนละ', input.formattedMonthly),
-        infoRow('ครบเป้า', input.dueMonth),
+        labelValueRow('ออมเดือนละ', input.formattedMonthly),
+        labelValueRow('ครบเป้า', input.dueMonth),
       ],
     },
   ];
 
   if (input.offTrack) {
-    bodyContents.push({
-      type: 'text',
-      text: '⚠️ ตอนนี้ออมช้ากว่าเป้า',
-      size: 'xs',
-      color: COLOR_WARN,
-      wrap: true,
-      margin: 'md',
+    body.push({
+      type: 'box',
+      layout: 'vertical',
+      margin: 'lg',
+      paddingAll: '10px',
+      backgroundColor: FLEX_THEME.warnBg,
+      cornerRadius: '8px',
+      contents: [
+        {
+          type: 'text',
+          text: 'ตอนนี้ออมช้ากว่าเป้า ลองพิมพ์ "ออม 500" เพื่อโอนเข้าแผนเพิ่ม',
+          size: 'xs',
+          color: FLEX_THEME.warnText,
+          wrap: true,
+        },
+      ],
     });
   }
 
-  return {
-    type: 'bubble',
-    size: 'kilo',
-    body: {
-      type: 'box',
-      layout: 'vertical',
-      spacing: 'sm',
-      contents: bodyContents,
-    },
-  };
+  const footer = input.assetBaseUrl
+    ? cardFooter([
+        actionButton(
+          'ดูแผนในเว็บ',
+          { type: 'uri', uri: `${trimBase(input.assetBaseUrl)}/analyze.html` },
+          'primary'
+        ),
+      ])
+    : undefined;
+
+  return bubble({
+    header: cardHeader({
+      title: input.title,
+      subtitle: `แผนออม · ครบเป้า ${input.dueMonth}`,
+      assetBaseUrl: input.assetBaseUrl,
+    }),
+    body: cardBody(body),
+    footer,
+  });
 }
 
 /** การ์ดแผนเดียว */

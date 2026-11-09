@@ -7,27 +7,21 @@
 // ⚖️ G1/G3: ยอดเงินทุกตัวรับมาเป็นสตริงที่ format จากสตางค์แล้ว การ์ดไม่แตะตัวเลขเงิน
 // เปอร์เซ็นต์ที่รับมาใช้วาดความกว้างแถบอย่างเดียว ไม่ได้เอาไปคิดต่อ
 //
-// 🔴 ข้อบังคับจากการทดสอบบนมือถือจริง (เหมือน recordedCard.ts — ห้ามแก้กลับ)
-//   1. กล่องในของแถบต้องกำหนด height เอง ไม่งั้นสูง 0 แล้วแถบหายทั้งแถบ
-//   2. แถบที่สั้นมากต้องลดความมน ไม่งั้นดูเป็นจุดกลมแทนที่จะเป็นขีด
+// หน้าตาตามแม่แบบการ์ด "บันทึกแล้ว" — ชิ้นส่วนทั้งหมด (หัวการ์ด แถบ ปุ่ม) มาจาก theme.ts
+// ข้อบังคับเรื่องแถบจากการทดสอบบนมือถือจริงอยู่ที่หัวไฟล์ theme.ts
 
-const C = {
-  band: '#c6ff3d',
-  bandText: '#4a5c38',
-  line: '#dfe9d3',
-  soft: '#f4f8ee',
-  text: '#1c2416',
-  strong: '#10140b',
-  muted: '#6b7a5e',
-  bar: '#8fbf18',
-  warn: '#f5a524',
-  danger: '#e5484d',
-  track: '#dde6d2',
-} as const;
+import {
+  actionButton,
+  bubble,
+  cardBody,
+  cardFooter,
+  cardHeader,
+  FLEX_THEME as C,
+  levelBarColor,
+  progressBar,
+  trimBase,
+} from './theme';
 
-const BAR_HEIGHT = '10px';
-const ROUND_THRESHOLD = 14;
-const MIN_BAR_WIDTH = 5;
 /** เกินกว่านี้การ์ดจะยาวจนต้องเลื่อนหลายจอ — ที่เหลือบอกเป็นบรรทัดสรุปแทน */
 const MAX_ROWS = 8;
 
@@ -56,29 +50,6 @@ function levelColor(level: BudgetCardRow['level']): string {
   if (level === 'over') return C.danger;
   if (level === 'warning') return C.warn;
   return C.bar;
-}
-
-function progressBar(percent: number, color: string) {
-  const width = Math.max(MIN_BAR_WIDTH, Math.min(100, Math.round(percent)));
-  return {
-    type: 'box',
-    layout: 'vertical',
-    height: BAR_HEIGHT,
-    backgroundColor: C.track,
-    cornerRadius: '5px',
-    margin: 'sm',
-    contents: [
-      {
-        type: 'box',
-        layout: 'vertical',
-        contents: [],
-        width: `${width}%`,
-        height: BAR_HEIGHT, // 🔴 ดูหมายเหตุข้อ 1 ด้านบน
-        backgroundColor: color,
-        cornerRadius: width < ROUND_THRESHOLD ? '2px' : '5px',
-      },
-    ],
-  };
 }
 
 function budgetRow(row: BudgetCardRow) {
@@ -127,7 +98,7 @@ function budgetRow(row: BudgetCardRow) {
 }
 
 export function buildBudgetCard(input: BudgetCardInput) {
-  const base = input.assetBaseUrl.replace(/\/$/, '');
+  const base = trimBase(input.assetBaseUrl);
   const shown = input.rows.slice(0, MAX_ROWS);
   const hidden = input.rows.length - shown.length;
 
@@ -165,10 +136,7 @@ export function buildBudgetCard(input: BudgetCardInput) {
             },
           ],
         },
-        progressBar(
-          input.totalPercentUsed,
-          input.totalPercentUsed >= 100 ? C.danger : input.totalPercentUsed >= 80 ? C.warn : C.bar
-        ),
+        progressBar(input.totalPercentUsed, levelBarColor(input.totalPercentUsed)),
       ],
     },
     { type: 'separator', margin: 'lg', color: C.line },
@@ -190,63 +158,17 @@ export function buildBudgetCard(input: BudgetCardInput) {
     type: 'flex' as const,
     // altText ขึ้นใน notification ต้องบอกสถานะได้โดยไม่ต้องเปิดการ์ด
     altText: `งบ ${input.monthLabel} — ${headline} · ใช้ไป ${input.formattedTotalSpent} จาก ${input.formattedTotalLimit}`,
-    contents: {
-      type: 'bubble',
-      size: 'mega',
-      header: {
-        type: 'box',
-        layout: 'horizontal',
-        backgroundColor: C.band,
-        paddingAll: '16px',
-        paddingBottom: '12px',
-        contents: [
-          {
-            type: 'box',
-            layout: 'vertical',
-            flex: 5,
-            contents: [
-              { type: 'text', text: 'งบเดือนนี้', size: 'lg', weight: 'bold', color: C.strong },
-              {
-                type: 'text',
-                text: `${input.monthLabel} · ${headline}`,
-                size: 'xxs',
-                color: C.bandText,
-                margin: 'xs',
-                wrap: true,
-              },
-            ],
-          },
-          {
-            type: 'image',
-            url: `${base}/img/mascot/happy.png`,
-            size: 'xs',
-            flex: 2,
-            aspectMode: 'fit',
-            gravity: 'center',
-          },
-        ],
-      },
-      body: {
-        type: 'box',
-        layout: 'vertical',
-        paddingAll: '16px',
-        spacing: 'none',
-        contents: body,
-      },
-      footer: {
-        type: 'box',
-        layout: 'horizontal',
-        paddingAll: '14px',
-        paddingTop: 'none',
-        contents: [
-          {
-            type: 'button',
-            style: 'secondary',
-            height: 'sm',
-            action: { type: 'message', label: 'ใช้ได้อีกเท่าไหร่', text: 'เหลือ' },
-          },
-        ],
-      },
-    },
+    contents: bubble({
+      header: cardHeader({
+        title: 'งบเดือนนี้',
+        subtitle: `${input.monthLabel} · ${headline}`,
+        assetBaseUrl: base,
+      }),
+      body: cardBody(body),
+      footer: cardFooter([
+        actionButton('ใช้ได้อีกเท่าไหร่', { type: 'message', text: 'เหลือ' }),
+        actionButton('ตั้งงบในเว็บ', { type: 'uri', uri: `${base}/categories.html` }, 'primary'),
+      ]),
+    }),
   };
 }
