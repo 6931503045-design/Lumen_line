@@ -83,6 +83,26 @@ apiRouter.get('/ping', (_req, res) => {
 // ทุก route ใต้บรรทัดนี้ต้องล็อกอินแล้ว (มี session cookie ที่เราเซ็น)
 apiRouter.use(requireSession);
 
+/**
+ * id ใน URL ต้องเป็น UUID — ไม่ใช่ก็ตอบ 404 ไปเลย ไม่ต้องไปถามฐานข้อมูล
+ *
+ * 🔴 แก้บั๊ก: เดิม `/api/transactions/abc` ส่ง "abc" ไปเทียบกับคอลัมน์ uuid ตรง ๆ
+ * Postgres โยน 22P02 (invalid input syntax for type uuid) ซึ่งไม่มีใครดักไว้
+ * จึงหลุดไปเป็น 500 "internal error" ทั้งที่ความจริงคือ "ไม่มีรายการนี้" และ log ของเซิร์ฟเวอร์
+ * ก็เต็มไปด้วย error ที่ไม่ใช่ความผิดของเซิร์ฟเวอร์
+ */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+for (const param of ['transactionId', 'categoryId', 'planId', 'ruleId']) {
+  apiRouter.param(param, (_req, res, next, value: string) => {
+    if (!UUID_PATTERN.test(value)) {
+      res.status(404).json({ ok: false, error: 'ไม่พบรายการนี้ในบัญชีของคุณ' });
+      return;
+    }
+    next();
+  });
+}
+
 /** ตัวช่วยห่อ handler ที่เป็น async ให้ error วิ่งไปที่ error handler กลางของ Express */
 function handle(
   fn: (req: AuthedRequest, res: express.Response) => Promise<void>

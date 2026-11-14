@@ -398,3 +398,29 @@ describe('PATCH /api/settings — เพดานการใช้จ่าย 
     expect(setSpendingLimitsRaw).not.toHaveBeenCalled();
   });
 });
+
+describe('/api — id ใน URL ที่ไม่ใช่ UUID', () => {
+  it.each([
+    ['DELETE', '/api/transactions/abc'],
+    ['PATCH', '/api/transactions/123'],
+    ['POST', '/api/transactions/not-a-uuid/restore'],
+    ['DELETE', '/api/categories/abc'],
+    ['POST', '/api/plans/abc/confirm'],
+    ['DELETE', '/api/budgets/abc'],
+    ['DELETE', '/api/recurring/abc'],
+  ])('🔴 %s %s → 404 ไม่ใช่ 500', async (method, path) => {
+    const res = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers: { cookie: sessionCookie(), 'content-type': 'application/json' },
+      body: method === 'DELETE' ? undefined : JSON.stringify({ amountSatang: 100 }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ ok: false });
+  });
+
+  it('ยังไม่ได้ล็อกอิน → 401 ก่อนจะดูรูปแบบ id', async () => {
+    const res = await fetch(`${baseUrl}/api/transactions/abc`, { method: 'DELETE' });
+    expect(res.status).toBe(401);
+  });
+});
