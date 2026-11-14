@@ -63,10 +63,8 @@ export function buildConfirmCard(input: ConfirmCardInput) {
     });
   }
 
-  // ⚠️ ปุ่ม "✏️ แก้หมวด" ถูกซ่อนไว้ก่อน: postbackHandler ยังตอบข้อความ stub อยู่เพราะต้องมี
-  // db/queries/categories.ts::listCategoriesByUser() + quick reply ก่อน ปล่อยปุ่มที่กดแล้ว
-  // ไม่เกิดอะไรไว้ในทุกการ์ดแย่กว่าไม่มีปุ่ม — เอากลับมาได้ทันทีที่ทำ flow นั้นเสร็จ
-  // (postbackHandler ยังรับ action=edit_category อยู่ เผื่อการ์ดเก่าในแชทผู้ใช้ที่ยังมีปุ่มนี้)
+  // ⚠️ การ์ดนี้ไม่ได้ถูกใช้แล้ว — การ์ด "บันทึกแล้ว" (recordedCard) แทนที่ และมีปุ่ม "เปลี่ยนหมวด" ของจริง
+  // (postbackHandler รับ action=edit_category → set_category ครบแล้ว การ์ดเก่าในแชทที่มีปุ่มนี้จึงกดได้ด้วย)
   const footerButtons: Record<string, unknown>[] = [
     {
       type: 'button',

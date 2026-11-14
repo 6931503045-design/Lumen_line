@@ -310,14 +310,23 @@ export async function updateTransaction(
   return (data ?? null) as InsertedTransaction | null;
 }
 
+export type TransactionDetail = {
+  id: string;
+  type: TransactionType;
+  category_id: string | null;
+  occurred_at: string;
+  /** ชื่อรายการ — ใช้วาดการ์ด "บันทึกแล้ว" ใหม่หลังเปลี่ยนหมวดในแชท */
+  note: string | null;
+};
+
 /** อ่านรายการเต็มของผู้ใช้ ใช้ตอนต้องรู้ค่าเดิมก่อนแก้ (เช่น หมวดเดิมเพื่อเช็คงบ) */
 export async function getTransactionDetail(
   transactionId: string,
   userId: string
-): Promise<{ id: string; type: TransactionType; category_id: string | null; occurred_at: string } | null> {
+): Promise<TransactionDetail | null> {
   const { data, error } = await supabase
     .from('transactions')
-    .select('id, type, category_id, occurred_at')
+    .select('id, type, category_id, occurred_at, note')
     .eq('id', transactionId)
     .eq('user_id', userId)
     .is('deleted_at', null)
@@ -326,7 +335,7 @@ export async function getTransactionDetail(
   if (error) {
     throw error;
   }
-  return (data ?? null) as { id: string; type: TransactionType; category_id: string | null; occurred_at: string } | null;
+  return (data ?? null) as TransactionDetail | null;
 }
 
 /**

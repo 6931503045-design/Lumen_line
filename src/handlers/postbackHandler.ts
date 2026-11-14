@@ -1,12 +1,9 @@
-// ไฟล์นี้ทำหน้าที่อะไร: จัดการ postback event จากปุ่มใน Flex message (ตอนนี้มีแค่ confirmCard: undo/edit_category)
+// ไฟล์นี้ทำหน้าที่อะไร: จัดการ postback event จากปุ่มในการ์ดและ quick reply
+//   undo / restore / edit_category → set_category / save_to_plan / ai_confirm / ai_cancel
 // ใครรับผิดชอบ: ① Bot Core
-// เขียนในสัปดาห์: W1 (บางส่วน — restore/edit_category เต็มรูปแบบเป็น W2)
+// เขียนในสัปดาห์: W1 (undo) · W2 (restore) · edit_category เต็มรูปแบบ พ.ย. 2026
 // อ้างอิง: SPEC.md §3 S1 ตาราง Postback
 // ⚖️ กฎเหล็ก G2, G6 — ทุก action ต้องเช็คว่า record เป็นของผู้ใช้ที่กด และกดซ้ำต้องไม่เกิดผลซ้ำ
-//
-// ⚠️ ขอบเขต W1: ทำเฉพาะ action=undo ให้ทำงานจริง (ตามเกณฑ์ปิด W1 ใน Prompt_AI_Agent_v3.md บรรทัด 912
-// ที่ระบุแค่ "confirmCard + ↩️ ยกเลิก") ส่วน action=edit_category ตอบข้อความ stub ไปก่อน (ต้องมี
-// quick reply รายการหมวดของ user ก่อน ซึ่งยังไม่ได้ทำ query สำหรับ list categories) — ยกเป็นงานถัดไป
 
 import { getUserIdByLineUserId } from '../db/queries/users';
 import { PlanError, transferToPlan } from '../services/plan.service';
@@ -16,7 +13,20 @@ import {
   softDeleteTransaction,
   restoreTransaction,
 } from '../db/queries/transactions';
-import { replyFlex, replyText, replyTextWithQuickReply } from '../line/reply';
+import {
+  replyFlex,
+  replyText,
+  replyTextWithQuickReply,
+  type PostbackQuickReplyItem,
+  type UriQuickReplyItem,
+} from '../line/reply';
+import {
+  changeTransactionCategory,
+  listCategoryChoices,
+  TransactionError,
+  type CategoryChoices,
+} from '../services/transaction.service';
+import { formatBudgetAlert } from '../services/budget.service';
 import { buildRecordedCardFor } from '../line/recordedView';
 import { env } from '../config/env';
 import { cancelPending, confirmPending } from '../services/pending.service';
@@ -70,8 +80,10 @@ export async function handlePostback(event: LinePostbackEvent): Promise<void> {
       await handleAiCancel(replyToken, userId, id);
       break;
     case 'edit_category':
-      // TODO W2: ต้องมี db/queries/categories.ts::listCategoriesByUser() ก่อน แล้วส่ง quick reply
-      await replyText(replyToken, 'ฟีเจอร์แก้หมวดยังไม่เปิดใช้งานตอนนี้ครับ 🙏 (กำลังทำต่อ)');
+      await handleEditCategory(replyToken, userId, id);
+      break;
+    case 'set_category':
+      await handleSetCategory(replyToken, userId, id, params.get('cat'));
       break;
     default:
       // 🔴 เคยแค่ log แล้วจบ ผู้ใช้กดปุ่มแล้วไม่มีอะไรเกิดขึ้นเลย ไม่มีแม้แต่ข้อความบอก
@@ -117,6 +129,110 @@ async function handleUndo(replyToken: string, userId: string, transactionId: str
   } catch (err) {
     console.error('[postbackHandler] softDeleteTransaction error:', err);
     await replyText(replyToken, 'ยกเลิกไม่สำเร็จ ลองใหม่อีกครั้งนะครับ 🙏');
+  }
+}
+
+/** LINE ใส่ quick reply ได้สูงสุด 13 ปุ่ม — เกินนี้เหลือที่ไว้ 1 ปุ่มสำหรับเปิดหน้าเว็บ */
+const MAX_QUICK_REPLY = 13;
+/** label ของปุ่ม quick reply ยาวได้ไม่เกิน 20 ตัวอักษร */
+const MAX_QUICK_REPLY_LABEL = 20;
+
+/**
+ * ผู้ใช้กด "เปลี่ยนหมวด" บนการ์ดบันทึกแล้ว → ตอบรายชื่อหมวดเป็นปุ่ม quick reply
+ * (FR-01 / SPEC §S1 — เดิมตอบ stub "ยังไม่เปิดใช้งาน")
+ */
+async function handleEditCategory(
+  replyToken: string,
+  userId: string,
+  transactionId: string
+): Promise<void> {
+  let choices: CategoryChoices;
+  try {
+    choices = await listCategoryChoices(userId, transactionId);
+  } catch (err) {
+    await replyText(replyToken, err instanceof TransactionError ? err.message : 'เปิดรายชื่อหมวดไม่สำเร็จ ลองใหม่อีกครั้งนะครับ 🙏');
+    if (!(err instanceof TransactionError)) console.error('[postbackHandler] edit_category error:', err);
+    return;
+  }
+
+  if (choices.choices.length === 0) {
+    await replyText(replyToken, 'ยังไม่มีหมวดอื่นให้เลือกครับ เพิ่มหมวดใหม่ได้ที่หน้าเว็บ → หมวดหมู่');
+    return;
+  }
+
+  const overflow = choices.choices.length > MAX_QUICK_REPLY;
+  const shown = overflow ? choices.choices.slice(0, MAX_QUICK_REPLY - 1) : choices.choices;
+  const items: Array<PostbackQuickReplyItem | UriQuickReplyItem> = shown.map((category) => ({
+    type: 'action',
+    action: {
+      type: 'postback',
+      label: `${category.emoji ? `${category.emoji} ` : ''}${category.name}`.slice(0, MAX_QUICK_REPLY_LABEL),
+      data: `action=set_category&id=${transactionId}&cat=${category.id}`,
+      displayText: `เปลี่ยนเป็นหมวด ${category.name}`,
+    },
+  }));
+  if (overflow) {
+    items.push({
+      type: 'action',
+      action: {
+        type: 'uri',
+        label: 'หมวดอื่น ๆ (เว็บ)',
+        uri: `${env.appBaseUrl}/transactions.html?tx=${encodeURIComponent(transactionId)}`,
+      },
+    });
+  }
+
+  await replyTextWithQuickReply(
+    replyToken,
+    choices.currentCategoryName
+      ? `ตอนนี้อยู่หมวด "${choices.currentCategoryName}" — เลือกหมวดใหม่ได้เลยครับ 👇`
+      : 'เลือกหมวดให้รายการนี้ได้เลยครับ 👇',
+    items
+  );
+}
+
+/** ผู้ใช้เลือกหมวดใหม่จาก quick reply → ย้ายรายการแล้วตอบการ์ดบันทึกแล้วใบใหม่ */
+async function handleSetCategory(
+  replyToken: string,
+  userId: string,
+  transactionId: string,
+  categoryId: string | null
+): Promise<void> {
+  if (!categoryId) {
+    console.error('[postbackHandler] set_category ไม่มี cat');
+    await replyText(replyToken, 'ปุ่มนี้ใช้ไม่ได้แล้วครับ ลองกด "เปลี่ยนหมวด" บนการ์ดอีกครั้ง');
+    return;
+  }
+
+  try {
+    const change = await changeTransactionCategory(userId, transactionId, categoryId);
+    const { updated } = change;
+    // การ์ดใบเดียวกับตอนบันทึก — ผู้ใช้เห็นหมวดใหม่และแถบงบของหมวดใหม่ทันที
+    await replyFlex(
+      replyToken,
+      buildRecordedCardFor(
+        [
+          {
+            transactionId: updated.id,
+            type: updated.type,
+            categoryName: change.categoryName,
+            title: change.title ?? undefined,
+            amountSatang: updated.amountSatang,
+            occurredAtIso: updated.occurredAt,
+            budgetStatus: updated.budgetStatus,
+          },
+        ],
+        env.appBaseUrl
+      ),
+      updated.budgetAlert ? formatBudgetAlert(updated.budgetAlert) : undefined
+    );
+  } catch (err) {
+    if (err instanceof TransactionError) {
+      await replyText(replyToken, err.message);
+      return;
+    }
+    console.error('[postbackHandler] set_category error:', err);
+    await replyText(replyToken, 'เปลี่ยนหมวดไม่สำเร็จ ลองใหม่อีกครั้งนะครับ 🙏');
   }
 }
 

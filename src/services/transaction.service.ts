@@ -8,8 +8,14 @@ import {
   type TransactionType,
   type TransactionSource,
   type TransactionParsedBy,
+  type TransactionDetail,
 } from '../db/queries/transactions';
-import { findOrCreateCategory } from '../db/queries/categories';
+import {
+  findCategoryOwnedByUser,
+  findOrCreateCategory,
+  listCategoriesByUser,
+  type UserCategory,
+} from '../db/queries/categories';
 import { MAX_AMOUNT_SATANG } from '../config/constants';
 import {
   evaluateBudgetAlert,
@@ -256,6 +262,88 @@ export async function updateTransactionForUser(
       updated.occurred_at
     ),
   };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// เปลี่ยนหมวดจากแชท (FR-01 / SPEC §S1 postback edit_category) — เดิมเป็น stub "ยังไม่เปิดใช้งาน"
+// ────────────────────────────────────────────────────────────────────────────
+
+export type CategoryChoices = {
+  transaction: TransactionDetail;
+  /** หมวดชนิดเดียวกับรายการ (รายจ่าย → หมวดรายจ่าย) ไม่รวมหมวดปัจจุบัน */
+  choices: UserCategory[];
+  currentCategoryName: string | null;
+};
+
+/**
+ * หมวดที่ย้ายรายการนี้ไปได้ — ⚖️ G6: รายการต้องเป็นของผู้ใช้คนนี้ และหมวดมาจากของเขาเท่านั้น
+ * รายการโอนเข้าแผน (⚖️ G7) ไม่มีหมวด จึงย้ายหมวดไม่ได้
+ */
+export async function listCategoryChoices(
+  userId: string,
+  transactionId: string
+): Promise<CategoryChoices> {
+  const transaction = await getTransactionDetail(transactionId, userId);
+  if (!transaction) {
+    throw new TransactionError('ไม่พบรายการนี้ อาจถูกลบไปแล้ว', 404);
+  }
+  if (transaction.type === 'transfer') {
+    throw new TransactionError('รายการโอนเข้าแผนออมไม่มีหมวดให้เปลี่ยน', 400);
+  }
+
+  const categories = await listCategoriesByUser(userId);
+  const sameType = categories.filter((category) => category.type === transaction.type);
+  const current = sameType.find((category) => category.id === transaction.category_id) ?? null;
+
+  return {
+    transaction,
+    choices: sameType.filter((category) => category.id !== transaction.category_id),
+    currentCategoryName: current?.name ?? null,
+  };
+}
+
+export type CategoryChange = {
+  updated: CreatedTransaction;
+  categoryName: string;
+  /** ชื่อรายการเดิม — ให้การ์ดที่ตอบกลับหน้าตาเหมือนตอนบันทึก */
+  title: string | null;
+};
+
+/**
+ * ย้ายรายการไปหมวดที่ผู้ใช้เลือกจากปุ่ม
+ *
+ * id ของหมวดมาจาก postback data ซึ่งปลอมได้ จึงต้องตรวจซ้ำทุกอย่าง:
+ * หมวดต้องเป็นของผู้ใช้คนนี้ (⚖️ G6) และชนิดต้องตรงกับรายการ (รายจ่ายไปหมวดรายรับไม่ได้)
+ */
+export async function changeTransactionCategory(
+  userId: string,
+  transactionId: string,
+  categoryId: string
+): Promise<CategoryChange> {
+  const transaction = await getTransactionDetail(transactionId, userId);
+  if (!transaction) {
+    throw new TransactionError('ไม่พบรายการนี้ อาจถูกลบไปแล้ว', 404);
+  }
+  if (transaction.type === 'transfer') {
+    throw new TransactionError('รายการโอนเข้าแผนออมไม่มีหมวดให้เปลี่ยน', 400);
+  }
+
+  const category = await findCategoryOwnedByUser(userId, categoryId);
+  if (!category) {
+    throw new TransactionError('ไม่พบหมวดนี้ อาจถูกลบไปแล้ว', 404);
+  }
+  if (category.type !== transaction.type) {
+    throw new TransactionError(
+      transaction.type === 'income'
+        ? 'รายการนี้เป็นรายรับ ต้องเลือกหมวดรายรับครับ'
+        : 'รายการนี้เป็นรายจ่าย ต้องเลือกหมวดรายจ่ายครับ',
+      400
+    );
+  }
+
+  // ผ่าน updateTransactionForUser ตัวเดียวกับหน้าเว็บ — ได้การเช็คงบหมวดใหม่ (S5.8) มาด้วย
+  const updated = await updateTransactionForUser(userId, transactionId, { categoryName: category.name });
+  return { updated, categoryName: category.name, title: transaction.note };
 }
 
 /** ลบแบบ soft delete — กู้คืนได้ คืน false ถ้าไม่เจอหรือถูกลบไปแล้ว */
