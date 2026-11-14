@@ -23,6 +23,12 @@ import { env } from '../config/env';
 import { getSafeToSpend, getUserSummary, type SafeToSpend } from './summary.service';
 import { getBudgetOverview } from './budget.service';
 import { listPlansWithProgress, transferToPlan } from './plan.service';
+import {
+  getDailyAllowance,
+  getSpendingLimits,
+  PROFILE_LABEL,
+  type DailyAllowance,
+} from './spendingLimit.service';
 import { parseThaiNumber } from '../utils/thaiNumber';
 import { findLatestChatTransaction, softDeleteTransaction } from '../db/queries/transactions';
 
@@ -68,6 +74,23 @@ const COMMANDS: Record<string, CommandName> = {
   'วันนี้ใช้ได้อีกเท่าไหร่': 'remaining',
   'เหลือเงินเท่าไหร่': 'remaining',
   'ใช้ได้อีกเท่าไหร่': 'remaining',
+
+  // 🔴 ผู้ใช้ทดสอบถาม "งบเดือนนี้เหลือเท่าไหร่" แล้วได้ "วันนี้ใช้ได้อีก ..." กลับไป
+  // ประโยคนี้ไม่ตรงคำสั่งไหนเลยจึงไปตกที่ AI ซึ่งเลือก "remaining" เพราะเห็นคำว่า "เหลือ"
+  // คำถามที่มีคำว่า "งบ" ต้องได้การ์ดงบรายหมวด
+  'งบเหลือเท่าไหร่': 'budget',
+  'งบเหลือ': 'budget',
+  'งบเดือนนี้': 'budget',
+  'งบเดือนนี้เหลือเท่าไหร่': 'budget',
+  'งบเดือนนี้เหลือ': 'budget',
+  'ดูงบ': 'budget',
+  'เช็คงบ': 'budget',
+  'งบรายหมวด': 'budget',
+  'สรุปเดือนนี้': 'summary',
+  'เดือนนี้ใช้ไปเท่าไหร่': 'summary',
+  'ใช้ไปเท่าไหร่': 'summary',
+  'ดูแผน': 'plans',
+  'แผนออม': 'plans',
 
   // ผู้ใช้ทดสอบถาม "พรุ่งนี้จะใช้เงินได้กี่บาท" แล้วได้ยอดของวันนี้กลับไป
   // (normalizeCommandText ตัดคำ "จะ" "เงิน" "อีก" และแปลง "กี่บาท" ให้แล้ว)
@@ -201,6 +224,19 @@ async function buildRemainingTomorrow(userId: string): Promise<string> {
     ].join('\n');
   }
 
+  // เพดานรายวันแบบตั้งเองเป็นตัวเลขคงที่ทุกวัน พรุ่งนี้จึงได้เต็มเพดาน
+  // (แบบให้ระบบคิดยังใช้สูตร S5.2 ด้านล่าง เพราะเพดานของพรุ่งนี้ขึ้นกับยอดที่จะใช้วันนี้)
+  const limits = await getSpendingLimits(userId);
+  if (limits.daily.enabled && limits.daily.mode === 'manual' && limits.daily.limitSatang !== null) {
+    return [
+      `💸 พรุ่งนี้ใช้ได้ ${formatBaht(limits.daily.limitSatang)}`,
+      '(ตามเพดานรายวันที่คุณตั้งไว้)',
+      '',
+      'เปลี่ยนเพดานได้ที่หน้าเว็บ → ตั้งค่า',
+      AI_DISCLAIMER,
+    ].join('\n');
+  }
+
   const safe = await getSafeToSpend(userId, tomorrowIso);
   if (safe.overspentSatang > 0) {
     // ผู้ใช้ทดสอบได้ "พรุ่งนี้ ฿0 เงินขาด" แล้วไม่รู้ว่าเกิดอะไรขึ้น — ต้องเห็นที่มาในคำตอบเดียว
@@ -254,7 +290,40 @@ function describeShortfall(headline: string, safe: SafeToSpend): string {
   return lines.join('\n');
 }
 
+/**
+ * "เหลือ" เมื่อผู้ใช้เปิดเพดานรายวันไว้ในหน้าเว็บ (ร่าง §S5.10)
+ *
+ * 🔴 ผู้ใช้ทดสอบตั้งเพดานรายวันในเว็บแล้วถามบอท ก็ยังได้ "เงินเหลือทั้งเดือน ÷ วันที่เหลือ"
+ * เพราะเพดานเคยอยู่ในเบราว์เซอร์อย่างเดียว ตอนนี้ตอบตามเพดานที่ตั้ง และบอกที่มาให้เห็นว่าคิดจากเพดาน
+ * ⚖️ G1: ตัวเลขทุกตัวมาจาก spendingLimit.service ที่นี่แค่จัดรูปแบบ
+ */
+function describeDailyAllowance(allowance: DailyAllowance): string {
+  const source =
+    allowance.mode === 'manual'
+      ? `  เพดานรายวันที่คุณตั้งไว้ ${formatBaht(allowance.ceilingSatang)}`
+      : `  เพดานรายวันที่ระบบคิดให้ (แบบ${PROFILE_LABEL[allowance.profile]}) ${formatBaht(allowance.ceilingSatang)}`;
+
+  const headline =
+    allowance.remainingSatang >= 0
+      ? `💸 วันนี้ใช้ได้อีก ${formatBaht(allowance.remainingSatang)}`
+      : `⚠️ วันนี้ใช้เกินเพดานแล้ว ${formatBaht(-allowance.remainingSatang)}`;
+
+  return [
+    headline,
+    '',
+    'คิดมาจาก',
+    source,
+    `  ใช้ไปแล้ววันนี้ ${formatBaht(allowance.spentTodaySatang)}`,
+    '',
+    'เปลี่ยนเพดานได้ที่หน้าเว็บ → ตั้งค่า',
+    AI_DISCLAIMER,
+  ].join('\n');
+}
+
 async function buildRemaining(userId: string): Promise<string> {
+  const allowance = await getDailyAllowance(userId, getTodayIso());
+  if (allowance) return describeDailyAllowance(allowance);
+
   const safe = await getSafeToSpend(userId, getTodayIso());
 
   // S5.2: ผลติดลบต้องเตือนทันทีว่าขาดเท่าไหร่ ไม่ใช่แสดง 0 เฉยๆ
@@ -294,7 +363,14 @@ async function buildPlans(userId: string): Promise<string> {
   );
 
   if (plans.length === 0) {
-    return '🎯 ยังไม่มีแผนออมที่กำลังทำอยู่\n\nสร้างแผนใหม่ได้ที่หน้าวิเคราะห์ในเว็บครับ';
+    return [
+      '🎯 ยังไม่มีแผนออมที่กำลังทำอยู่',
+      '',
+      'อยากรู้ว่าต้องออมเดือนละเท่าไหร่ พิมพ์บอกเป้าหมายได้เลย เช่น',
+      '   "อยากออมซื้อโน้ตบุ๊ก 15000"',
+      '',
+      `สร้างแผนจริงได้ที่หน้าเว็บ → วิเคราะห์ → สร้างแผนใหม่${env.appBaseUrl ? `\n${env.appBaseUrl}/analyze.html` : ''}`,
+    ].join('\n');
   }
 
   const lines = ['🎯 แผนออมของคุณ'];

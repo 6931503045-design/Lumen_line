@@ -315,16 +315,16 @@ function monthsToReach(targetSatang: number, monthlySaveSatang: number): number 
  *
  * @param months ระยะเวลาที่ผู้ใช้ระบุ (ถ้ามี) — ใช้กับทางเลือก "เร็ว" เท่านั้น
  */
-export async function createSavingPlan(
-  userId: string,
-  title: string,
-  targetSatang: number,
-  months?: number,
-  todayIso: string = getTodayIso()
-): Promise<CreatePlanResult> {
-  if (!title.trim()) {
-    throw new PlanError('ต้องตั้งชื่อเป้าหมายที่อยากออม', 400);
-  }
+export type PlanDraft = {
+  kind: PlanOptionKind;
+  /** "⚡ เร็ว" หรือ "⚡ ตามเป้า" — ไม่มีชื่อเป้าหมายต่อท้าย */
+  label: string;
+  months: number;
+  monthlySaveSatang: number;
+  targetDate: string;
+};
+
+function assertPlanInput(targetSatang: number, months?: number): void {
   if (!Number.isInteger(targetSatang) || targetSatang <= 0) {
     throw new PlanError('ราคาเป้าหมายต้องมากกว่า 0 บาท (กฎ G3)', 400);
   }
@@ -334,12 +334,19 @@ export async function createSavingPlan(
   if (months !== undefined && (!Number.isInteger(months) || months <= 0)) {
     throw new PlanError('จำนวนเดือนต้องเป็นจำนวนเต็มบวก', 400);
   }
+}
 
-  const capacity = await getPlanCapacity(userId, todayIso);
-  if (!capacity.canCreatePlan) {
-    throw new PlanError(capacity.reason ?? 'ยังสร้างแผนไม่ได้', 409);
-  }
-
+/**
+ * S5.4 — คิด 3 ทางเลือกจากกำลังออม โดยยังไม่บันทึกอะไรลง DB
+ * ใช้ร่วมกันทั้งการสร้างแผนจริง (createSavingPlan) และการตอบคำถาม "ออมกี่เดือนดี" ในแชท
+ * (previewSavingPlan) — สองทางจึงได้ตัวเลขชุดเดียวกันเสมอ
+ */
+function computePlanDrafts(
+  capacity: PlanCapacity,
+  targetSatang: number,
+  months: number | undefined,
+  todayIso: string
+): { drafts: PlanDraft[]; requestedMonthsNote: string | null } {
   // ── ทางเลือก "เร็ว": ถ้าผู้ใช้ระบุเวลาและทำไหว ให้ใช้ยอดตามเป้า ──────────────
   let requestedMonthsNote: string | null = null;
   let fastSave = capacity.capacitySatang;
@@ -372,9 +379,9 @@ export async function createSavingPlan(
       const planMonths = Math.min(monthsToReach(targetSatang, candidate.save), MAX_PLAN_MONTHS);
       return {
         kind: candidate.kind,
+        label: `${OPTION_META[candidate.kind].emoji} ${candidate.label}`,
         months: planMonths,
         monthlySaveSatang: candidate.save,
-        title: `${OPTION_META[candidate.kind].emoji} ${candidate.label} — ${title.trim()}`,
         targetDate: shiftMonthClampDay(todayIso, planMonths, todayParts.day),
       };
     });
@@ -385,6 +392,63 @@ export async function createSavingPlan(
       409
     );
   }
+
+  return { drafts, requestedMonthsNote };
+}
+
+export type PlanPreview = {
+  options: PlanDraft[];
+  capacity: PlanCapacity;
+  requestedMonthsNote: string | null;
+};
+
+/**
+ * ทางเลือกของแผนแบบดูอย่างเดียว — ไม่สร้าง draft ไม่ยกเลิกชุดเดิม
+ * ใช้ตอบคำถามในแชทเช่น "อยากออมซื้อ CPU 4500 ออมกี่เดือนดี" ด้วยตัวเลขจริงของผู้ใช้
+ * สร้างแผนจริงยังต้องไปกดในหน้าเว็บ (ผู้ใช้ต้องเห็นทั้งสามทางเลือกแล้วเลือกเอง S5.4)
+ */
+export async function previewSavingPlan(
+  userId: string,
+  targetSatang: number,
+  months?: number,
+  todayIso: string = getTodayIso()
+): Promise<PlanPreview> {
+  assertPlanInput(targetSatang, months);
+  const capacity = await getPlanCapacity(userId, todayIso);
+  if (!capacity.canCreatePlan) {
+    throw new PlanError(capacity.reason ?? 'ยังสร้างแผนไม่ได้', 409);
+  }
+  const { drafts, requestedMonthsNote } = computePlanDrafts(capacity, targetSatang, months, todayIso);
+  return { options: drafts, capacity, requestedMonthsNote };
+}
+
+export async function createSavingPlan(
+  userId: string,
+  title: string,
+  targetSatang: number,
+  months?: number,
+  todayIso: string = getTodayIso()
+): Promise<CreatePlanResult> {
+  if (!title.trim()) {
+    throw new PlanError('ต้องตั้งชื่อเป้าหมายที่อยากออม', 400);
+  }
+  assertPlanInput(targetSatang, months);
+
+  const capacity = await getPlanCapacity(userId, todayIso);
+  if (!capacity.canCreatePlan) {
+    throw new PlanError(capacity.reason ?? 'ยังสร้างแผนไม่ได้', 409);
+  }
+
+  const { drafts: planDrafts, requestedMonthsNote } = computePlanDrafts(
+    capacity,
+    targetSatang,
+    months,
+    todayIso
+  );
+  const drafts = planDrafts.map((draft) => ({
+    ...draft,
+    title: `${draft.label} — ${title.trim()}`,
+  }));
 
   // ยกเลิกชุดเก่าก่อนเสมอ ไม่งั้นผู้ใช้จะเห็น draft ปนกันสองชุดแล้วกดยืนยันผิดใบ
   await cancelDraftPlans(userId);

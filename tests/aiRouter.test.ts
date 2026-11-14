@@ -23,12 +23,17 @@ vi.mock('../src/db/queries/categories', () => ({ listCategoriesByUser: vi.fn() }
 vi.mock('../src/db/queries/transactions', () => ({ listTransactionsByUser: vi.fn() }));
 vi.mock('../src/services/command.service', () => ({ runCommand: vi.fn() }));
 vi.mock('../src/services/simulate.service', () => ({ simulatePurchase: vi.fn() }));
+vi.mock('../src/services/plan.service', async (importOriginal) => ({
+  PlanError: (await importOriginal<typeof import('../src/services/plan.service')>()).PlanError,
+  previewSavingPlan: vi.fn(),
+}));
 
 import { listCategoriesByUser } from '../src/db/queries/categories';
 import { listTransactionsByUser } from '../src/db/queries/transactions';
 import { runCommand } from '../src/services/command.service';
 import { createPending } from '../src/services/pending.service';
 import { simulatePurchase } from '../src/services/simulate.service';
+import { PlanError, previewSavingPlan } from '../src/services/plan.service';
 import { understandText } from '../src/services/ai/gemini';
 import { checkAiAllowed } from '../src/services/ai/guard';
 import {
@@ -84,12 +89,12 @@ describe('⚖️ G4 — ทุกเส้นทางที่ AI ใช้ไ�
   it('service ที่ถูกเรียกต่อ throw → unavailable ไม่ใช่ปล่อย error ทะลุไปถึงผู้ใช้', async () => {
     vi.mocked(understandText).mockResolvedValue({
       kind: 'tool',
-      name: 'get_summary',
-      args: { period: 'this_month' },
+      name: 'simulate_purchase',
+      args: { item_name: 'หูฟัง', price: 1500 },
     });
-    vi.mocked(runCommand).mockRejectedValue(new Error('DB ล่ม'));
+    vi.mocked(simulatePurchase).mockRejectedValue(new Error('DB ล่ม'));
 
-    expect(await ask('เดือนนี้ใช้ไปเท่าไหร่')).toEqual({ kind: 'unavailable' });
+    expect(await ask('ซื้อหูฟัง 1500 ได้ไหม')).toEqual({ kind: 'unavailable' });
   });
 });
 
@@ -344,8 +349,8 @@ describe('แก้ / ลบ รายการ — หา target จากข�
 });
 
 describe('⚖️ G1 — tool ที่อ่านข้อมูล ตัวเลขทุกตัวมาจาก S5', () => {
-  it('get_summary ใช้ runCommand ตัวเดียวกับคำสั่งตายตัว', async () => {
-    vi.mocked(runCommand).mockResolvedValue('สรุปเดือนนี้: ...');
+  it('get_summary ส่งต่อเป็นคำสั่งตายตัวตัวเดียวกัน — ผู้เรียกตอบด้วยการ์ดใบเดียวกับที่พิมพ์ "สรุป"', async () => {
+    // เดิมคืนข้อความล้วน แต่พิมพ์ "งบ" ได้การ์ด — คำถามเดียวกันได้หน้าตาคนละแบบ
     vi.mocked(understandText).mockResolvedValue({
       kind: 'tool',
       name: 'get_summary',
@@ -354,8 +359,9 @@ describe('⚖️ G1 — tool ที่อ่านข้อมูล ตัว�
 
     const reply = await ask('เดือนนี้ใช้ไปเท่าไหร่แล้ว');
 
-    expect(reply).toEqual({ kind: 'text', text: 'สรุปเดือนนี้: ...' });
-    expect(runCommand).toHaveBeenCalledWith('u1', 'summary');
+    expect(reply).toEqual({ kind: 'command', command: 'summary' });
+    // ตัวเลขยังไม่ถูกคิดที่ router — textHandler ไปเรียก command.service เอง (⚖️ G1 ที่เดียว)
+    expect(runCommand).not.toHaveBeenCalled();
   });
 
   it('period ถูกแปลงเป็นคำสั่งที่ถูกตัว', async () => {
@@ -375,8 +381,7 @@ describe('⚖️ G1 — tool ที่อ่านข้อมูล ตัว�
         args: { period },
       });
 
-      await ask('ถามเรื่องเงิน');
-      expect(runCommand).toHaveBeenCalledWith('u1', command);
+      expect(await ask('ถามเรื่องเงิน')).toEqual({ kind: 'command', command });
     }
   });
 
@@ -557,9 +562,10 @@ describe('get_summary period=tomorrow', () => {
       args: { period: 'tomorrow' },
     });
 
-    await ask('ถ้าพรุ่งนี้ไปเที่ยวจะมีเงินใช้แค่ไหน');
-
-    expect(runCommand).toHaveBeenCalledWith('u1', 'remaining_tomorrow');
+    expect(await ask('ถ้าพรุ่งนี้ไปเที่ยวจะมีเงินใช้แค่ไหน')).toEqual({
+      kind: 'command',
+      command: 'remaining_tomorrow',
+    });
   });
 });
 
@@ -781,7 +787,7 @@ describe('⚖️ G5 — log ตอนสำเร็จต้องไม่ม�
     spy.mockRestore();
 
     expect(logged).toContain('get_summary');
-    expect(logged).toContain('text');
+    expect(logged).toContain('command');
     // ตัวเลขเงินจริงจาก S5 ต้องไม่หลุดลง log
     expect(logged).not.toContain('สรุปเดือนนี้');
   });
@@ -817,5 +823,79 @@ describe('เทสต์เชิงโครงสร้าง — ไม่�
       'services/ai/tools.ts',
       'services/ai/vision.ts',
     ]);
+  });
+});
+
+describe('🔴 plan_goal — "อยากออมซื้อ CPU 4500 ออมกี่เดือนดี" ต้องได้ตัวเลขจริง ไม่ใช่ AI ตอบเอง', () => {
+  // ผู้ใช้ทดสอบได้ "ดูวิธีตั้งค่าได้ที่เมนูแผนออมเงิน" ซึ่งไม่มีเมนูนี้ และไม่ได้ตอบคำถาม
+  const PREVIEW = {
+    capacity: { capacitySatang: 63000, confidence: 'medium' },
+    requestedMonthsNote: null,
+    options: [
+      { kind: 'fast', label: '⚡ เร็ว', months: 8, monthlySaveSatang: 63000, targetDate: '2027-06-07' },
+      { kind: 'balanced', label: '⚖️ สมดุล', months: 13, monthlySaveSatang: 37000, targetDate: '2027-11-07' },
+    ],
+  };
+
+  it('ส่งยอดเป้าหมายเป็นสตางค์ให้ plan.service แล้วตอบทุกทางเลือกด้วยตัวเลขจาก service', async () => {
+    vi.mocked(previewSavingPlan).mockResolvedValue(PREVIEW as never);
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'plan_goal',
+      args: { item_name: 'CPU', target: 4500 },
+    });
+
+    const reply = await ask('อยากสร้างแผนการออมซื้อ CPU 4500บาท ออมกี่เดือนดี');
+
+    expect(previewSavingPlan).toHaveBeenCalledWith('u1', 450000, undefined, TODAY);
+    expect(reply.kind).toBe('text');
+    const text = (reply as { text: string }).text;
+    expect(text).toContain('CPU');
+    expect(text).toContain('฿4,500.00');
+    expect(text).toContain('เดือนละ ฿630.00 · 8 เดือน');
+    expect(text).toContain('เดือนละ ฿370.00 · 13 เดือน');
+    expect(text).toContain('หน้าเว็บ');
+  });
+
+  it('ผู้ใช้บอกจำนวนเดือนมาเอง → ส่งต่อให้ service', async () => {
+    vi.mocked(previewSavingPlan).mockResolvedValue(PREVIEW as never);
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'plan_goal',
+      args: { item_name: 'CPU', target: 4500, months: 6 },
+    });
+
+    await ask('อยากได้ CPU 4500 ภายใน 6 เดือน');
+
+    expect(previewSavingPlan).toHaveBeenCalledWith('u1', 450000, 6, TODAY);
+  });
+
+  it('ออมไม่ไหว → ตอบเหตุผลจาก service ไม่ใช่ AI ใช้ไม่ได้', async () => {
+    vi.mocked(previewSavingPlan).mockRejectedValue(
+      new PlanError('ยังไม่รู้รายได้ประจำของคุณ — ตั้งรายการประจำของรายรับก่อน แล้วค่อยวางแผนออม', 409)
+    );
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'plan_goal',
+      args: { item_name: 'CPU', target: 4500 },
+    });
+
+    const reply = await ask('อยากออมซื้อ CPU 4500');
+
+    expect(reply.kind).toBe('text');
+    expect((reply as { text: string }).text).toContain('ยังไม่รู้รายได้ประจำ');
+  });
+
+  it('plan_goal ดูอย่างเดียว ไม่สร้าง pending (ไม่มีการเขียนข้อมูล)', async () => {
+    vi.mocked(previewSavingPlan).mockResolvedValue(PREVIEW as never);
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'plan_goal',
+      args: { item_name: 'CPU', target: 4500 },
+    });
+
+    await ask('อยากออมซื้อ CPU 4500');
+
+    expect(createPending).not.toHaveBeenCalled();
   });
 });

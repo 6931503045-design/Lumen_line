@@ -1867,60 +1867,10 @@ h3 {
    Plan wizard / strategy cards / simulator
    ============================================================ */
 
-.strategy-grid { display: grid; gap: var(--space-2); }
-
-.strategy-card {
-  display: grid;
-  gap: 4px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  padding: var(--space-3);
-  border-radius: var(--radius-lg);
-  text-align: left;
-  color: var(--text-strong);
-  cursor: pointer;
-}
-
-.strategy-card.selected {
-  border-color: var(--lime-strong);
-  background: var(--lime-soft);
-}
-
 .strategy-icon {
   width: 15px;
   height: 15px;
   vertical-align: -3px;
-}
-
-.wizard-step-indicator {
-  display: flex;
-  gap: var(--space-1);
-  margin-bottom: var(--space-4);
-}
-
-.wizard-step {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 0.82rem;
-}
-
-.wizard-step.active {
-  background: var(--surface-dark);
-  color: var(--lime);
-  border-color: var(--surface-dark);
-}
-
-.plan-summary-card {
-  background: var(--surface-soft);
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
-  display: grid;
-  gap: var(--space-2);
 }
 
 .summary-row {
@@ -2996,6 +2946,8 @@ h3 {
 }
 
 .form-field input.invalid { border-color: var(--danger); outline: 2px solid rgba(229, 72, 77, 0.2); }
+/* ตัวอย่างในช่องกรอกต้องจางพอให้ไม่ถูกอ่านว่าเป็นค่าที่กรอกไว้แล้ว */
+.form-field input::placeholder { color: var(--muted); opacity: 0.55; }
 
 /* --- ไทล์กดดูรายละเอียด + modal อธิบาย (หน้าวิเคราะห์) --- */
 .an-tile.tappable {

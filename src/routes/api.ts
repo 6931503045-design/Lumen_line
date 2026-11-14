@@ -67,6 +67,8 @@ import { env } from '../config/env';
 import { toSatang } from '../utils/money';
 import { normalizeMonthIso } from '../utils/thaiDate';
 import { simulatePurchase, SimulateError } from '../services/simulate.service';
+import { getSpendingLimits, parseSpendingLimitsInput } from '../services/spendingLimit.service';
+import { setSpendingLimitsRaw } from '../db/queries/users';
 
 export const apiRouter = express.Router();
 
@@ -559,9 +561,10 @@ apiRouter.get(
     const token = await ensureEmailIngestToken(req.userId!);
     const unparsedEmails = await countUnparsedEmails(req.userId!);
 
-    const [userAiEnabled, dailySummaryEnabled] = await Promise.all([
+    const [userAiEnabled, dailySummaryEnabled, spendingLimits] = await Promise.all([
       isAiEnabledForUser(req.userId!),
       isDailySummaryEnabledForUser(req.userId!),
+      getSpendingLimits(req.userId!),
     ]);
 
     res.json({
@@ -583,6 +586,8 @@ apiRouter.get(
       aiEnabled: env.aiEnabled && userAiEnabled,
       /** สรุปรายวันเข้า LINE ตอน 21:00 (FR-17) — opt-in ค่าเริ่มต้นปิด */
       dailySummaryEnabled,
+      /** เพดานการใช้จ่าย (ร่าง §S5.10) — บอทใช้ตอบ "เหลือ" ด้วย หน้าเว็บต้องถือค่านี้เป็นหลัก */
+      spendingLimits,
     });
   })
 );
@@ -604,22 +609,31 @@ apiRouter.patch(
     const body = (req.body ?? {}) as Record<string, unknown>;
     const hasAi = body.aiEnabled !== undefined;
     const hasDaily = body.dailySummaryEnabled !== undefined;
+    const hasLimits = body.spendingLimits !== undefined;
 
     // รับเฉพาะ boolean แท้ ๆ ไม่แปลง "false" หรือ 0 ให้เอง —
     // การเดาใจตรงนี้เสี่ยงเปิด AI ให้คนที่สั่งปิด ซึ่งเป็นการละเมิดความยินยอม
     if (
-      (!hasAi && !hasDaily) ||
+      (!hasAi && !hasDaily && !hasLimits) ||
       (hasAi && typeof body.aiEnabled !== 'boolean') ||
       (hasDaily && typeof body.dailySummaryEnabled !== 'boolean')
     ) {
       res.status(400).json({
         ok: false,
-        error: 'ต้องส่ง aiEnabled หรือ dailySummaryEnabled เป็น true หรือ false',
+        error: 'ต้องส่ง aiEnabled, dailySummaryEnabled (true/false) หรือ spendingLimits',
       });
       return;
     }
 
+    // ตรวจทั้งก้อนก่อนเขียนอะไร — ค่าไหนผิดตอบ 400 ไปเลย ไม่บันทึกครึ่ง ๆ
+    const spendingLimits = hasLimits ? parseSpendingLimitsInput(body.spendingLimits) : null;
+
     const result: Record<string, unknown> = { ok: true };
+    if (spendingLimits) {
+      // false = ยังไม่ได้รัน migration 005 — หน้าเว็บยังเก็บในเครื่องได้ แต่บอทจะไม่เห็นค่า
+      result.spendingLimitsStored = await setSpendingLimitsRaw(req.userId!, spendingLimits);
+      result.spendingLimits = spendingLimits;
+    }
     if (hasAi) {
       await setAiEnabledForUser(req.userId!, body.aiEnabled as boolean);
       result.aiUserEnabled = body.aiEnabled;

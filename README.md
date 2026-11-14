@@ -65,7 +65,7 @@ G7	transfer ไม่นับเป็นรายรับ/รายจ่า�
 | `src/line/flex/` | การ์ด Flex ในแชท | จะแก้หน้าตาข้อความ |
 | `src/jobs/` | งานตามเวลา (ดูข้อ 6) | |
 | `web/` | หน้าเว็บที่ backend เสิร์ฟเอง | |
-| `supabase/migrations/` | schema SQL (001–004) 12 ตาราง + views + triggers + RLS | |
+| `supabase/migrations/` | schema SQL (001–005) 12 ตาราง + views + triggers + RLS | |
 | `.env.example` | ตัวแปรที่ต้องตั้งค่า | |
 
 5. เริ่มรันยังไง
@@ -76,7 +76,7 @@ npm install
 cp .env.example .env        # ใส่ค่า LINE + Supabase
                             # แนะนำ: เริ่มด้วย AI_ENABLED=false ก่อน
 
-# รัน supabase/migrations/001_init.sql แล้วตามด้วย 002_updated_at_trigger.sql, 003_budget_carry_over.sql และ 004_backfill_recurring_categories.sql
+# รัน supabase/migrations/001_init.sql แล้วตามด้วย 002_updated_at_trigger.sql, 003_budget_carry_over.sql, 004_backfill_recurring_categories.sql และ 005_spending_limits.sql
 # ที่ Supabase > SQL Editor (โปรเจกต์นี้ไม่ได้ต่อ Postgres ตรงๆ จึงไม่มี DATABASE_URL)
 
 npm run dev                 # เปิดที่ localhost:3000

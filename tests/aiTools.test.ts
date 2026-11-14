@@ -35,9 +35,9 @@ function expectFail(result: ReturnType<typeof validateToolCall>) {
 }
 
 describe('ทะเบียน tool', () => {
-  it('ประกาศให้ Gemini ครบทั้ง 9 ตัวและชื่อตรงกับทะเบียน', () => {
-    expect(AI_TOOL_NAMES).toHaveLength(9);
-    expect(geminiToolDeclarations).toHaveLength(9);
+  it('ประกาศให้ Gemini ครบทั้ง 10 ตัวและชื่อตรงกับทะเบียน', () => {
+    expect(AI_TOOL_NAMES).toHaveLength(10);
+    expect(geminiToolDeclarations).toHaveLength(10);
     expect(geminiToolDeclarations.map((tool) => tool.name).sort()).toEqual(
       [...AI_TOOL_NAMES].sort()
     );
@@ -54,6 +54,8 @@ describe('ทะเบียน tool', () => {
     expect(isWriteTool('get_summary')).toBe(false);
     expect(isWriteTool('query_transactions')).toBe(false);
     expect(isWriteTool('simulate_purchase')).toBe(false);
+    // plan_goal ดูทางเลือกอย่างเดียว ไม่สร้าง draft — ถ้าวันหนึ่งให้มันสร้างแผน ต้องย้ายมาเป็น write (G2)
+    expect(isWriteTool('plan_goal')).toBe(false);
   });
 
   it('ทุก tool มี parameters เป็น object (ไม่งั้น SDK ปฏิเสธตอนส่ง)', () => {
@@ -477,5 +479,30 @@ describe('ทางที่ผิดระดับบนสุด', () => {
   it('ทุกข้อความตอบผู้ใช้ต้องบอกทางไปต่อ ไม่ใช่แค่บอกว่าผิด', () => {
     const failed = expectFail(validateToolCall('create_transaction', {}, TODAY));
     expect(failed.askUser.length).toBeGreaterThan(10);
+  });
+});
+
+describe('plan_goal — ยอดเป้าหมายและจำนวนเดือนจากที่ผู้ใช้พิมพ์', () => {
+  it('แปลงยอดเป้าหมายเป็นสตางค์ ไม่มีเดือน = null', () => {
+    const result = validateToolCall('plan_goal', { item_name: 'CPU', target: '4500' }, TODAY);
+    expect(result).toEqual({
+      ok: true,
+      call: { name: 'plan_goal', itemName: 'CPU', targetSatang: 450000, months: null },
+    });
+  });
+
+  it('มีจำนวนเดือน → ส่งต่อเป็นจำนวนเต็ม', () => {
+    const result = validateToolCall('plan_goal', { item_name: 'CPU', target: 4500, months: '6' }, TODAY);
+    expect(result).toMatchObject({ ok: true, call: { months: 6 } });
+  });
+
+  it.each([0, -1, 2.5, 500])('จำนวนเดือน %s ใช้ไม่ได้ → ถามกลับ', (months) => {
+    const result = validateToolCall('plan_goal', { item_name: 'CPU', target: 4500, months }, TODAY);
+    expect(result).toMatchObject({ ok: false, errorCode: 'bad_months' });
+  });
+
+  it('ยอดเป้าหมายใช้ไม่ได้ → ถามกลับ', () => {
+    const result = validateToolCall('plan_goal', { item_name: 'CPU', target: 0 }, TODAY);
+    expect(result).toMatchObject({ ok: false, errorCode: 'bad_amount' });
   });
 });
