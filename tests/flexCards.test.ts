@@ -575,3 +575,25 @@ describe('ปุ่มบนการ์ดต้องกดแล้วเก�
     }
   });
 });
+
+describe('การ์ดบันทึกแล้ว — ปุ่มเปลี่ยนหมวด (FR-01)', () => {
+  const item = (id: string) => ({ transactionId: id, occurredLabel: 'x', title: 'กาแฟ', formattedAmount: '฿80' });
+
+  it('รายการเดียว → มีปุ่มเปลี่ยนหมวดที่ยิง edit_category ของรายการนั้น', () => {
+    const card = buildRecordedCard({
+      groups: [{ type: 'expense', categoryName: 'อาหาร', items: [item('t1')] }],
+      budgets: [], periodNote: '', assetBaseUrl: 'https://example.test',
+    });
+    const footer = (card.contents as Record<string, unknown>).footer;
+    expect(collect(footer, 'data')).toEqual(['action=edit_category&id=t1']);
+    expect(collect(footer, 'text')).toContain('เปลี่ยนหมวด');
+  });
+
+  it('หลายรายการ → ไม่มีปุ่ม (ไม่รู้ว่าผู้ใช้หมายถึงแถวไหน)', () => {
+    const card = buildRecordedCard({
+      groups: [{ type: 'expense', categoryName: 'อาหาร', items: [item('t1'), item('t2')] }],
+      budgets: [], periodNote: '', assetBaseUrl: 'https://example.test',
+    });
+    expect((card.contents as Record<string, unknown>).footer).toBeUndefined();
+  });
+});

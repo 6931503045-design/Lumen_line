@@ -29,11 +29,17 @@ export type PostbackQuickReplyItem = {
   };
 };
 
-/** ส่งข้อความพร้อมปุ่ม quick reply แบบ postback (ใช้กับปุ่ม "เอากลับคืน" หลังกด ↩️ ยกเลิก) */
+/** ปุ่ม quick reply ที่เปิดหน้าเว็บ — ใช้เมื่อตัวเลือกเกินที่ LINE ใส่ได้ (13 ปุ่ม) */
+export type UriQuickReplyItem = {
+  type: 'action';
+  action: { type: 'uri'; label: string; uri: string };
+};
+
+/** ส่งข้อความพร้อมปุ่ม quick reply (ใช้กับปุ่ม "เอากลับคืน" หลังกด ↩️ ยกเลิก และการเลือกหมวดใหม่) */
 export async function replyTextWithQuickReply(
   replyToken: string,
   text: string,
-  items: PostbackQuickReplyItem[]
+  items: Array<PostbackQuickReplyItem | UriQuickReplyItem>
 ): Promise<void> {
   try {
     await lineClient.replyMessage({

@@ -12,8 +12,10 @@
 //   ข้อ 3 เกี่ยวกับไฟล์นี้โดยตรง: ไอคอนต้องเป็น child ตรงๆ ของแถว horizontal ห้ามห่อ box
 
 import {
+  actionButton,
   bubble,
   cardBody,
+  cardFooter,
   cardHeader,
   FLEX_THEME as C,
   heavyDivider,
@@ -234,6 +236,19 @@ export function buildRecordedCard(input: RecordedCardInput) {
         assetBaseUrl: base,
       }),
       body: cardBody(body),
+      // ปุ่มเปลี่ยนหมวด (FR-01 / SPEC §S1) — หมวดคือสิ่งที่ระบบเดาผิดบ่อยที่สุด
+      // ใส่เฉพาะการ์ดรายการเดียว: การ์ดหลายรายการไม่รู้ว่าผู้ใช้หมายถึงแถวไหน (แก้ทีละแถวได้ที่หน้าเว็บ)
+      ...(count === 1 && first
+        ? {
+            footer: cardFooter([
+              actionButton('เปลี่ยนหมวด', {
+                type: 'postback',
+                data: `action=edit_category&id=${first.transactionId}`,
+                displayText: 'เปลี่ยนหมวด',
+              }),
+            ]),
+          }
+        : {}),
     }),
   };
 }
