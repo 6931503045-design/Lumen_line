@@ -167,7 +167,7 @@
       <main class="page-content">
         <section class="an-card">
           <h3>เปิดหน้านี้ไม่ได้</h3>
-          <p class="an-detail-lead">${message}</p>
+          <p class="an-detail-lead">${escapeHtml(message)}</p>
           <button class="primary-btn full" type="button" onclick="location.reload()">ลองใหม่</button>
         </section>
       </main>
@@ -635,7 +635,7 @@
         <div class="an-action-list">
           ${options.map((opt) => `
             <button type="button" class="an-action" data-confirm-plan="${opt.planId}">
-              <span class="an-action-icon">${opt.emoji || '💰'}</span>
+              <span class="an-action-icon">${escapeHtml(opt.emoji || '💰')}</span>
               <span class="an-action-text">
                 <strong>${escapeHtml(String(opt.title || '').replace(/^\S+\s+/u, ''))}</strong>
                 <small>เดือนละ ${formatMoney(opt.monthlySaveSatang)} · ${opt.months} เดือน · ครบ ${bangkok(opt.targetDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small>

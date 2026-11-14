@@ -59,6 +59,18 @@ function escapeHtml(text) {
   ));
 }
 
+/**
+ * ข้อความหลายบรรทัดสำหรับกล่องข้อความ — หนีอักขระก่อน แล้วค่อยแปลงขึ้นบรรทัดใหม่เป็น <br>
+ *
+ * 🔒 กล่อง alert/confirm/success รับข้อความจากหลายที่ รวมถึงข้อความ error ของเซิร์ฟเวอร์
+ * ที่มีสิ่งที่ผู้ใช้พิมพ์ติดมาด้วย เช่น มีหมวด "<ชื่อที่พิมพ์>" อยู่แล้ว เดิมข้อความพวกนี้ถูกแทรกลง
+ * HTML ตรง ๆ ตอนนี้กล่องข้อความหนีอักขระให้เองทุกครั้ง ผู้เรียกจึงส่งข้อความดิบมาได้เลย
+ * (ห้ามหนีมาก่อน ไม่งั้นจะโชว์ &amp; ซ้อน) ถ้าต้องการขึ้นบรรทัดใหม่ให้ใช้ \n ไม่ใช่ <br>
+ */
+function escapeMultiline(text) {
+  return escapeHtml(text).replace(/\n/g, '<br>');
+}
+
 function renderCategoryIcon(iconKey) {
   const inner = CATEGORY_ICON_LIBRARY[iconKey] || CATEGORY_ICON_LIBRARY[CATEGORY_ICON_FALLBACK];
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
@@ -934,7 +946,7 @@ function renderDashboard() {
               <div class="transaction-icon">${icon}</div>
               <div class="transaction-text">
                 <strong>${escapeHtml(item.title)}${aiBadge}</strong>
-                <small>${transfer ? 'โอนเข้าแผนออม' : item.category} • ${item.time}</small>
+                <small>${transfer ? 'โอนเข้าแผนออม' : escapeHtml(item.category)} • ${escapeHtml(item.time)}</small>
               </div>
             </div>
             <span class="amount ${transfer ? 'transfer' : item.type}">${sign}${displayAmount}</span>
@@ -1472,7 +1484,7 @@ function renderTransactionsPage() {
                 <div class="transaction-icon">${icon}</div>
                 <div class="transaction-text">
                   <strong>${escapeHtml(item.title)}${aiBadge}</strong>
-                  <small>${transfer ? 'โอนเข้าแผนออม' : item.category} • ${item.time}</small>
+                  <small>${transfer ? 'โอนเข้าแผนออม' : escapeHtml(item.category)} • ${escapeHtml(item.time)}</small>
                 </div>
                 <div class="transaction-actions">
                   <span class="amount ${transfer ? 'transfer' : item.type}">${sign}${displayAmount}</span>
@@ -2403,7 +2415,7 @@ function openPlanHistory(plan) {
           ${group.items.map((entry) => `
             <div class="an-history-row">
               <span class="an-history-icon">${renderIcon('arrow-left-right')}</span>
-              <span class="an-history-main"><strong>โอนเข้าแผน</strong><small>${formatDay(entry.date)}${entry.time ? ` · ${entry.time}` : ''}${entry.note ? ` · ${entry.note}` : ''}</small></span>
+              <span class="an-history-main"><strong>โอนเข้าแผน</strong><small>${formatDay(entry.date)}${entry.time ? ` · ${entry.time}` : ''}${entry.note ? ` · ${escapeHtml(entry.note)}` : ''}</small></span>
               <span class="an-history-amount"><strong>+${formatMoney(entry.amount)}</strong><small>สะสม ${formatMoneyShort(entry.balance)}</small></span>
               <button type="button" class="an-history-edit" data-history-edit="${plan.id}:${entry.id}" aria-label="แก้ไขรายการนี้">${renderIcon('pencil')}</button>
             </div>
@@ -3060,7 +3072,7 @@ function renderAnalyzeCategory() {
     </section>
     <div class="an-tiles four">${tiles}</div>
     <section class="an-card an-list">
-      <div class="an-head"><h3>${category ? category.name : 'รายจ่ายแยกตามหมวด'}</h3></div>
+      <div class="an-head"><h3>${category ? escapeHtml(category.name) : 'รายจ่ายแยกตามหมวด'}</h3></div>
       ${listRows}
     </section>
   `;
@@ -3398,8 +3410,8 @@ function showAlertModal(message, title = 'ยังทำไม่ได้') {
   openModal(`
     <div class="modal-card success-modal alert-modal">
       <div class="success-icon">${renderIcon('info')}</div>
-      <h3>${title}</h3>
-      <p>${message}</p>
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeMultiline(message)}</p>
       <div class="modal-actions">
         <button class="primary-btn full" type="button" data-close-modal="true">เข้าใจแล้ว</button>
       </div>
@@ -3424,13 +3436,13 @@ function showConfirmModal(options) {
   openModal(`
     <div class="modal-card small an-detail">
       <div class="modal-head">
-        <h3>${title}</h3>
+        <h3>${escapeHtml(title)}</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
-      <p class="an-detail-lead">${message}</p>
+      <p class="an-detail-lead">${escapeMultiline(message)}</p>
       <div class="an-detail-actions two">
         <button class="secondary-btn" type="button" data-close-modal="true">ยกเลิก</button>
-        <button class="primary-btn danger" type="button" data-confirm-action="true">${confirmLabel}</button>
+        <button class="primary-btn danger" type="button" data-confirm-action="true">${escapeHtml(confirmLabel)}</button>
       </div>
     </div>
   `);
@@ -3446,7 +3458,7 @@ function showSuccessModal(message) {
     <div class="modal-card success-modal">
       <div class="success-icon">${renderIcon('check')}</div>
       <h3>สำเร็จ</h3>
-      <p>${message}</p>
+      <p>${escapeMultiline(message)}</p>
       <div class="modal-actions split">
         <button class="secondary-btn" type="button" data-close-modal="true">ปิด</button>
         <button class="primary-btn" type="button" data-close-modal="true">ตกลง</button>
@@ -3840,7 +3852,7 @@ function openCategoryMenu(categoryId) {
     deleteBtn.addEventListener('click', () => {
       showConfirmModal({
         title: 'ลบหมวดหมู่นี้?',
-        message: `"${escapeHtml(category.name)}" จะถูกลบถาวร เอากลับคืนไม่ได้<br>`
+        message: `"${category.name}" จะถูกลบถาวร เอากลับคืนไม่ได้\n`
           + 'รายการที่เคยอยู่ในหมวดนี้จะไม่หายไป แต่จะไม่มีหมวดกำกับ',
         confirmLabel: 'ลบหมวดหมู่',
         onConfirm: () => deleteCategory(category.id),
