@@ -84,6 +84,25 @@ export type InterpretInput = {
 // ⚠️ เก็บเฉพาะข้อความที่ redact แล้ว ไม่เก็บข้อความดิบ — ทั้งฝั่งผู้ใช้และฝั่งบอท
 // (คำถามกลับของ AI มักทวนคำของผู้ใช้ จึง redact ซ้ำอีกรอบก่อนเก็บ)
 
+/**
+ * period ของ tool get_summary -> คำสั่งตายตัวที่ตอบคำถามเดียวกัน
+ * เป็นตารางแทน if ซ้อน เพื่อให้ TypeScript บังคับว่า period ใหม่ทุกตัวต้องมีคำสั่งรองรับ
+ */
+const SUMMARY_PERIOD_COMMAND: Record<
+  Extract<ValidatedToolCall, { name: 'get_summary' }>['period'],
+  CommandName
+> = {
+  this_month: 'summary',
+  remaining: 'remaining',
+  tomorrow: 'remaining_tomorrow',
+  week: 'remaining_week',
+  month_remaining: 'remaining_month',
+  limits: 'limits',
+  recurring: 'recurring',
+  budget: 'budget',
+  plans: 'plans',
+};
+
 const HISTORY_TTL_MS = 30 * 60 * 1000;
 
 type HistoryEntry = { turns: ChatTurn[]; updatedAt: number };
@@ -340,17 +359,7 @@ async function runToolCall(
     case 'get_summary': {
       // ส่งต่อเป็นคำสั่งตายตัวตัวเดียวกัน (การ์ด/ข้อความชุดเดียวกับที่พิมพ์ตรง ๆ) เพื่อให้ผู้ใช้ถามด้วยภาษาคน
       // แล้วได้ตัวเลขชุดเดียวกับที่พิมพ์ "สรุป" เป๊ะ ๆ ไม่มีสองความจริงในระบบ
-      const command: CommandName =
-        call.period === 'this_month'
-          ? 'summary'
-          : call.period === 'remaining'
-            ? 'remaining'
-            : call.period === 'tomorrow'
-              ? 'remaining_tomorrow'
-              : call.period === 'budget'
-                ? 'budget'
-                : 'plans';
-      return { kind: 'command', command };
+      return { kind: 'command', command: SUMMARY_PERIOD_COMMAND[call.period] };
     }
 
     case 'query_transactions':

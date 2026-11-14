@@ -20,6 +20,9 @@ import { getSafeToSpend } from '../src/services/summary.service';
 import {
   defaultSpendingLimits,
   getDailyAllowance,
+  getMonthlyAllowance,
+  getWeekStartSundayIso,
+  getWeeklyAllowance,
   normalizeSpendingLimits,
   parseSpendingLimitsInput,
   SpendingLimitError,
@@ -152,5 +155,148 @@ describe('getDailyAllowance — วันนี้ใช้ได้อีกต
     vi.mocked(getSafeToSpend).mockResolvedValue({ monthRemainingSatang: -50000, daysLeft: 10 } as never);
 
     expect((await getDailyAllowance(USER, TODAY))?.ceilingSatang).toBe(0);
+  });
+});
+
+// 2026-11-14 เป็นวันเสาร์ → สัปดาห์นี้คือ อา. 8 – ส. 14 พ.ย. (อยู่ในเดือนเดียว) ผ่านมาแล้ว 6 วัน
+describe('getWeekStartSundayIso — สัปดาห์เริ่มวันอาทิตย์ (§S5.10.3)', () => {
+  it.each([
+    ['วันเสาร์', '2026-11-14', '2026-11-08'],
+    ['วันอาทิตย์เอง', '2026-11-08', '2026-11-08'],
+    ['วันจันทร์', '2026-11-09', '2026-11-08'],
+    ['ข้ามเดือน', '2026-12-01', '2026-11-29'],
+  ])('%s', (_label, date, expected) => {
+    expect(getWeekStartSundayIso(date)).toBe(expected);
+  });
+});
+
+describe('getWeeklyAllowance — สัปดาห์นี้ใช้ได้อีกตามเพดาน', () => {
+  it('นับรายจ่ายตั้งแต่วันอาทิตย์ถึงสิ้นวันนี้ และไม่นับโอนเข้าแผน (G7)', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({
+      weekly: { enabled: true, mode: 'manual', limitSatang: 150000 },
+    });
+    vi.mocked(listTransactionRowsInRange).mockResolvedValue(
+      rows(['expense', '500.00'], ['transfer', '900.00'], ['income', '1000.00'])
+    );
+
+    expect(await getWeeklyAllowance(USER, TODAY)).toEqual({
+      enabled: true,
+      available: true,
+      mode: 'manual',
+      profile: 'moderate',
+      ceilingSatang: 150000,
+      spentSatang: 50000,
+      remainingSatang: 100000,
+    });
+    expect(listTransactionRowsInRange).toHaveBeenCalledWith(USER, '2026-11-08', '2026-11-15');
+    // เพดานตั้งเองไม่ต้องพึ่งยอดทั้งเดือน
+    expect(getSafeToSpend).not.toHaveBeenCalled();
+  });
+
+  it('ไม่ได้เปิดเพดานรายสัปดาห์ → enabled=false แต่ยังบอกยอดที่ใช้ไปได้', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({});
+    vi.mocked(listTransactionRowsInRange).mockResolvedValue(rows(['expense', '120.00']));
+
+    const allowance = await getWeeklyAllowance(USER, TODAY);
+    expect(allowance.enabled).toBe(false);
+    expect(allowance.spentSatang).toBe(12000);
+  });
+
+  it('ให้ระบบคิด — (คงเหลือ + ใช้ไปสัปดาห์นี้) ÷ (วันที่เหลือ + วันที่ผ่านไป) × 7 เหมือนหน้าเว็บ', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({ weekly: { enabled: true, mode: 'system' } });
+    vi.mocked(listTransactionRowsInRange).mockResolvedValue(rows(['expense', '100.00']));
+    vi.mocked(getSafeToSpend).mockResolvedValue({ monthRemainingSatang: 288800, daysLeft: 17 } as never);
+
+    // (288,800 + 10,000) ÷ (17 + 6) × 7 = 90,939.13... → ปัดลง
+    const allowance = await getWeeklyAllowance(USER, TODAY);
+    expect(allowance.mode).toBe('system');
+    expect(allowance.ceilingSatang).toBe(90939);
+    expect(allowance.remainingSatang).toBe(90939 - 10000);
+  });
+
+  it('ให้ระบบคิดแบบประหยัด → คูณ 0.8 ปัดลงเป็นสตางค์', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({
+      profile: 'frugal',
+      weekly: { enabled: true, mode: 'system' },
+    });
+    vi.mocked(listTransactionRowsInRange).mockResolvedValue(rows(['expense', '100.00']));
+    vi.mocked(getSafeToSpend).mockResolvedValue({ monthRemainingSatang: 288800, daysLeft: 17 } as never);
+
+    expect((await getWeeklyAllowance(USER, TODAY)).ceilingSatang).toBe(Math.floor(90939 * 0.8));
+  });
+
+  it('🔴 สัปดาห์คาบสองเดือนในโหมดระบบคิด → available=false ไม่เดาตัวเลข', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({ weekly: { enabled: true, mode: 'system' } });
+
+    const allowance = await getWeeklyAllowance(USER, '2026-12-01');
+    expect(allowance.enabled).toBe(true);
+    expect(allowance.available).toBe(false);
+    expect(getSafeToSpend).not.toHaveBeenCalled();
+  });
+
+  it('สัปดาห์คาบสองเดือนแต่ตั้งเพดานเอง → ยังตอบได้ตามปกติ', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({
+      weekly: { enabled: true, mode: 'manual', limitSatang: 150000 },
+    });
+
+    const allowance = await getWeeklyAllowance(USER, '2026-12-01');
+    expect(allowance.available).toBe(true);
+    expect(allowance.remainingSatang).toBe(150000);
+  });
+
+  it('เงินเดือนนี้ติดลบ → เพดานระบบเป็น 0 ไม่ติดลบ', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({ weekly: { enabled: true, mode: 'system' } });
+    vi.mocked(getSafeToSpend).mockResolvedValue({ monthRemainingSatang: -50000, daysLeft: 17 } as never);
+
+    expect((await getWeeklyAllowance(USER, TODAY)).ceilingSatang).toBe(0);
+  });
+});
+
+describe('getMonthlyAllowance — เดือนนี้ใช้ได้อีกตามเพดาน', () => {
+  const safe = (monthRemainingSatang: number, monthExpenseSatang: number) =>
+    ({ monthRemainingSatang, daysLeft: 17, breakdown: { monthExpenseSatang } }) as never;
+
+  it('ตั้งเอง → เพดาน − ใช้ไปแล้วเดือนนี้', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({
+      monthly: { enabled: true, mode: 'manual', limitSatang: 500000 },
+    });
+    vi.mocked(getSafeToSpend).mockResolvedValue(safe(288800, 120000));
+
+    expect(await getMonthlyAllowance(USER, TODAY)).toEqual({
+      enabled: true,
+      available: true,
+      mode: 'manual',
+      profile: 'moderate',
+      ceilingSatang: 500000,
+      spentSatang: 120000,
+      remainingSatang: 380000,
+    });
+  });
+
+  it('ให้ระบบคิด — เพดาน = ใช้ไปแล้ว + เงินเหลือทั้งเดือน (§S5.10.2)', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({ monthly: { enabled: true, mode: 'system' } });
+    vi.mocked(getSafeToSpend).mockResolvedValue(safe(288800, 120000));
+
+    const allowance = await getMonthlyAllowance(USER, TODAY);
+    expect(allowance.ceilingSatang).toBe(408800);
+    expect(allowance.remainingSatang).toBe(288800);
+  });
+
+  it('ใช้เกินเพดานที่ตั้งเอง → remaining ติดลบ', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({
+      monthly: { enabled: true, mode: 'manual', limitSatang: 100000 },
+    });
+    vi.mocked(getSafeToSpend).mockResolvedValue(safe(0, 120000));
+
+    expect((await getMonthlyAllowance(USER, TODAY)).remainingSatang).toBe(-20000);
+  });
+
+  it('ไม่ได้เปิดเพดานรายเดือน → enabled=false', async () => {
+    vi.mocked(getSpendingLimitsRaw).mockResolvedValue({});
+    vi.mocked(getSafeToSpend).mockResolvedValue(safe(288800, 120000));
+
+    const allowance = await getMonthlyAllowance(USER, TODAY);
+    expect(allowance.enabled).toBe(false);
+    expect(allowance.spentSatang).toBe(120000);
   });
 });

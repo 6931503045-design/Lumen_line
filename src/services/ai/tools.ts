@@ -195,10 +195,14 @@ export const geminiToolDeclarations: FunctionDeclaration[] = [
       properties: {
         period: {
           type: Type.STRING,
-          enum: ['this_month', 'remaining', 'tomorrow', 'budget', 'plans'],
+          enum: ['this_month', 'remaining', 'tomorrow', 'week', 'month_remaining', 'limits', 'recurring', 'budget', 'plans'],
           description:
-            'remaining = เงินที่ใช้ได้ต่อวัน ใช้กับคำถามแนว "วันนี้เหลือเท่าไหร่" "ใช้ได้อีกเท่าไหร่" "พอใช้ไหม"; '
+            'remaining = เงินที่ใช้ได้ของ "วันนี้" ใช้กับคำถามแนว "วันนี้เหลือเท่าไหร่" "ใช้ได้อีกเท่าไหร่" "พอใช้ไหม" ที่ไม่ได้ระบุสัปดาห์หรือเดือน; '
             + 'tomorrow = เงินที่ใช้ได้ของพรุ่งนี้ ใช้เมื่อผู้ใช้ถามถึง "พรุ่งนี้"; '
+            + 'week = เงินที่ใช้ได้อีกของ "สัปดาห์นี้/อาทิตย์นี้" ห้ามใช้ remaining แทน; '
+            + 'month_remaining = เงินที่ใช้ได้อีกของ "เดือนนี้" เช่น "เดือนนี้ใช้ได้อีกเท่าไหร่" "เดือนนี้เหลือเท่าไหร่" (ไม่ใช่ยอดที่ใช้ไปแล้ว); '
+            + 'limits = เพดานการใช้จ่ายรายวัน/สัปดาห์/เดือนที่ผู้ใช้ตั้งไว้ ใช้เมื่อผู้ใช้พูดถึง "เพดาน"; '
+            + 'recurring = รายการประจำที่ตั้งไว้ เช่น เงินเดือน ค่าหอ (อยากตั้งรายการประจำใหม่ให้ใช้ create_recurring); '
             + 'this_month = ยอดรายรับกับรายจ่ายรวมของเดือน ใช้เฉพาะเมื่อถามถึงยอดรวมหรือใช้ไปแล้วเท่าไหร่; '
             + 'budget = งบรายหมวด ใช้ทุกครั้งที่ผู้ใช้พูดถึง "งบ" แม้จะมีคำว่าเหลือ เช่น "งบเดือนนี้เหลือเท่าไหร่"; '
             + 'plans = ความคืบหน้าของแผนออมที่มีอยู่แล้ว (อยากตั้งเป้าออมใหม่ให้ใช้ plan_goal)',
@@ -343,7 +347,7 @@ const schemas = {
   }),
   delete_transaction: z.object({ target: z.string().trim().min(1) }),
   get_summary: z.object({
-    period: z.enum(['this_month', 'remaining', 'tomorrow', 'budget', 'plans']),
+    period: z.enum(['this_month', 'remaining', 'tomorrow', 'week', 'month_remaining', 'limits', 'recurring', 'budget', 'plans']),
   }),
   query_transactions: z.object({
     category_hint: z.string().trim().max(50).optional(),
@@ -401,7 +405,19 @@ export type ValidatedToolCall =
       };
     }
   | { name: 'delete_transaction'; target: string }
-  | { name: 'get_summary'; period: 'this_month' | 'remaining' | 'tomorrow' | 'budget' | 'plans' }
+  | {
+      name: 'get_summary';
+      period:
+        | 'this_month'
+        | 'remaining'
+        | 'tomorrow'
+        | 'week'
+        | 'month_remaining'
+        | 'limits'
+        | 'recurring'
+        | 'budget'
+        | 'plans';
+    }
   | {
       name: 'query_transactions';
       categoryHint: string | null;
