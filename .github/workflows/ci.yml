@@ -1,0 +1,52 @@
+name: CI
+
+# รัน typecheck + เทสต์ทุกครั้งที่เปิด/อัปเดต PR และทุกครั้งที่มี commit เข้า main
+#
+# ทำไมต้องมี: Render deploy จาก main อัตโนมัติ แต่เดิมไม่มีอะไรรันเทสต์ก่อนโค้ดเข้า main เลย
+# โค้ดที่ typecheck ไม่ผ่านหรือเทสต์แดงจึงขึ้น production ได้ถ้าคนเขียนลืมรันในเครื่อง
+#
+# ⚠️ workflow นี้ "บอก" ว่าพังเท่านั้น ยังไม่ได้ "ห้าม" merge
+# ถ้าต้องการให้ PR ที่แดง merge ไม่ได้ ต้องเปิด branch protection ของ main ที่
+# Settings > Branches > Add rule แล้วติ๊ก "Require status checks to pass" เลือกงาน "test"
+#
+# ไม่ต้องตั้ง secret อะไร: เทสต์ทุกตัว mock ฐานข้อมูล, LINE และ Gemini
+# ค่า env ปลอมที่ต้องใช้ถูกตั้งไว้ใน tests/setup.ts แล้ว
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# push ซ้อนกันบน branch เดียวกัน ให้ยกเลิกรอบเก่าที่ยังรันค้าง ไม่เปลืองนาทีของ Actions
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # ตรงกับ engines ใน package.json และ NODE_VERSION ใน render.yaml
+          node-version: 22
+          cache: npm
+
+      # npm ci = ติดตั้งตาม package-lock.json เป๊ะๆ เหมือนที่ Render ทำตอน build
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # ยืนยันว่า build ที่ Render จะรันตอน deploy ผ่านด้วย (ใช้ tsconfig.build.json คนละไฟล์กับ typecheck)
+      - name: Build
+        run: npm run build
