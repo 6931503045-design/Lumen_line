@@ -12,12 +12,42 @@
 
 import type { ParsedMail } from 'mailparser';
 
+/**
+ * แปลงค่า header หนึ่งตัวเป็นข้อความ
+ *
+ * 🔴 แก้บั๊ก: mailparser ไม่ได้คืน string เสมอ — header ที่เป็นที่อยู่อีเมล (Delivered-To, To ฯลฯ)
+ * ถูกแปลงเป็น object `{ value, html, text }` ให้แล้ว เดิมใช้ String() ตรงๆ จึงได้ "[object Object]"
+ * ทำให้หา +token จาก Delivered-To ไม่เคยเจอเลยกับอีเมลจริง (เทสต์เดิมจำลอง header เป็น string
+ * จึงมองไม่เห็น) อีเมลที่ forward มายังรอดเพราะ X-Forwarded-To เป็น string ธรรมดา
+ */
+function headerText(value: unknown): string {
+  if (value && typeof value === 'object' && typeof (value as { text?: unknown }).text === 'string') {
+    return (value as { text: string }).text;
+  }
+  return String(value);
+}
+
 /** ดึงค่า header ตัวเดียวออกมาเป็น string (mailparser คืน array ได้ถ้ามีซ้ำ) */
 export function headerValue(mail: ParsedMail, name: string): string | undefined {
-  const raw = mail.headers.get(name);
+  const raw: unknown = mail.headers.get(name);
   if (!raw) return undefined;
-  if (Array.isArray(raw)) return raw.map(String).join(' ');
-  return String(raw);
+  if (Array.isArray(raw)) return raw.map(headerText).join(' ');
+  return headerText(raw);
+}
+
+/**
+ * ค่าของ header ตัว "บนสุด" ตัวเดียว เมื่อ header ชื่อนี้มีหลายตัวในอีเมล
+ *
+ * 🔒 ใช้กับ header ที่ต้องรู้ว่าใครเป็นคนเขียน เช่น Authentication-Results
+ * เซิร์ฟเวอร์ที่รับอีเมลเติม header ของตัวเองไว้บนสุดเสมอ ตัวที่อยู่ต่ำกว่าอาจเป็นของที่
+ * ผู้ส่งแนบมาเอง จึงห้ามใช้ headerValue() ที่เอาทุกตัวมาต่อกันกับ header แบบนี้
+ * (mailparser เรียง array ตามลำดับในอีเมลจากบนลงล่าง — มีเทสต์ยืนยันใน emailDkim.test.ts)
+ */
+export function topHeaderValue(mail: ParsedMail, name: string): string | undefined {
+  const raw: unknown = mail.headers.get(name);
+  if (!raw) return undefined;
+  const first: unknown = Array.isArray(raw) ? raw[0] : raw;
+  return first === undefined || first === null ? undefined : headerText(first);
 }
 
 /**

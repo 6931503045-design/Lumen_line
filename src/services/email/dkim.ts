@@ -13,6 +13,17 @@
 //
 // header ที่อ่านคือ Authentication-Results ที่ Gmail เขียนไว้ตอนรับอีเมลเข้ากล่อง
 // รูปแบบ: "mx.google.com; dkim=pass header.i=@kasikornbank.com; spf=fail ..."
+//
+// 🔒 เชื่อเฉพาะ header ตัว "บนสุด" ที่ขึ้นต้นด้วย authserv-id ของ Gmail เท่านั้น
+// Authentication-Results เป็น header ธรรมดาที่ผู้ส่งเขียนแนบมาเองได้ เดิมโค้ดเอา header นี้
+// ทุกตัวในอีเมลมาต่อกันแล้วหา dkim=pass ทำให้คนที่รู้ที่อยู่ +token แนบ
+// "Authentication-Results: x; dkim=pass header.i=@kasikornbank.com" มาเองแล้วผ่านด่านนี้ได้
+// เซิร์ฟเวอร์ที่รับอีเมลเติม header ของตัวเองไว้บนสุดเสมอ ตัวที่ผู้ส่งแนบมาจึงอยู่ต่ำกว่า
+// ผู้เรียกต้องส่งมาเฉพาะตัวบนสุด (recipient.ts topHeaderValue) แล้วไฟล์นี้ตรวจซ้ำอีกชั้นว่า
+// คนเขียน header คือ Gmail จริง
+
+/** authserv-id ที่ Gmail ใส่ไว้หน้า Authentication-Results ตอนรับอีเมลเข้ากล่อง */
+export const TRUSTED_AUTHSERV_ID = 'mx.google.com';
 
 /** ดึงคู่ (ผลตรวจ, โดเมนผู้ลงนาม) ของทุกบล็อก dkim= ใน header */
 const DKIM_BLOCK = /dkim=(\w+)[^;]*?header\.(?:i=@?|d=)([A-Za-z0-9.-]+)/g;
@@ -28,12 +39,22 @@ export type DkimCheck = {
  * โดเมนย่อยของธนาคารก็นับ (เช่น mail.kbank.co.th เข้ากับ kbank.co.th)
  *
  * ไม่มี header เลย = ไม่ผ่าน ไม่ใช่ผ่าน — ระบบต้อง fail closed
+ *
+ * @param authenticationResults ค่าของ Authentication-Results "ตัวบนสุดตัวเดียว"
+ *   ห้ามส่งหลายตัวต่อกันมา เพราะตัวที่อยู่ต่ำกว่าอาจเป็นของที่ผู้ส่งแนบมาเอง
  */
 export function checkBankDkim(
   authenticationResults: string | undefined,
   allowedDomains: readonly string[]
 ): DkimCheck {
   if (!authenticationResults) {
+    return { passed: false, signedBy: [] };
+  }
+
+  // ส่วนแรกก่อน ; คือ authserv-id (อาจมีเลขเวอร์ชันต่อท้าย เช่น "mx.google.com 1")
+  // ไม่ใช่ของ Gmail = ไม่รู้ว่าใครเขียน header นี้ จึงไม่เชื่อผลข้างใน (fail closed)
+  const authservId = (authenticationResults.split(';')[0] ?? '').trim().split(/\s+/)[0] ?? '';
+  if (authservId.toLowerCase() !== TRUSTED_AUTHSERV_ID) {
     return { passed: false, signedBy: [] };
   }
 

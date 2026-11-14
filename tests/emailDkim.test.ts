@@ -9,7 +9,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { checkBankDkim } from '../src/services/email/dkim';
-import { extractIngestToken } from '../src/services/email/recipient';
+import { simpleParser } from 'mailparser';
+import { extractIngestToken, topHeaderValue } from '../src/services/email/recipient';
 
 const BANKS = ['kasikornbank.com', 'kbank.co.th'];
 
@@ -88,5 +89,59 @@ describe('extractIngestToken', () => {
 
   it('ไม่มีที่อยู่เลย = null ไม่ใช่ error', () => {
     expect(extractIngestToken(undefined)).toBeNull();
+  });
+});
+
+describe('checkBankDkim — header ต้องเป็นของ Gmail เท่านั้น', () => {
+  it('🔴 authserv-id ไม่ใช่ mx.google.com = ไม่เชื่อผลข้างใน แม้จะเขียนว่า dkim=pass ของธนาคาร', () => {
+    const header = 'mail.attacker.example; dkim=pass header.i=@kasikornbank.com';
+    const result = checkBankDkim(header, BANKS);
+    expect(result.passed).toBe(false);
+    expect(result.signedBy).toEqual([]);
+  });
+
+  it('ชื่อที่แค่ขึ้นต้นคล้าย mx.google.com ต้องไม่ผ่าน', () => {
+    const header = 'mx.google.com.attacker.example; dkim=pass header.i=@kbank.co.th';
+    expect(checkBankDkim(header, BANKS).passed).toBe(false);
+  });
+
+  it('authserv-id มีเลขเวอร์ชันต่อท้ายและตัวพิมพ์ใหญ่ ยังนับว่าเป็น Gmail', () => {
+    const header = 'MX.Google.com 1; dkim=pass header.i=@kbank.co.th';
+    expect(checkBankDkim(header, BANKS).passed).toBe(true);
+  });
+});
+
+describe('topHeaderValue + checkBankDkim — อีเมลที่ผู้ส่งแนบ Authentication-Results ปลอมมาเอง', () => {
+  /** ประกอบอีเมลดิบแล้วให้ mailparser ตัวจริงอ่าน เพื่อยืนยันลำดับ header ที่โค้ดพึ่งอยู่ */
+  async function parse(headers: string[]) {
+    return simpleParser([...headers, 'From: x@example.com', 'Subject: s', '', 'body'].join('\r\n'));
+  }
+
+  it('🔴 เคสโจมตี: Gmail บอกว่าไม่ผ่าน (บนสุด) แต่มี header ปลอมอยู่ข้างล่างบอกว่าผ่าน → ต้องไม่ผ่าน', async () => {
+    const mail = await parse([
+      'Authentication-Results: mx.google.com; dkim=pass header.i=@attacker.example',
+      'Received: by mx.google.com',
+      // ตัวนี้ผู้ส่งเขียนใส่มาเอง ปลอมได้ทั้งผลตรวจและชื่อเซิร์ฟเวอร์
+      'Authentication-Results: mx.google.com; dkim=pass header.i=@kasikornbank.com',
+    ]);
+
+    const result = checkBankDkim(topHeaderValue(mail, 'authentication-results'), BANKS);
+    expect(result.passed).toBe(false);
+    expect(result.signedBy).toEqual(['attacker.example']);
+  });
+
+  it('อีเมลธนาคารจริงที่ถูก forward: ตัวบนสุดของ Gmail บอกว่าผ่าน → ผ่าน', async () => {
+    const mail = await parse([
+      'Authentication-Results: mx.google.com; dkim=pass header.i=@kasikornbank.com; spf=fail',
+      'Received: by mx.google.com',
+      'Authentication-Results: mx.google.com; dkim=pass header.i=@kasikornbank.com',
+    ]);
+    expect(checkBankDkim(topHeaderValue(mail, 'authentication-results'), BANKS).passed).toBe(true);
+  });
+
+  it('มี header เดียวก็อ่านได้ และไม่มีเลยคืน undefined', async () => {
+    const one = await parse(['Authentication-Results: mx.google.com; dkim=none']);
+    expect(topHeaderValue(one, 'authentication-results')).toBe('mx.google.com; dkim=none');
+    expect(topHeaderValue(await parse([]), 'authentication-results')).toBeUndefined();
   });
 });
