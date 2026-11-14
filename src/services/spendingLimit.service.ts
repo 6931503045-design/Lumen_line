@@ -16,7 +16,7 @@ import { MAX_AMOUNT_SATANG } from '../config/constants';
 import { listTransactionRowsInRange } from '../db/queries/summary';
 import { getSpendingLimitsRaw } from '../db/queries/users';
 import { add, roundDownToSatang, toSatang } from '../utils/money';
-import { addDaysIso, getTodayIso } from '../utils/thaiDate';
+import { addDaysIso, getTodayIso, isoDayOfWeek } from '../utils/thaiDate';
 import { getSafeToSpend } from './summary.service';
 
 export class SpendingLimitError extends Error {
@@ -182,5 +182,147 @@ export async function getDailyAllowance(
     ceilingSatang,
     spentTodaySatang,
     remainingSatang: ceilingSatang - spentTodaySatang,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// เพดานรายสัปดาห์ / รายเดือน
+//
+// 🔴 ผู้ใช้ตั้งเพดานรายสัปดาห์กับรายเดือนในหน้าเว็บ แล้วถามบอท "สัปดาห์นี้ใช้ได้อีกกี่บาท"
+// "เดือนนี้ใช้ได้อีกกี่บาท" ได้ยอดของ "วันนี้" กลับไปทั้งสองคำถาม เพราะฝั่งบอทรู้จักแค่รายวัน
+// สูตรข้างล่างลอกจาก web/js/app.js getSpendingLimitInfo ทีละบรรทัด ให้สองที่ตอบเลขเดียวกัน
+// ────────────────────────────────────────────────────────────────────────────
+
+export type PeriodAllowance = {
+  /** ผู้ใช้เปิดเพดานของช่วงนี้ไว้ไหม — false = มีแค่ยอดที่ใช้ไป ไม่มีเพดานให้เทียบ */
+  enabled: boolean;
+  /**
+   * false = คำนวณเพดานให้แม่นยำไม่ได้ (โหมด system ของสัปดาห์ที่คาบสองเดือน)
+   * ห้ามเดาตัวเลขมาแทน — ผู้เรียกต้องบอกผู้ใช้ตรง ๆ ว่ายังคิดให้ไม่ได้ (เหมือนหน้าเว็บ)
+   */
+  available: boolean;
+  mode: SpendingLimitMode;
+  /** ใช้เฉพาะโหมด system */
+  profile: SpendingProfile;
+  ceilingSatang: number;
+  /** ยอดรายจ่ายของช่วงนี้จนถึงวันนี้ — มีค่าเสมอ แม้ไม่ได้เปิดเพดาน */
+  spentSatang: number;
+  /** เพดาน − ใช้ไป — ติดลบ = เกินเพดานแล้ว (0 เมื่อไม่มีเพดาน) */
+  remainingSatang: number;
+};
+
+/**
+ * วันอาทิตย์ของสัปดาห์ที่วันที่นี้อยู่ — เพดานรายสัปดาห์เริ่มวันอาทิตย์ตามปฏิทินไทย (§S5.10.3)
+ * ⚠️ คนละตัวกับ thaiDate.getWeekStartIso ที่เริ่มวันจันทร์ (ใช้กับการเตือนแผนออม)
+ */
+export function getWeekStartSundayIso(isoDate: string): string {
+  return addDaysIso(isoDate, -isoDayOfWeek(isoDate));
+}
+
+/** ⚖️ G7: นับเฉพาะรายจ่าย โอนเข้าแผนไม่ใช่การใช้เงิน */
+async function sumExpenses(userId: string, fromIso: string, toIsoExclusive: string): Promise<number> {
+  const rows = await listTransactionRowsInRange(userId, fromIso, toIsoExclusive);
+  return add(...rows.filter((row) => row.type === 'expense').map((row) => toSatang(row.amount)));
+}
+
+function hasManualLimit(setting: SpendingLimitSetting): setting is SpendingLimitSetting & { limitSatang: number } {
+  return setting.mode === 'manual' && setting.limitSatang !== null;
+}
+
+/** "สัปดาห์นี้ใช้ได้อีกเท่าไหร่" — สัปดาห์นับจากวันอาทิตย์ถึงวันนี้ */
+export async function getWeeklyAllowance(
+  userId: string,
+  todayIso: string = getTodayIso()
+): Promise<PeriodAllowance> {
+  const limits = await getSpendingLimits(userId);
+  const weekly = limits.weekly;
+  const weekStart = getWeekStartSundayIso(todayIso);
+  const spentSatang = await sumExpenses(userId, weekStart, addDaysIso(todayIso, 1));
+
+  const base = { profile: limits.profile, spentSatang };
+  if (!weekly.enabled) {
+    return { ...base, enabled: false, available: true, mode: weekly.mode, ceilingSatang: 0, remainingSatang: 0 };
+  }
+
+  if (hasManualLimit(weekly)) {
+    return {
+      ...base,
+      enabled: true,
+      available: true,
+      mode: 'manual',
+      ceilingSatang: weekly.limitSatang,
+      remainingSatang: weekly.limitSatang - spentSatang,
+    };
+  }
+
+  // สัปดาห์ที่คาบสองเดือนต้องใช้เงินเหลือของเดือนหน้าด้วย (§S5.10.2 แบบ B) ซึ่งยังไม่ได้ทำ
+  const weekEnd = addDaysIso(weekStart, 6);
+  if (weekStart.slice(0, 7) !== weekEnd.slice(0, 7)) {
+    return { ...base, enabled: true, available: false, mode: 'system', ceilingSatang: 0, remainingSatang: 0 };
+  }
+
+  // ย้อนกลับไปต้นสัปดาห์: บวกยอดที่ใช้ในสัปดาห์นี้กลับเข้าเงินเหลือ และบวกวันที่ผ่านไปกลับเข้าวันที่เหลือ
+  const safe = await getSafeToSpend(userId, todayIso);
+  const elapsedDays = isoDayOfWeek(todayIso);
+  const startOfWeekCeiling = roundDownToSatang(
+    ((safe.monthRemainingSatang + spentSatang) / (Math.max(1, safe.daysLeft) + elapsedDays)) * 7
+  );
+  const ceilingSatang = Math.max(
+    0,
+    roundDownToSatang(Math.max(0, startOfWeekCeiling) * PROFILE_FACTOR[limits.profile])
+  );
+
+  return {
+    ...base,
+    enabled: true,
+    available: true,
+    mode: 'system',
+    ceilingSatang,
+    remainingSatang: ceilingSatang - spentSatang,
+  };
+}
+
+/**
+ * "เดือนนี้ใช้ได้อีกเท่าไหร่" ตามเพดานรายเดือน
+ * enabled=false เมื่อไม่ได้เปิดเพดานรายเดือน — ผู้เรียกใช้เงินเหลือทั้งเดือนของ S5.2 ตอบแทน
+ */
+export async function getMonthlyAllowance(
+  userId: string,
+  todayIso: string = getTodayIso()
+): Promise<PeriodAllowance> {
+  const limits = await getSpendingLimits(userId);
+  const monthly = limits.monthly;
+  const safe = await getSafeToSpend(userId, todayIso);
+  const spentSatang = safe.breakdown.monthExpenseSatang;
+
+  const base = { profile: limits.profile, spentSatang, available: true };
+  if (!monthly.enabled) {
+    return { ...base, enabled: false, mode: monthly.mode, ceilingSatang: 0, remainingSatang: 0 };
+  }
+
+  if (hasManualLimit(monthly)) {
+    return {
+      ...base,
+      enabled: true,
+      mode: 'manual',
+      ceilingSatang: monthly.limitSatang,
+      remainingSatang: monthly.limitSatang - spentSatang,
+    };
+  }
+
+  // §S5.10.2: เพดานรายเดือน = ใช้ไปแล้ว + เงินที่เหลือใช้ได้ทั้งเดือน
+  const ceilingSatang = Math.max(
+    0,
+    roundDownToSatang(
+      Math.max(0, spentSatang + safe.monthRemainingSatang) * PROFILE_FACTOR[limits.profile]
+    )
+  );
+
+  return {
+    ...base,
+    enabled: true,
+    mode: 'system',
+    ceilingSatang,
+    remainingSatang: ceilingSatang - spentSatang,
   };
 }

@@ -22,15 +22,22 @@ vi.mock('../src/db/queries/transactions', () => ({
 vi.mock('../src/services/spendingLimit.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/services/spendingLimit.service')>()),
   getDailyAllowance: vi.fn(),
+  getWeeklyAllowance: vi.fn(),
+  getMonthlyAllowance: vi.fn(),
   getSpendingLimits: vi.fn(),
 }));
+vi.mock('../src/services/recurring.service', () => ({ listRecurringRules: vi.fn() }));
 
 import { getSafeToSpend, getUserSummary } from '../src/services/summary.service';
 import {
   defaultSpendingLimits,
   getDailyAllowance,
+  getMonthlyAllowance,
   getSpendingLimits,
+  getWeeklyAllowance,
+  type PeriodAllowance,
 } from '../src/services/spendingLimit.service';
+import { listRecurringRules } from '../src/services/recurring.service';
 import { getBudgetOverview } from '../src/services/budget.service';
 import { listPlansWithProgress, transferToPlan } from '../src/services/plan.service';
 import {
@@ -47,11 +54,25 @@ import {
 
 const USER = 'user-1';
 
+/** ผู้ใช้ไม่ได้เปิดเพดานของช่วงนั้น */
+const NO_LIMIT: PeriodAllowance = {
+  enabled: false,
+  available: true,
+  mode: 'system',
+  profile: 'moderate',
+  ceilingSatang: 0,
+  spentSatang: 0,
+  remainingSatang: 0,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   // ค่าเริ่มต้น: ผู้ใช้ไม่ได้ตั้งเพดานรายวัน → "เหลือ" ใช้สูตร S5.2 เดิม
   vi.mocked(getDailyAllowance).mockResolvedValue(null);
   vi.mocked(getSpendingLimits).mockResolvedValue(defaultSpendingLimits());
+  vi.mocked(getWeeklyAllowance).mockResolvedValue(NO_LIMIT);
+  vi.mocked(getMonthlyAllowance).mockResolvedValue(NO_LIMIT);
+  vi.mocked(listRecurringRules).mockResolvedValue([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(getUserSummary).mockResolvedValue({
     monthIncomeSatang: 0,
@@ -530,5 +551,220 @@ describe('🔴 เหลือ — ใช้เพดานรายวันท
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('🔴 สัปดาห์นี้ / เดือนนี้ใช้ได้อีกเท่าไหร่ — ต้องไม่ตอบยอดของวันนี้', () => {
+  it('ประโยคที่ผู้ใช้พิมพ์จริงตอนทดสอบ เข้าคำสั่งของช่วงเวลาที่ถาม', () => {
+    expect(matchCommand('สัปดาห์นี้ใช้ได้อีกกี่บาท')).toBe('remaining_week');
+    expect(matchCommand('เดือนนี้ใช้ได้อีกกี่บาท')).toBe('remaining_month');
+    // ของเดิมต้องไม่เปลี่ยน
+    expect(matchCommand('วันนี้ใช้ได้อีกกี่บาท')).toBe('remaining');
+  });
+
+  it.each([
+    ['สัปดาห์นี้เหลือเท่าไหร่ครับ', 'remaining_week'],
+    ['อาทิตย์นี้ใช้เงินได้อีกเท่าไร', 'remaining_week'],
+    ['อาทิตย์นี้เหลือเงินเท่าไหร่', 'remaining_week'],
+    ['เพดานรายสัปดาห์', 'remaining_week'],
+    ['How much can I spend this week?', 'remaining_week'],
+    ['เดือนนี้เหลือเท่าไหร่', 'remaining_month'],
+    ['เดือนนี้จะใช้เงินได้อีกกี่บาทคะ', 'remaining_month'],
+    ['เพดานรายเดือน', 'remaining_month'],
+    ['how much left this month', 'remaining_month'],
+    ['เพดาน', 'limits'],
+    ['ดูเพดาน', 'limits'],
+    ['เพดานการใช้จ่าย', 'limits'],
+    ['รายการประจำ', 'recurring'],
+    ['รายจ่ายประจำ', 'recurring'],
+  ])('"%s" → %s', (text, command) => {
+    expect(matchCommand(text)).toBe(command);
+  });
+
+  it('คำถามที่มีอยู่เดิมยังเข้าคำสั่งเดิม ไม่ถูกคำใหม่แย่ง', () => {
+    expect(matchCommand('เดือนนี้ใช้ไปเท่าไหร่')).toBe('summary');
+    expect(matchCommand('งบเดือนนี้เหลือเท่าไหร่')).toBe('budget');
+    expect(matchCommand('พรุ่งนี้ใช้ได้เท่าไหร่')).toBe('remaining_tomorrow');
+  });
+
+  it('🔴 ข้อความบันทึกเงินที่มีคำว่าเพดาน/สัปดาห์ ยังไม่ใช่คำสั่ง', () => {
+    expect(matchCommand('ซ่อมเพดาน 500')).toBeNull();
+    expect(matchCommand('ค่าขนมสัปดาห์นี้ 200')).toBeNull();
+    expect(matchCommand('รายการประจำ 300')).toBeNull();
+  });
+});
+
+describe('remaining_week — ตอบตามเพดานรายสัปดาห์', () => {
+  it('ตั้งเพดานเอง → หัวข้อเป็นของสัปดาห์นี้ พร้อมที่มา', async () => {
+    vi.mocked(getWeeklyAllowance).mockResolvedValue({
+      ...NO_LIMIT,
+      enabled: true,
+      mode: 'manual',
+      ceilingSatang: 150000,
+      spentSatang: 50000,
+      remainingSatang: 100000,
+    });
+
+    const text = await runCommand(USER, 'remaining_week');
+    expect(text.split('\n')[0]).toBe('💸 สัปดาห์นี้ใช้ได้อีก ฿1,000.00');
+    expect(text).toContain('เพดานรายสัปดาห์ที่คุณตั้งไว้ ฿1,500.00');
+    expect(text).toContain('ใช้ไปแล้วสัปดาห์นี้ ฿500.00');
+    expect(text).not.toContain('วันนี้ใช้ได้อีก');
+  });
+
+  it('ใช้เกินเพดาน → บอกว่าเกินเท่าไหร่', async () => {
+    vi.mocked(getWeeklyAllowance).mockResolvedValue({
+      ...NO_LIMIT,
+      enabled: true,
+      mode: 'manual',
+      ceilingSatang: 150000,
+      spentSatang: 170000,
+      remainingSatang: -20000,
+    });
+
+    expect((await runCommand(USER, 'remaining_week')).split('\n')[0]).toBe(
+      '⚠️ สัปดาห์นี้ใช้เกินเพดานแล้ว ฿200.00'
+    );
+  });
+
+  it('ระบบคิดให้ → บอกรูปแบบที่ใช้คิด', async () => {
+    vi.mocked(getWeeklyAllowance).mockResolvedValue({
+      ...NO_LIMIT,
+      enabled: true,
+      profile: 'frugal',
+      ceilingSatang: 72751,
+      spentSatang: 10000,
+      remainingSatang: 62751,
+    });
+
+    expect(await runCommand(USER, 'remaining_week')).toContain(
+      'เพดานรายสัปดาห์ที่ระบบคิดให้ (แบบประหยัด) ฿727.51'
+    );
+  });
+
+  it('🔴 ไม่ได้ตั้งเพดานรายสัปดาห์ → บอกยอดที่ใช้ไปและบอกตรง ๆ ว่ายังไม่ได้ตั้ง ไม่เอายอดรายวันมาตอบ', async () => {
+    vi.mocked(getWeeklyAllowance).mockResolvedValue({ ...NO_LIMIT, spentSatang: 12000 });
+
+    const text = await runCommand(USER, 'remaining_week');
+    expect(text.split('\n')[0]).toBe('📅 สัปดาห์นี้ใช้ไปแล้ว ฿120.00');
+    expect(text).toContain('ยังไม่ได้ตั้งเพดานรายสัปดาห์');
+    expect(text).not.toContain('ใช้ได้อีก ฿');
+    expect(getDailyAllowance).not.toHaveBeenCalled();
+  });
+
+  it('สัปดาห์คาบสองเดือนในโหมดระบบคิด → บอกว่ายังคิดให้ไม่ได้ ไม่โชว์เพดาน ฿0', async () => {
+    vi.mocked(getWeeklyAllowance).mockResolvedValue({
+      ...NO_LIMIT,
+      enabled: true,
+      available: false,
+      spentSatang: 30000,
+    });
+
+    const text = await runCommand(USER, 'remaining_week');
+    expect(text).toContain('สัปดาห์นี้คาบสองเดือน');
+    expect(text).toContain('ใช้ไปแล้วสัปดาห์นี้ ฿300.00');
+    expect(text).not.toContain('฿0.00');
+  });
+});
+
+describe('remaining_month — ตอบตามเพดานรายเดือน หรือเงินเหลือทั้งเดือน', () => {
+  it('ตั้งเพดานรายเดือนไว้ → เพดาน − ใช้ไปแล้วเดือนนี้', async () => {
+    vi.mocked(getMonthlyAllowance).mockResolvedValue({
+      ...NO_LIMIT,
+      enabled: true,
+      mode: 'manual',
+      ceilingSatang: 500000,
+      spentSatang: 120000,
+      remainingSatang: 380000,
+    });
+
+    const text = await runCommand(USER, 'remaining_month');
+    expect(text.split('\n')[0]).toBe('💸 เดือนนี้ใช้ได้อีก ฿3,800.00');
+    expect(text).toContain('เพดานรายเดือนที่คุณตั้งไว้ ฿5,000.00');
+    expect(text).toContain('ใช้ไปแล้วเดือนนี้ ฿1,200.00');
+  });
+
+  it('ไม่ได้ตั้งเพดานรายเดือน → ใช้เงินเหลือทั้งเดือนของ S5.2 พร้อมที่มา', async () => {
+    const text = await runCommand(USER, 'remaining_month');
+
+    // ค่าจาก getSafeToSpend ใน beforeEach: คงเหลือ ฿1,400 / วันละ ฿100 / เหลือ 14 วัน
+    expect(text.split('\n')[0]).toBe('💸 เดือนนี้ใช้ได้อีก ฿1,400.00');
+    expect(text).toContain('รายรับเดือนนี้ ฿15,000.00');
+    expect(text).toContain('กันไว้ให้แผนออม ฿3,000.00');
+    expect(text).toContain('เหลืออีก 14 วันจะสิ้นเดือน เฉลี่ยวันละ ฿100.00');
+    expect(text).not.toContain('วันนี้ใช้ได้อีก');
+  });
+
+  it('เงินเดือนนี้ติดลบ → ตอบ ฿0 แล้วบอกสาเหตุ เหมือนคำสั่ง "เหลือ"', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getSafeToSpend).mockResolvedValue({
+      monthRemainingSatang: -50000,
+      perDaySatang: 0,
+      daysLeft: 14,
+      overspentSatang: 50000,
+      breakdown: {
+        monthIncomeSatang: 100000,
+        upcomingIncomeSatang: 0,
+        monthExpenseSatang: 150000,
+        upcomingExpenseSatang: 0,
+        planCommitmentSatang: 0,
+      },
+    } as any);
+
+    const text = await runCommand(USER, 'remaining_month');
+    expect(text.split('\n')[0]).toBe('💸 เดือนนี้ใช้ได้อีก ฿0.00');
+    expect(text).toContain('เดือนนี้ใช้เกินแล้ว ขาดอยู่ ฿500.00');
+  });
+});
+
+describe('limits — เพดานทั้ง 3 ระดับที่ตั้งในหน้าเว็บ', () => {
+  it('ยังไม่ได้เปิดสักระดับ → ชี้ไปที่หน้าตั้งค่า', async () => {
+    const text = await runCommand(USER, 'limits');
+    expect(text).toContain('ยังไม่ได้เปิดเพดานการใช้จ่าย');
+    expect(text).toContain('หน้าเว็บ → ตั้งค่า');
+  });
+
+  it('เปิดบางระดับ → แสดงใช้ไป/เพดานของระดับที่เปิด และบอกว่าระดับไหนปิดอยู่', async () => {
+    vi.mocked(getDailyAllowance).mockResolvedValue({
+      mode: 'manual',
+      profile: 'moderate',
+      ceilingSatang: 10000,
+      spentTodaySatang: 12000,
+      remainingSatang: -2000,
+    });
+    vi.mocked(getMonthlyAllowance).mockResolvedValue({
+      ...NO_LIMIT,
+      enabled: true,
+      mode: 'manual',
+      ceilingSatang: 500000,
+      spentSatang: 120000,
+      remainingSatang: 380000,
+    });
+
+    const text = await runCommand(USER, 'limits');
+    expect(text).toContain('🔴 วันนี้  ฿120.00 / ฿100.00');
+    expect(text).toContain('เกิน ฿20.00');
+    expect(text).toContain('⚪ รายสัปดาห์  ปิดอยู่');
+    expect(text).toContain('🟢 เดือนนี้  ฿1,200.00 / ฿5,000.00');
+    expect(text).toContain('เหลือ ฿3,800.00');
+  });
+});
+
+describe('recurring — รายการประจำที่ตั้งในหน้าเว็บ', () => {
+  it('ยังไม่มี → บอกว่าตั้งได้ที่หน้าเว็บ', async () => {
+    expect(await runCommand(USER, 'recurring')).toContain('ยังไม่มีรายการประจำ');
+  });
+
+  it('มีรายการ → แสดงยอด ทิศทาง รอบ และวันถัดไป', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(listRecurringRules).mockResolvedValue([
+      { label: 'เงินเดือน', type: 'income', amountSatang: 1500000, frequency: 'monthly', nextRun: '2026-12-01' },
+      { label: 'ค่าหอ', type: 'expense', amountSatang: 350000, frequency: 'monthly', nextRun: '2026-12-05' },
+    ] as any);
+
+    const text = await runCommand(USER, 'recurring');
+    expect(text).toContain('🟢 เงินเดือน +฿15,000.00');
+    expect(text).toContain('🔴 ค่าหอ -฿3,500.00');
+    expect(text).toContain('ทุกเดือน · รอบถัดไป 5 ธ.ค.');
   });
 });

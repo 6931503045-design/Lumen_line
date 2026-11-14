@@ -25,10 +25,14 @@ import { getBudgetOverview } from './budget.service';
 import { listPlansWithProgress, transferToPlan } from './plan.service';
 import {
   getDailyAllowance,
+  getMonthlyAllowance,
   getSpendingLimits,
+  getWeeklyAllowance,
   PROFILE_LABEL,
   type DailyAllowance,
+  type PeriodAllowance,
 } from './spendingLimit.service';
+import { listRecurringRules } from './recurring.service';
 import { parseThaiNumber } from '../utils/thaiNumber';
 import { findLatestChatTransaction, softDeleteTransaction } from '../db/queries/transactions';
 
@@ -36,6 +40,10 @@ export type CommandName =
   | 'summary'
   | 'remaining'
   | 'remaining_tomorrow'
+  | 'remaining_week'
+  | 'remaining_month'
+  | 'limits'
+  | 'recurring'
   | 'plans'
   | 'budget'
   | 'help'
@@ -98,6 +106,45 @@ const COMMANDS: Record<string, CommandName> = {
   'พรุ่งนี้เหลือเท่าไหร่': 'remaining_tomorrow',
   'พรุ่งนี้ใช้ได้วันละเท่าไหร่': 'remaining_tomorrow',
   'พรุ่งนี้มีใช้เท่าไหร่': 'remaining_tomorrow',
+
+  // 🔴 ผู้ใช้ตั้งเพดานรายสัปดาห์/รายเดือนในหน้าเว็บ แล้วถาม "สัปดาห์นี้ใช้ได้อีกกี่บาท"
+  // "เดือนนี้ใช้ได้อีกกี่บาท" ได้ยอดของ "วันนี้" กลับไปทั้งสองคำถาม — ประโยคพวกนี้ไม่ตรงคำสั่งไหน
+  // จึงตกไปที่ AI ซึ่งมีแต่ตัวเลือก "remaining" (รายวัน) ให้เลือก
+  // (normalizeCommandText ตัดคำ "จะ" "เงิน" "อีก" และแปลง "กี่บาท" ให้แล้ว)
+  'สัปดาห์นี้ใช้ได้เท่าไหร่': 'remaining_week',
+  'สัปดาห์นี้เหลือเท่าไหร่': 'remaining_week',
+  'สัปดาห์นี้เหลือ': 'remaining_week',
+  'เหลือสัปดาห์นี้': 'remaining_week',
+  'อาทิตย์นี้ใช้ได้เท่าไหร่': 'remaining_week',
+  'อาทิตย์นี้เหลือเท่าไหร่': 'remaining_week',
+  'อาทิตย์นี้เหลือ': 'remaining_week',
+  'วีคนี้ใช้ได้เท่าไหร่': 'remaining_week',
+  'วีคนี้เหลือเท่าไหร่': 'remaining_week',
+  'เพดานสัปดาห์': 'remaining_week',
+  'เพดานรายสัปดาห์': 'remaining_week',
+  'เพดานสัปดาห์นี้': 'remaining_week',
+  'เดือนนี้ใช้ได้เท่าไหร่': 'remaining_month',
+  'เดือนนี้เหลือเท่าไหร่': 'remaining_month',
+  'เดือนนี้เหลือ': 'remaining_month',
+  'เหลือเดือนนี้': 'remaining_month',
+  'เพดานเดือน': 'remaining_month',
+  'เพดานรายเดือน': 'remaining_month',
+  'เพดานเดือนนี้': 'remaining_month',
+  'เพดานวันนี้': 'remaining',
+  'เพดานรายวัน': 'remaining',
+
+  // ฟีเจอร์ของหน้าเว็บที่ยังไม่มีทางถามจากแชท: เพดานทั้ง 3 ระดับ และรายการประจำ
+  'เพดาน': 'limits',
+  'ดูเพดาน': 'limits',
+  'เช็คเพดาน': 'limits',
+  'เพดานการใช้จ่าย': 'limits',
+  'เพดานใช้จ่าย': 'limits',
+  'รายการประจำ': 'recurring',
+  'ดูรายการประจำ': 'recurring',
+  'รายจ่ายประจำ': 'recurring',
+  'รายรับประจำ': 'recurring',
+  'มีรายการประจำอะไรบ้าง': 'recurring',
+
   // SPEC §S11.4 / NFR-6: ผู้ใช้ต้องอ่านประกาศความเป็นส่วนตัวซ้ำได้
   // ข้อความต้อนรับเลื่อนหายไปในแชทภายในไม่กี่วัน ถ้าไม่มีทางเรียกอ่านอีก
   // การแจ้งครั้งแรกก็เท่ากับแจ้งแล้วหายไป
@@ -117,6 +164,14 @@ const COMMANDS: Record<string, CommandName> = {
   'how much can i spend': 'remaining',
   'how much can i spend today': 'remaining',
   'how much can i spend tomorrow': 'remaining_tomorrow',
+  'how much can i spend this week': 'remaining_week',
+  'how much left this week': 'remaining_week',
+  'how much can i spend this month': 'remaining_month',
+  'how much left this month': 'remaining_month',
+  'limit': 'limits',
+  'limits': 'limits',
+  'spending limits': 'limits',
+  'recurring': 'recurring',
   'plan': 'plans',
   'plans': 'plans',
   'budget': 'budget',
@@ -168,8 +223,11 @@ const HELP_TEXT = [
   '📊 คำสั่ง',
   '   สรุป — รายรับรายจ่ายเดือนนี้',
   '   เหลือ — วันนี้ใช้ได้อีกเท่าไหร่ (พิมพ์ "เหลือเท่าไหร่" ก็ได้)',
+  '   สัปดาห์นี้เหลือ · เดือนนี้เหลือ — ใช้ได้อีกเท่าไหร่ในช่วงนั้น',
+  '   เพดาน — เพดานรายวัน/สัปดาห์/เดือนที่ตั้งไว้',
   '   แผน — แผนออมและความคืบหน้า',
   '   งบ — งบรายหมวดเดือนนี้',
+  '   รายการประจำ — เงินเดือน ค่าหอ ที่เข้า/ออกตามรอบ',
   '   ช่วยเหลือ — ข้อความนี้',
   '   ความเป็นส่วนตัว — ข้อมูลของคุณถูกใช้อย่างไร',
   '',
@@ -357,6 +415,204 @@ async function buildRemaining(userId: string): Promise<string> {
   return lines.join('\n');
 }
 
+const LIMIT_SETTINGS_HINT = 'เปลี่ยนเพดานได้ที่หน้าเว็บ → ตั้งค่า';
+
+/** บรรทัด "เพดาน...ที่คุณตั้งไว้ / ที่ระบบคิดให้" — ใช้ร่วมกันทั้งรายสัปดาห์และรายเดือน */
+function describeCeilingSource(periodLabel: string, allowance: PeriodAllowance): string {
+  return allowance.mode === 'manual'
+    ? `  เพดาน${periodLabel}ที่คุณตั้งไว้ ${formatBaht(allowance.ceilingSatang)}`
+    : `  เพดาน${periodLabel}ที่ระบบคิดให้ (แบบ${PROFILE_LABEL[allowance.profile]}) ${formatBaht(allowance.ceilingSatang)}`;
+}
+
+/**
+ * "สัปดาห์นี้ใช้ได้อีกเท่าไหร่" — ตามเพดานรายสัปดาห์ที่ตั้งในหน้าเว็บ (ร่าง §S5.10)
+ *
+ * ไม่ได้เปิดเพดานรายสัปดาห์ = ไม่มีตัวเลข "ใช้ได้อีก" ที่มีความหมาย จึงบอกยอดที่ใช้ไปแล้ว
+ * และบอกตรง ๆ ว่ายังไม่ได้ตั้ง — ไม่เอายอดรายวันมาตอบแทนเหมือนที่เคยเป็น
+ * ⚖️ G1: ตัวเลขทุกตัวมาจาก spendingLimit.service ที่นี่แค่จัดรูปแบบ
+ */
+async function buildRemainingWeek(userId: string): Promise<string> {
+  const allowance = await getWeeklyAllowance(userId, getTodayIso());
+  const spentLine = `ใช้ไปแล้วสัปดาห์นี้ ${formatBaht(allowance.spentSatang)} (นับจากวันอาทิตย์)`;
+
+  if (!allowance.enabled) {
+    return [
+      `📅 สัปดาห์นี้ใช้ไปแล้ว ${formatBaht(allowance.spentSatang)}`,
+      '(นับจากวันอาทิตย์)',
+      '',
+      'ยังไม่ได้ตั้งเพดานรายสัปดาห์ จึงยังบอกไม่ได้ว่าสัปดาห์นี้ใช้ได้อีกเท่าไหร่',
+      'ตั้งได้ที่หน้าเว็บ → ตั้งค่า',
+      'พิมพ์ "เหลือ" เพื่อดูว่าวันนี้ใช้ได้อีกเท่าไหร่',
+    ].join('\n');
+  }
+
+  if (!allowance.available) {
+    return [
+      '📅 สัปดาห์นี้คาบสองเดือน ระบบยังคิดเพดานรายสัปดาห์ให้แม่นยำไม่ได้',
+      '',
+      spentLine,
+      '',
+      'ถ้าอยากได้ตัวเลขแน่นอน ตั้งเพดานรายสัปดาห์เองได้ที่หน้าเว็บ → ตั้งค่า',
+    ].join('\n');
+  }
+
+  return [
+    allowance.remainingSatang >= 0
+      ? `💸 สัปดาห์นี้ใช้ได้อีก ${formatBaht(allowance.remainingSatang)}`
+      : `⚠️ สัปดาห์นี้ใช้เกินเพดานแล้ว ${formatBaht(-allowance.remainingSatang)}`,
+    '',
+    'คิดมาจาก',
+    describeCeilingSource('รายสัปดาห์', allowance),
+    `  ${spentLine}`,
+    '',
+    LIMIT_SETTINGS_HINT,
+    AI_DISCLAIMER,
+  ].join('\n');
+}
+
+/**
+ * "เดือนนี้ใช้ได้อีกเท่าไหร่"
+ *   เปิดเพดานรายเดือนไว้ → เพดาน − ใช้ไปแล้วเดือนนี้ (ร่าง §S5.10)
+ *   ไม่ได้เปิด           → เงินเหลือทั้งเดือนของ S5.2 (ตัวเดียวกับบรรทัด "คิดมาจาก" ของคำสั่ง "เหลือ")
+ * ⚖️ G1: ตัวเลขทุกตัวมาจาก service ที่นี่แค่จัดรูปแบบ
+ */
+async function buildRemainingMonth(userId: string): Promise<string> {
+  const todayIso = getTodayIso();
+  const allowance = await getMonthlyAllowance(userId, todayIso);
+
+  if (allowance.enabled) {
+    return [
+      allowance.remainingSatang >= 0
+        ? `💸 เดือนนี้ใช้ได้อีก ${formatBaht(allowance.remainingSatang)}`
+        : `⚠️ เดือนนี้ใช้เกินเพดานแล้ว ${formatBaht(-allowance.remainingSatang)}`,
+      '',
+      'คิดมาจาก',
+      describeCeilingSource('รายเดือน', allowance),
+      `  ใช้ไปแล้วเดือนนี้ ${formatBaht(allowance.spentSatang)}`,
+      '',
+      LIMIT_SETTINGS_HINT,
+      AI_DISCLAIMER,
+    ].join('\n');
+  }
+
+  const safe = await getSafeToSpend(userId, todayIso);
+  if (safe.overspentSatang > 0) {
+    return describeShortfall(`💸 เดือนนี้ใช้ได้อีก ${formatBaht(0)}`, safe);
+  }
+
+  const { breakdown } = safe;
+  const lines = [
+    `💸 เดือนนี้ใช้ได้อีก ${formatBaht(safe.monthRemainingSatang)}`,
+    '',
+    'คิดมาจาก',
+    `  รายรับเดือนนี้ ${formatBaht(breakdown.monthIncomeSatang)}`,
+  ];
+  if (breakdown.upcomingIncomeSatang > 0) {
+    lines.push(`  รายรับประจำที่จะเข้าอีก ${formatBaht(breakdown.upcomingIncomeSatang)}`);
+  }
+  lines.push(`  ใช้ไปแล้ว ${formatBaht(breakdown.monthExpenseSatang)}`);
+  if (breakdown.upcomingExpenseSatang > 0) {
+    lines.push(`  รายจ่ายประจำที่ยังไม่ถึงรอบ ${formatBaht(breakdown.upcomingExpenseSatang)}`);
+  }
+  if (breakdown.planCommitmentSatang > 0) {
+    lines.push(`  กันไว้ให้แผนออม ${formatBaht(breakdown.planCommitmentSatang)}`);
+  }
+  lines.push(
+    '',
+    `เหลืออีก ${safe.daysLeft} วันจะสิ้นเดือน เฉลี่ยวันละ ${formatBaht(safe.perDaySatang)}`,
+    AI_DISCLAIMER
+  );
+  return lines.join('\n');
+}
+
+/** หนึ่งระดับของคำสั่ง "เพดาน" — ใช้ไป / เพดาน แล้วบอกว่าเหลือหรือเกิน */
+function describeLimitRow(label: string, spentSatang: number, ceilingSatang: number): string[] {
+  const remaining = ceilingSatang - spentSatang;
+  return [
+    `${remaining >= 0 ? '🟢' : '🔴'} ${label}  ${formatBaht(spentSatang)} / ${formatBaht(ceilingSatang)}`,
+    remaining >= 0 ? `   เหลือ ${formatBaht(remaining)}` : `   เกิน ${formatBaht(-remaining)}`,
+  ];
+}
+
+/**
+ * "เพดาน" — เพดานการใช้จ่ายทั้ง 3 ระดับที่ตั้งในหน้าเว็บ → ตั้งค่า (ร่าง §S5.10)
+ * ระดับที่ปิดอยู่ก็แสดงว่าปิด ผู้ใช้จะได้รู้ว่ามีระดับนั้นให้เปิด
+ */
+async function buildLimits(userId: string): Promise<string> {
+  const todayIso = getTodayIso();
+  const [daily, weekly, monthly] = await Promise.all([
+    getDailyAllowance(userId, todayIso),
+    getWeeklyAllowance(userId, todayIso),
+    getMonthlyAllowance(userId, todayIso),
+  ]);
+
+  if (!daily && !weekly.enabled && !monthly.enabled) {
+    return [
+      '🎚️ ยังไม่ได้เปิดเพดานการใช้จ่าย',
+      '',
+      'ตั้งเพดานรายวัน รายสัปดาห์ หรือรายเดือนได้ที่หน้าเว็บ → ตั้งค่า',
+      'พิมพ์ "เหลือ" เพื่อดูว่าวันนี้ใช้ได้อีกเท่าไหร่',
+    ].join('\n');
+  }
+
+  const lines = ['🎚️ เพดานการใช้จ่าย'];
+  lines.push(
+    ...(daily
+      ? describeLimitRow('วันนี้', daily.spentTodaySatang, daily.ceilingSatang)
+      : ['⚪ รายวัน  ปิดอยู่'])
+  );
+  if (!weekly.enabled) {
+    lines.push('⚪ รายสัปดาห์  ปิดอยู่');
+  } else if (!weekly.available) {
+    lines.push(
+      `⚪ สัปดาห์นี้  ใช้ไป ${formatBaht(weekly.spentSatang)}`,
+      '   สัปดาห์นี้คาบสองเดือน ระบบยังคิดเพดานให้ไม่ได้'
+    );
+  } else {
+    lines.push(...describeLimitRow('สัปดาห์นี้', weekly.spentSatang, weekly.ceilingSatang));
+  }
+  lines.push(
+    ...(monthly.enabled
+      ? describeLimitRow('เดือนนี้', monthly.spentSatang, monthly.ceilingSatang)
+      : ['⚪ รายเดือน  ปิดอยู่'])
+  );
+
+  lines.push('', LIMIT_SETTINGS_HINT, AI_DISCLAIMER);
+  return lines.join('\n');
+}
+
+const FREQUENCY_LABEL = {
+  daily: 'ทุกวัน',
+  weekly: 'ทุกสัปดาห์',
+  monthly: 'ทุกเดือน',
+  yearly: 'ทุกปี',
+} as const;
+
+/** YYYY-MM-DD -> "5 ธ.ค." ใช้กับวันรอบถัดไปของรายการประจำ */
+function thaiDayMonth(isoDate: string): string {
+  return `${Number(isoDate.slice(8, 10))} ${formatThaiMonthLabel(isoDate.slice(0, 7))}`;
+}
+
+/** "รายการประจำ" — กฎที่ตั้งไว้ในหน้าเว็บ (S5.9) พร้อมวันที่จะเข้า/ออกรอบถัดไป */
+async function buildRecurring(userId: string): Promise<string> {
+  const rules = await listRecurringRules(userId);
+
+  if (rules.length === 0) {
+    return '🔁 ยังไม่มีรายการประจำ\n\nตั้งเงินเดือน ค่าหอ ค่าเน็ต ที่เข้า/ออกทุกรอบได้ที่หน้าเว็บครับ';
+  }
+
+  const lines = ['🔁 รายการประจำ'];
+  for (const rule of rules) {
+    const sign = rule.type === 'income' ? '+' : '-';
+    lines.push(
+      `${rule.type === 'income' ? '🟢' : '🔴'} ${rule.label} ${sign}${formatBaht(rule.amountSatang)}`,
+      `   ${FREQUENCY_LABEL[rule.frequency]} · รอบถัดไป ${thaiDayMonth(rule.nextRun)}`
+    );
+  }
+  lines.push('', 'เพิ่มหรือลบได้ที่หน้าเว็บ');
+  return lines.join('\n');
+}
+
 async function buildPlans(userId: string): Promise<string> {
   const plans = (await listPlansWithProgress(userId)).filter(
     (plan) => plan.status === 'active'
@@ -529,6 +785,14 @@ export async function runCommand(userId: string, command: CommandName): Promise<
       return buildRemaining(userId);
     case 'remaining_tomorrow':
       return buildRemainingTomorrow(userId);
+    case 'remaining_week':
+      return buildRemainingWeek(userId);
+    case 'remaining_month':
+      return buildRemainingMonth(userId);
+    case 'limits':
+      return buildLimits(userId);
+    case 'recurring':
+      return buildRecurring(userId);
     case 'plans':
       return buildPlans(userId);
     case 'budget':
