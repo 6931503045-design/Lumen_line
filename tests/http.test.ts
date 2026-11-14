@@ -48,6 +48,10 @@ vi.mock('../src/jobs', () => {
     isJobName: (value: string) => Object.prototype.hasOwnProperty.call(JOBS, value),
   };
 });
+vi.mock('../src/db/queries/users', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/db/queries/users')>()),
+  setSpendingLimitsRaw: vi.fn(),
+}));
 vi.mock('../src/services/transaction.service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/services/transaction.service')>()),
   createTransaction: vi.fn(),
@@ -59,6 +63,7 @@ import { createSessionValue, SESSION_COOKIE_NAME } from '../src/utils/session';
 import { handleText } from '../src/handlers/textHandler';
 import { JOBS } from '../src/jobs';
 import { createTransaction } from '../src/services/transaction.service';
+import { setSpendingLimitsRaw } from '../src/db/queries/users';
 
 const USER = 'user-in-session';
 
@@ -350,5 +355,46 @@ describe('/auth — LINE Login', () => {
   it('/auth/callback ที่ไม่มี state cookie เลย → 400', async () => {
     const res = await fetch(`${baseUrl}/auth/callback?code=abc&state=whatever`, { redirect: 'manual' });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('PATCH /api/settings — เพดานการใช้จ่าย (บอทใช้ตอบ "เหลือ")', () => {
+  async function patch(body: unknown) {
+    return fetch(`${baseUrl}/api/settings`, {
+      method: 'PATCH',
+      headers: { cookie: sessionCookie(), 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('ค่าถูกต้อง → บันทึกของ user ใน session และบอกว่าเก็บที่เซิร์ฟเวอร์ได้', async () => {
+    vi.mocked(setSpendingLimitsRaw).mockResolvedValue(true);
+
+    const res = await patch({
+      spendingLimits: { profile: 'moderate', daily: { enabled: true, mode: 'manual', limitSatang: 30000 } },
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, spendingLimitsStored: true });
+    expect(setSpendingLimitsRaw).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ daily: { enabled: true, mode: 'manual', limitSatang: 30000 } })
+    );
+  });
+
+  it('ยังไม่ได้รัน migration → 200 แต่ spendingLimitsStored=false ให้หน้าเว็บรู้', async () => {
+    vi.mocked(setSpendingLimitsRaw).mockResolvedValue(false);
+
+    const res = await patch({ spendingLimits: { daily: { enabled: false, mode: 'system', limitSatang: null } } });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ spendingLimitsStored: false });
+  });
+
+  it('ยอดเป็นทศนิยม → 400 และไม่เขียนอะไร (G3)', async () => {
+    const res = await patch({ spendingLimits: { daily: { enabled: true, mode: 'manual', limitSatang: 300.5 } } });
+
+    expect(res.status).toBe(400);
+    expect(setSpendingLimitsRaw).not.toHaveBeenCalled();
   });
 });

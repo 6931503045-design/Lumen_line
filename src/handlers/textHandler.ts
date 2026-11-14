@@ -30,6 +30,7 @@ import {
   runCommandCard,
   runSaveCommand,
   runUndoLatest,
+  type CommandName,
 } from '../services/command.service';
 import { buildRecordedCardFor } from '../line/recordedView';
 import { buildPendingCard } from '../line/flex/pendingCard';
@@ -234,17 +235,25 @@ async function handleCommands(
   const command = matchCommand(trimmed);
   if (!command) return false;
 
-  // คำสั่งที่มีการ์ด (สรุป/แผน) ตอบเป็น Flex — ที่เหลือยังเป็นข้อความล้วน
-  // ถ้าการ์ดคืน null แปลว่ายังไม่มีข้อมูลพอ (เช่นยังไม่มีแผน) ให้ถอยไปใช้ข้อความเดิม
-  // ซึ่งเขียนกรณี "ยังไม่มี..." ไว้ครบแล้ว
+  await replyCommand(replyToken, userId, command);
+  return true;
+}
+
+/**
+ * ตอบคำสั่งตายตัว — ใช้ทั้งตอนพิมพ์คำสั่งตรง ๆ และตอน AI ตีความประโยคแล้วได้คำสั่งเดียวกัน
+ * (เดิมทาง AI ได้ข้อความล้วน แต่พิมพ์ "งบ" ได้การ์ด — คำถามเดียวกันได้หน้าตาคนละแบบ)
+ *
+ * คำสั่งที่มีการ์ด (สรุป/แผน/งบ) ตอบเป็น Flex — ที่เหลือยังเป็นข้อความล้วน
+ * ถ้าการ์ดคืน null แปลว่ายังไม่มีข้อมูลพอ (เช่นยังไม่มีแผน) ให้ถอยไปใช้ข้อความเดิม
+ * ซึ่งเขียนกรณี "ยังไม่มี..." ไว้ครบแล้ว
+ */
+async function replyCommand(replyToken: string, userId: string, command: CommandName): Promise<void> {
   const card = await runCommandCard(userId, command);
   if (card) {
     await replyFlex(replyToken, card);
-    return true;
+    return;
   }
-
   await replyText(replyToken, await runCommand(userId, command));
-  return true;
 }
 
 /**
@@ -261,6 +270,11 @@ async function handleWithAi(replyToken: string, userId: string, text: string): P
 
   if (reply.kind === 'text') {
     await replyText(replyToken, reply.text);
+    return;
+  }
+
+  if (reply.kind === 'command') {
+    await replyCommand(replyToken, userId, reply.command);
     return;
   }
 

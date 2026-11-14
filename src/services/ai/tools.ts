@@ -15,10 +15,9 @@
 //
 // ⚠️ ส่วนที่ต่างจาก SPEC และเหตุผล:
 //   1. tool #8 ใน SPEC ชื่อ simulate_purchase_or_plan (ทำทั้งจำลองการซื้อและเสนอแผนออม)
-//      ที่นี่เหลือแค่ simulate_purchase เพราะการเสนอแผนออมคือการเขียน (สร้าง plan draft)
-//      ซึ่งตาม G2 ต้องผ่าน pending_actions แต่ CHECK constraint ของคอลัมน์ action
-//      ไม่มีชนิด create_plan ให้ใช้ — เปิดทางนี้จึงต้องแก้ schema ก่อน ยกเป็นงานถัดไป
-//      (การสร้างแผนยังทำได้ตามปกติผ่านหน้าเว็บและคำสั่ง `ออม`)
+//      ที่นี่แยกเป็น simulate_purchase กับ plan_goal และ plan_goal "ดูอย่างเดียว" ไม่สร้าง plan draft
+//      เพราะการสร้างแผนคือการเขียน ซึ่งตาม G2 ต้องผ่าน pending_actions แต่ CHECK constraint
+//      ของคอลัมน์ action ไม่มีชนิด create_plan ให้ใช้ — สร้างแผนจริงยังทำที่หน้าเว็บ
 //   2. tool #1 ของ SPEC มี arg plan_name สำหรับโอนเข้าแผน ที่นี่ไม่มี
 //      เพราะคำสั่ง `ออม <จำนวน>` ใน command.service ดักไว้ก่อนถึง AI อยู่แล้ว
 //      และเส้นทางนั้นให้ผู้ใช้เลือกแผนด้วย quick reply ซึ่งปลอดภัยกว่าให้ AI เดาชื่อแผน
@@ -49,6 +48,7 @@ export const AI_TOOL_NAMES = [
   'query_transactions',
   'create_recurring',
   'simulate_purchase',
+  'plan_goal',
   'explain_feature',
 ] as const;
 
@@ -200,7 +200,8 @@ export const geminiToolDeclarations: FunctionDeclaration[] = [
             'remaining = เงินที่ใช้ได้ต่อวัน ใช้กับคำถามแนว "วันนี้เหลือเท่าไหร่" "ใช้ได้อีกเท่าไหร่" "พอใช้ไหม"; '
             + 'tomorrow = เงินที่ใช้ได้ของพรุ่งนี้ ใช้เมื่อผู้ใช้ถามถึง "พรุ่งนี้"; '
             + 'this_month = ยอดรายรับกับรายจ่ายรวมของเดือน ใช้เฉพาะเมื่อถามถึงยอดรวมหรือใช้ไปแล้วเท่าไหร่; '
-            + 'budget = งบรายหมวด; plans = แผนออม',
+            + 'budget = งบรายหมวด ใช้ทุกครั้งที่ผู้ใช้พูดถึง "งบ" แม้จะมีคำว่าเหลือ เช่น "งบเดือนนี้เหลือเท่าไหร่"; '
+            + 'plans = ความคืบหน้าของแผนออมที่มีอยู่แล้ว (อยากตั้งเป้าออมใหม่ให้ใช้ plan_goal)',
         },
       },
       required: ['period'],
@@ -258,6 +259,30 @@ export const geminiToolDeclarations: FunctionDeclaration[] = [
         },
       },
       required: ['item_name', 'price'],
+    },
+  },
+  {
+    // 🔴 ผู้ใช้ทดสอบถาม "อยากสร้างแผนการออมซื้อ CPU 4500บาท ออมกี่เดือนดี" แล้วโมเดลตอบเอง
+    // ว่า "ดูวิธีตั้งค่าได้ที่เมนูแผนออมเงิน" ซึ่งไม่มีเมนูนี้อยู่จริง และไม่ได้ตอบคำถามเลย
+    // tool นี้ให้ระบบคิดทางเลือกจากกำลังออมจริงของผู้ใช้ (ดูอย่างเดียว ไม่สร้างแผน)
+    name: 'plan_goal',
+    description:
+      'คิดว่าต้องออมเดือนละเท่าไหร่ กี่เดือนถึงจะครบ ใช้เมื่อผู้ใช้อยากออมเงินซื้อของ ตั้งเป้าหมายออม '
+      + 'หรือถามว่า "ออมกี่เดือนดี" "อยากเก็บเงินซื้อ..." (ต่างจาก simulate_purchase ที่ถามว่าซื้อตอนนี้ได้ไหม)',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        item_name: { type: Type.STRING, description: 'ชื่อของหรือเป้าหมายที่อยากออม' },
+        target: {
+          type: Type.NUMBER,
+          description: 'ยอดเป้าหมายหน่วยบาทตามที่ผู้ใช้พิมพ์ ห้ามคำนวณ',
+        },
+        months: {
+          type: Type.NUMBER,
+          description: 'จำนวนเดือนที่ผู้ใช้อยากได้ภายใน ใส่เฉพาะเมื่อผู้ใช้พิมพ์มาเอง ห้ามเดา',
+        },
+      },
+      required: ['item_name', 'target'],
     },
   },
   {
@@ -336,8 +361,16 @@ const schemas = {
     item_name: itemSchema,
     price: bahtSchema,
   }),
+  plan_goal: z.object({
+    item_name: itemSchema,
+    target: bahtSchema,
+    months: z.union([z.number(), z.string()]).optional(),
+  }),
   explain_feature: z.object({ topic: z.enum(HELP_TOPICS) }),
 } as const;
+
+/** ผู้ใช้ขอออมนานเกินนี้ ถือว่าโมเดลอ่านเลขผิด (เช่น ไปหยิบราคามาใส่ช่องเดือน) */
+export const MAX_GOAL_MONTHS = 120;
 
 /** รายการเงิน 1 ก้อนที่ตรวจและแปลงหน่วยเสร็จแล้ว พร้อมเขียนลง pending payload */
 export type ValidatedEntry = {
@@ -385,6 +418,7 @@ export type ValidatedToolCall =
       dayOfWeek: number | null;
     }
   | { name: 'simulate_purchase'; itemName: string; priceSatang: number }
+  | { name: 'plan_goal'; itemName: string; targetSatang: number; months: number | null }
   | { name: 'explain_feature'; topic: HelpTopic };
 
 export type ToolValidation =
@@ -634,6 +668,23 @@ export function validateToolCall(
         return fail('bad_amount', 'ขอราคาเป็นตัวเลขอีกครั้งนะครับ เช่น "ซื้อหูฟัง 1500 ได้ไหม"');
       }
       return { ok: true, call: { name, itemName: data.item_name, priceSatang } };
+    }
+
+    case 'plan_goal': {
+      const data = parsed.data as z.infer<typeof schemas.plan_goal>;
+      const targetSatang = toSatangOrNull(data.target);
+      if (targetSatang === null) {
+        return fail('bad_amount', 'ขอยอดเป้าหมายเป็นตัวเลขอีกครั้งนะครับ เช่น "อยากออมซื้อโน้ตบุ๊ก 15000"');
+      }
+      let months: number | null = null;
+      if (data.months !== undefined) {
+        const parsedMonths = Number(data.months);
+        if (!Number.isInteger(parsedMonths) || parsedMonths < 1 || parsedMonths > MAX_GOAL_MONTHS) {
+          return fail('bad_months', 'ขอจำนวนเดือนเป็นตัวเลขอีกครั้งนะครับ เช่น "ภายใน 6 เดือน"');
+        }
+        months = parsedMonths;
+      }
+      return { ok: true, call: { name, itemName: data.item_name, targetSatang, months } };
     }
 
     case 'explain_feature': {

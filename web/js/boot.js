@@ -425,6 +425,85 @@
     renderCurrentPage();
   }
 
+  // ---------- เพดานการใช้จ่าย (ร่าง §S5.10) ----------
+  // เซิร์ฟเวอร์เป็นตัวจริง เพราะบอทใน LINE ใช้ค่านี้ตอบ "เหลือ" — localStorage เป็นแค่สำเนาให้ app.js อ่าน
+
+  const LIMIT_PERIODS = ['daily', 'weekly', 'monthly'];
+  const LIMITS_STORAGE_KEY = 'jodtang.spendingLimits';
+  const PROFILE_STORAGE_KEY = 'jodtang.spendingLimitProfile';
+
+  /** จัดรูปให้ผ่านการตรวจของเซิร์ฟเวอร์ — ยอดต้องเป็นจำนวนเต็มสตางค์บวก (G3) */
+  function toServerLimits(all) {
+    const out = { profile: all.profile === 'frugal' ? 'frugal' : 'moderate' };
+    LIMIT_PERIODS.forEach((period) => {
+      const value = all[period] || {};
+      const limit = Math.round(Number(value.limitSatang));
+      out[period] = {
+        enabled: value.enabled === true,
+        mode: value.mode === 'manual' ? 'manual' : 'system',
+        limitSatang: limit > 0 ? limit : null,
+      };
+    });
+    return out;
+  }
+
+  function hasAnyLimitEnabled(all) {
+    return LIMIT_PERIODS.some((period) => all && all[period] && all[period].enabled === true);
+  }
+
+  let limitSaveTimer = null;
+  window.jodtangSaveSpendingLimits = (all) => {
+    // ผู้ใช้กดสลับหลายปุ่มติดกัน — ส่งแค่ค่าสุดท้าย
+    if (limitSaveTimer) clearTimeout(limitSaveTimer);
+    limitSaveTimer = setTimeout(async () => {
+      try {
+        const res = await api.updateSettings({ spendingLimits: toServerLimits(all) });
+        if (res && res.spendingLimitsStored === false) {
+          console.warn('[boot] เซิร์ฟเวอร์ยังเก็บเพดานไม่ได้ (ยังไม่ได้รัน migration 005) — ใช้ได้แค่ในเครื่องนี้');
+        }
+      } catch (err) {
+        console.error('[boot] บันทึกเพดานไม่สำเร็จ', err);
+        showAlertModal('บันทึกเพดานไปที่เซิร์ฟเวอร์ไม่สำเร็จ หน้านี้ยังใช้ได้ แต่บอทใน LINE จะยังไม่เห็นค่าใหม่', 'บันทึกไม่สำเร็จ');
+      }
+    }, 400);
+  };
+
+  /** ดึงเพดานจากเซิร์ฟเวอร์มาเขียนทับสำเนาในเครื่องก่อนวาดหน้า */
+  async function syncSpendingLimitsFromServer() {
+    let settings;
+    try {
+      settings = await api.fetchSettings();
+    } catch (err) {
+      return; // ดึงไม่ได้ก็ใช้สำเนาในเครื่องไปก่อน ไม่ขวางการเปิดหน้า
+    }
+    const server = settings && settings.spendingLimits;
+    if (!server) return;
+
+    let local = null;
+    try {
+      local = JSON.parse(window.localStorage.getItem(LIMITS_STORAGE_KEY) || 'null');
+    } catch (err) {
+      local = null;
+    }
+
+    // ย้ายค่าเก่าขึ้นเซิร์ฟเวอร์ครั้งเดียว: ผู้ใช้ที่ตั้งเพดานไว้ก่อนมีระบบนี้ เซิร์ฟเวอร์ยังว่าง
+    // ถ้าเขียนทับด้วยค่าว่างของเซิร์ฟเวอร์ เพดานที่ผู้ใช้ตั้งไว้จะหายเงียบ ๆ
+    if (!hasAnyLimitEnabled(server) && hasAnyLimitEnabled(local)) {
+      let profile = 'moderate';
+      try { profile = window.localStorage.getItem(PROFILE_STORAGE_KEY) || 'moderate'; } catch (err) { /* ใช้ค่าเริ่มต้น */ }
+      window.jodtangSaveSpendingLimits({ ...local, profile });
+      return;
+    }
+
+    try {
+      const { profile, ...periods } = server;
+      window.localStorage.setItem(LIMITS_STORAGE_KEY, JSON.stringify(periods));
+      window.localStorage.setItem(PROFILE_STORAGE_KEY, profile === 'frugal' ? 'frugal' : 'moderate');
+    } catch (err) {
+      // เก็บสำเนาไม่ได้ (โหมดส่วนตัว) — หน้าจะใช้ค่าเริ่มต้นแทน
+    }
+  }
+
   // ---------- หน้าตั้งค่า ----------
 
   async function loadSettings() {
@@ -536,7 +615,10 @@
     );
   }
 
-  /** ให้ผู้ใช้เลือก 1 ใน 3 ทางเลือกที่ backend คำนวณมา แล้วยืนยัน (S5.3) */
+  /**
+   * ให้ผู้ใช้เลือก 1 ใน 3 ทางเลือกที่ backend คำนวณมา แล้วยืนยัน (S5.3) — เป็นการเลือกครั้งเดียวของฟอร์มสร้างแผน
+   * ชื่อจาก backend ขึ้นต้นด้วยอีโมจิ ("⚡ เร็ว — ...") ซึ่งซ้ำกับไอคอนวงกลมด้านซ้าย จึงตัดตัวหน้าออกตอนแสดง
+   */
   function showPlanOptions(result) {
     const options = result.options || [];
     if (!options.length) {
@@ -549,13 +631,13 @@
           <h3>เลือกแบบที่ไหว</h3>
           <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
         </div>
-        ${result.requestedMonthsNote ? `<p class="an-detail-lead">${result.requestedMonthsNote}</p>` : ''}
+        ${result.requestedMonthsNote ? `<p class="an-detail-lead">${escapeHtml(result.requestedMonthsNote)}</p>` : ''}
         <div class="an-action-list">
           ${options.map((opt) => `
             <button type="button" class="an-action" data-confirm-plan="${opt.planId}">
               <span class="an-action-icon">${opt.emoji || '💰'}</span>
               <span class="an-action-text">
-                <strong>${opt.title}</strong>
+                <strong>${escapeHtml(String(opt.title || '').replace(/^\S+\s+/u, ''))}</strong>
                 <small>เดือนละ ${formatMoney(opt.monthlySaveSatang)} · ${opt.months} เดือน · ครบ ${bangkok(opt.targetDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small>
               </span>
               ${renderConfidenceBadge(opt.confidence)}
@@ -648,7 +730,14 @@
   function fillPlanCapacityHint() {
     const box = document.getElementById('planCapacityHint');
     if (!box || !planCapacity) return;
-    const monthly = planCapacity.monthlyCapacitySatang;
+    // 🔴 เดิมอ่าน monthlyCapacitySatang ซึ่ง /api/plans/capacity ไม่เคยส่งมา (ชื่อจริงคือ capacitySatang)
+    // บรรทัดนี้จึงไม่เคยขึ้นเลย ผู้ใช้ตั้งเป้าโดยไม่รู้ว่าตัวเองออมไหวเดือนละเท่าไหร่
+    if (!planCapacity.canCreatePlan && planCapacity.reason) {
+      box.textContent = planCapacity.reason;
+      box.hidden = false;
+      return;
+    }
+    const monthly = planCapacity.capacitySatang;
     if (typeof monthly !== 'number') return;
     box.textContent = monthly > 0
       ? `ตอนนี้คุณออมไหวราวเดือนละ ${formatMoney(monthly)}`
@@ -730,7 +819,7 @@
       return result;
     };
 
-    // ทุกครั้งที่ย้อนกลับมา step 1 ช่องนี้ถูกสร้างใหม่ ต้องเติมซ้ำ
+    // ทุกครั้งที่ฟอร์มถูกวาดใหม่ ช่องนี้ถูกสร้างใหม่ ต้องเติมซ้ำ
     window.renderPlanWizardStep = function wrappedRenderPlanWizardStep() {
       const result = stepOriginal();
       fillPlanCapacityHint();
@@ -952,6 +1041,8 @@
     }
 
     applyProfile(me);
+    // ต้องได้เพดานจากเซิร์ฟเวอร์ก่อนวาด ไม่งั้นหน้าแรกแสดงเพดานจากสำเนาเก่าในเครื่อง
+    await syncSpendingLimitsFromServer();
     installPlanCapacity();
     installPurchaseSimulation();
     hideUnsupported();

@@ -194,6 +194,54 @@ export async function setDailySummaryEnabledForUser(userId: string, enabled: boo
   }
 }
 
+/** Postgres: ไม่มีคอลัมน์นี้ — แปลว่ายังไม่ได้รัน migration 005_spending_limits.sql */
+const UNDEFINED_COLUMN = '42703';
+
+/**
+ * เพดานการใช้จ่ายที่ผู้ใช้ตั้งไว้ (ค่าดิบจาก jsonb — ผู้เรียกต้องจัดรูปเองที่ spendingLimit.service)
+ *
+ * คืน null เมื่อยังไม่ได้รัน migration 005 แทนการ throw — ฟีเจอร์นี้เป็นของเสริม
+ * คำสั่ง "เหลือ" ต้องตอบได้เสมอ ไม่ใช่พังทั้งคำสั่งเพราะคอลัมน์ยังไม่มี
+ * ⚖️ G6: กรอง id ของผู้ใช้คนนี้เท่านั้น
+ */
+export async function getSpendingLimitsRaw(userId: string): Promise<unknown | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('spending_limits')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === UNDEFINED_COLUMN) {
+      console.warn('[users] ยังไม่มีคอลัมน์ spending_limits — รัน supabase/migrations/005_spending_limits.sql');
+      return null;
+    }
+    throw error;
+  }
+  return data?.spending_limits ?? null;
+}
+
+/**
+ * บันทึกเพดานการใช้จ่าย — ค่าต้องผ่าน normalizeSpendingLimits มาแล้ว
+ * คืน false เมื่อยังไม่ได้รัน migration 005 (ผู้เรียกบอกผู้ใช้ได้ว่าเก็บได้แค่ในเครื่อง)
+ * ⚖️ G6: กรอง id ของผู้ใช้คนนี้เท่านั้น
+ */
+export async function setSpendingLimitsRaw(userId: string, value: unknown): Promise<boolean> {
+  const { error } = await supabase
+    .from('users')
+    .update({ spending_limits: value })
+    .eq('id', userId);
+
+  if (error) {
+    if (error.code === UNDEFINED_COLUMN) {
+      console.warn('[users] ยังไม่มีคอลัมน์ spending_limits — รัน supabase/migrations/005_spending_limits.sql');
+      return false;
+    }
+    throw error;
+  }
+  return true;
+}
+
 /**
  * ผู้ใช้ทุกคนที่เปิดรับสรุปรายวันและยังไม่บล็อกบอท — ใช้โดย job dailySummary
  * คนที่บล็อกบอทแล้ว (is_active=false) push ไปก็ไม่ถึง เปลืองโควตาเปล่าๆ

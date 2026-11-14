@@ -152,7 +152,7 @@ const dashboardState = {
 };
 
 const pageState = {
-  planWizard: { step: 1, name: '', amount: '', months: '', mode: 'balanced', emergency: false },
+  planWizard: { name: '', amount: '', months: '', mode: 'balanced', emergency: false },
 };
 
 /**
@@ -479,8 +479,9 @@ function renderDashboardPlans() {
 // ============================================================
 // เพดานการใช้จ่ายรายวัน / สัปดาห์ / เดือน (ร่าง SPEC §S5.10 — docs/DRAFT_S5.10_spending_limits.md)
 //
-// ⚠️ ตอนนี้เป็นฝั่งหน้าเว็บล้วนๆ: ยังไม่มี /api/limits จึงเก็บค่าที่ผู้ใช้ตั้งไว้ใน localStorage ของเบราว์เซอร์นี้
-// และคำนวณยอดใช้ไปจากรายการที่โหลดมาแล้ว — ต้องย้ายไปให้ backend ทำเมื่อร่างสเปคผ่านทีมรีวิว
+// ค่าที่ผู้ใช้ตั้งเก็บที่เซิร์ฟเวอร์ (users.spending_limits ผ่าน PUT /api/settings) เพื่อให้บอทใช้ตอบ "เหลือ" ได้
+// localStorage เป็นแค่สำเนาในเครื่อง — boot.js เขียนทับด้วยค่าจากเซิร์ฟเวอร์ทุกครั้งที่เปิดหน้า
+// ⚠️ ยอดใช้ไปบนหน้านี้ยังคำนวณจากรายการที่โหลดมาแล้ว — ต้องย้ายไปให้ backend ทำเมื่อร่างสเปคผ่านทีมรีวิว
 // (G1: ห้ามหน้าเว็บคำนวณเงินเอง) ค่าที่ระบบคำนวณให้ (โหมด system) ใช้ R/D ของ §S5.2 ที่ backend ส่งมาเป็นฐาน
 // ไม่ได้คิดสูตรใหม่ แต่เป็น "ค่าประมาณสด" ที่ย้อนคำนวณต้นงวดเอง ไม่ใช่ค่าที่ตรึงไว้ตามสเปค
 // ============================================================
@@ -520,6 +521,17 @@ function saveSpendingProfile(profile) {
   } catch (error) {
     // เก็บไม่ได้ก็ยังเลือกได้ในรอบนี้ แค่ไม่จำข้ามหน้า
   }
+  pushSpendingLimitsToServer();
+}
+
+/**
+ * ส่งเพดานทั้งก้อนขึ้นเซิร์ฟเวอร์ (boot.js ผูก window.jodtangSaveSpendingLimits ไว้เมื่อต่อ API จริง)
+ * 🔴 เดิมเก็บแค่ใน localStorage บอทใน LINE จึงไม่รู้ว่าผู้ใช้ตั้งเพดานรายวันไว้
+ * ถาม "เหลือ" ก็ยังได้ "เงินเหลือทั้งเดือน ÷ วันที่เหลือ" แทนเพดานที่ตั้ง
+ */
+function pushSpendingLimitsToServer() {
+  if (typeof window.jodtangSaveSpendingLimits !== 'function') return;
+  window.jodtangSaveSpendingLimits({ profile: readSpendingProfile(), ...readSpendingLimits() });
 }
 
 function readSpendingLimits() {
@@ -544,6 +556,7 @@ function saveSpendingLimit(period, patch) {
   } catch (error) {
     // เก็บไม่ได้ (เช่น โหมดส่วนตัว) ก็ยังใช้ได้ในหน้านี้ แค่ไม่จำข้ามหน้า
   }
+  pushSpendingLimitsToServer();
   return all[period];
 }
 
@@ -3257,23 +3270,23 @@ function openPlanTransfer(plan) {
 function openPlanWizard(preset) {
   const wizardState = pageState.planWizard;
   const isEmergency = preset === 'emergency';
-  wizardState.step = 1;
+  // 🔴 แผนทั่วไปเริ่มจากช่องว่าง (มีแค่ placeholder จาง ๆ) — เดิมใส่ "ออมซื้อไอเทม" กับ 150000 ไว้เป็นค่าจริง
+  // ผู้ใช้กดต่อไปโดยไม่ทันแก้ ได้แผนชื่อ "ออมซื้อไอเทม" ที่ตัวเองไม่ได้ตั้ง
+  // กองทุนฉุกเฉินยังเติมให้ เพราะเป็นยอดที่ระบบแนะนำจากรายจ่ายจริง ไม่ใช่ตัวอย่าง
   wizardState.name = isEmergency ? 'กองทุนฉุกเฉิน' : '';
-  wizardState.amount = isEmergency ? String(Math.round(getEmergencySuggestion().target / 100) || 150000) : '150000';
-  wizardState.months = isEmergency ? '12' : '6';
+  wizardState.amount = isEmergency ? String(Math.round(getEmergencySuggestion().target / 100) || '') : '';
+  wizardState.months = isEmergency ? '12' : '';
   wizardState.mode = 'balanced';
   wizardState.emergency = isEmergency;
 
+  // ฟอร์มขั้นเดียว: กรอกเป้าหมาย → backend เสนอ 3 ทางเลือกจากกำลังออมจริง → เลือกครั้งเดียว
+  // (เดิมมี 3 ขั้นพร้อมเลข 1 2 3 และให้เลือกเร็ว/สมดุล/สบายจากตัวเลขที่หน้าเว็บเดาเอง
+  //  แล้ว backend ให้เลือกซ้ำอีกรอบ = เลือก 2 ครั้ง และรอบแรกเป็นเลขหลอก ⚖️ G1)
   const html = `
     <div class="modal-card wide">
       <div class="modal-head">
         <h3>สร้างแผนออม</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
-      </div>
-      <div class="wizard-step-indicator">
-        <span class="wizard-step ${wizardState.step === 1 ? 'active' : ''}">1</span>
-        <span class="wizard-step ${wizardState.step === 2 ? 'active' : ''}">2</span>
-        <span class="wizard-step ${wizardState.step === 3 ? 'active' : ''}">3</span>
       </div>
       <div id="planWizardBody"></div>
     </div>
@@ -3288,92 +3301,49 @@ function renderPlanWizardStep() {
   if (!body) return;
   const state = pageState.planWizard;
 
-  if (state.step === 1) {
-    body.innerHTML = `
-      <div class="form-grid">
-        <label class="form-field">
-          <span>ชื่อแผน</span>
-          <input id="planNameInput" value="${state.name || 'ออมซื้อไอเทม'}" />
-        </label>
-        <label class="form-field">
-          <span>เป้าหมาย</span>
-          <input id="planAmountInput" type="number" value="${state.amount}" />
-        </label>
-        <label class="form-field">
-          <span>ระยะเวลา (เดือน)</span>
-          <input id="planMonthsInput" type="number" value="${state.months}" min="1" />
-        </label>
-      </div>
-      ${renderEmergencyToggleRow(state.emergency, null)}
-      <!-- boot.js เติมกำลังออมจริงจาก /api/plans/capacity ลงตรงนี้ โหมดตัวอย่างจะว่างไว้ -->
-      <p id="planCapacityHint" class="an-note" hidden></p>
-      <div class="modal-actions">
-        <button class="primary-btn full" type="button" data-plan-next="2">ต่อไป</button>
-      </div>
-    `;
-  }
-
-  if (state.step === 2) {
-    const planStrategies = [
-      { key: 'fast', label: 'เร็ว', icon: 'zap', hint: 'ต้นทุนสูง', save: safeNumber(state.amount) * 100 * 0.18 },
-      { key: 'balanced', label: 'สมดุล', icon: 'scale', hint: 'ปลอดภัย', save: safeNumber(state.amount) * 100 * 0.12 },
-      { key: 'relaxed', label: 'สบาย', icon: 'leaf', hint: 'ผ่อนคลาย', save: safeNumber(state.amount) * 100 * 0.08 },
-    ];
-
-    body.innerHTML = `
-      <div class="strategy-grid">
-        ${planStrategies.map((strategy) => `
-          <button type="button" class="strategy-card ${state.mode === strategy.key ? 'selected' : ''}" data-plan-strategy="${strategy.key}">
-            <strong>${renderIcon(strategy.icon, 'strategy-icon')} ${strategy.label}</strong>
-            <small>${strategy.hint}</small>
-            <span>${formatMoney(strategy.save)}</span>
-          </button>
-        `).join('')}
-      </div>
-      <div class="modal-actions split">
-        <button class="secondary-btn" type="button" data-plan-back="1">ย้อนกลับ</button>
-        <button class="primary-btn" type="button" data-plan-next="3">ต่อไป</button>
-      </div>
-    `;
-  }
-
-  if (state.step === 3) {
-    const target = safeNumber(state.amount) * 100;
-    const monthly = Math.round(target / Math.max(1, safeNumber(state.months || 1)));
-    const save = state.mode === 'fast' ? target * 0.18 : state.mode === 'balanced' ? target * 0.12 : target * 0.08;
-    body.innerHTML = `
-      <div class="plan-summary-card">
-        <h4>${state.name || 'ออมซื้อไอเทม'}</h4>
-        <div class="summary-row"><span>เป้าหมาย</span><strong>${formatMoney(target)}</strong></div>
-        <div class="summary-row"><span>ต่อเดือน</span><strong>${formatMoney(Math.round(monthly))}</strong></div>
-        <div class="summary-row"><span>รูปแบบ</span><strong>${renderIcon(getPlanStrategyMeta(state.mode).icon, 'strategy-icon')} ${getPlanStrategyMeta(state.mode).label}</strong></div>
-        <div class="summary-row"><span>คาดการณ์ออม</span><strong>${formatMoney(Math.round(save))}</strong></div>
-        ${state.emergency ? '<div class="summary-row"><span>ประเภท</span><strong>กองทุนฉุกเฉิน</strong></div>' : ''}
-      </div>
-      <div class="modal-actions split">
-        <button class="secondary-btn" type="button" data-plan-back="2">ย้อนกลับ</button>
-        <button class="primary-btn" type="button" data-plan-confirm="true">ยืนยันแผนนี้</button>
-      </div>
-    `;
-  }
+  body.innerHTML = `
+    <div class="form-grid">
+      <label class="form-field">
+        <span>ชื่อแผน</span>
+        <input id="planNameInput" value="${escapeHtml(state.name)}" placeholder="เช่น ซื้อโน้ตบุ๊ก" maxlength="60" />
+      </label>
+      <label class="form-field">
+        <span>เป้าหมาย (บาท)</span>
+        <input id="planAmountInput" type="number" inputmode="decimal" value="${escapeHtml(state.amount)}" placeholder="เช่น 15000" min="1" />
+      </label>
+      <label class="form-field">
+        <span>อยากได้ภายใน (เดือน) — ไม่ใส่ก็ได้</span>
+        <input id="planMonthsInput" type="number" inputmode="numeric" value="${escapeHtml(state.months)}" placeholder="เช่น 6" min="1" />
+      </label>
+    </div>
+    ${renderEmergencyToggleRow(state.emergency, null)}
+    <!-- boot.js เติมกำลังออมจริงจาก /api/plans/capacity ลงตรงนี้ โหมดตัวอย่างจะว่างไว้ -->
+    <p id="planCapacityHint" class="an-note" hidden></p>
+    <div class="modal-actions">
+      <button class="primary-btn full" type="button" data-plan-submit="true">ดูทางเลือกที่ออมไหว</button>
+    </div>
+  `;
 }
 
 function addPlanFromWizard() {
   const state = pageState.planWizard;
+  // ช่องเดือนไม่บังคับ — ไม่ใส่ = ให้ backend เสนอตามกำลังออมล้วน ๆ
+  const months = Number(state.months) > 0 ? Math.round(Number(state.months)) : undefined;
 
   if (window.jodtangPersist) {
     // backend เป็นคนสร้าง 3 ทางเลือกให้ (S5.3) หน้าเว็บห้ามเดายอดออมต่อเดือนเอง (G1)
     window.jodtangPersist.createPlan({
-      title: state.name || 'ออมซื้อไอเทม',
+      title: state.name.trim(),
       targetSatang: Math.round(safeNumber(state.amount) * 100),
-      months: Math.max(1, safeNumber(state.months || 1)),
+      months,
     });
     return;
   }
 
-  const name = state.name || 'ออมซื้อไอเทม';
+  // โหมดตัวอย่าง (ไม่มี backend): ไม่มีกำลังออมจริงให้เสนอทางเลือก จึงสร้างแผนตามเวลาที่กรอกตรง ๆ
+  const name = state.name.trim();
   const target = safeNumber(state.amount) * 100;
-  const months = Math.max(1, safeNumber(state.months || 1));
+  const mockMonths = months || 12;
   const nextPlan = {
     id: Date.now(),
     name,
@@ -3382,8 +3352,8 @@ function addPlanFromWizard() {
     progress: 0,
     confidence: 'medium',
     status: 'normal',
-    dueMonth: `ภายใน ${months} เดือน`,
-    monthly_save: Math.round(target / months),
+    dueMonth: `ภายใน ${mockMonths} เดือน`,
+    monthly_save: Math.round(target / mockMonths),
     strategy: state.mode,
     active: true,
   };
@@ -4545,13 +4515,19 @@ function bindTransactionControls() {
       return;
     }
 
-    if (event.target.closest('[data-plan-next]')) {
-      const nextStep = Number(event.target.closest('[data-plan-next]').dataset.planNext);
-      pageState.planWizard.step = nextStep;
+    if (event.target.closest('[data-plan-submit]')) {
       const inputName = document.getElementById('planNameInput');
       const inputAmount = document.getElementById('planAmountInput');
       const inputMonths = document.getElementById('planMonthsInput');
-      const invalidInputs = [inputAmount, inputMonths].filter((input) => input && !(Number(input.value) > 0));
+      [inputName, inputAmount, inputMonths].forEach((input) => input && input.classList.remove('invalid'));
+      // ชื่อกับเป้าหมายบังคับ / เดือนไม่บังคับ แต่ถ้าใส่ต้องเป็นจำนวนเต็มบวก
+      const invalidInputs = [
+        inputName && !inputName.value.trim() ? inputName : null,
+        inputAmount && !(Number(inputAmount.value) > 0) ? inputAmount : null,
+        inputMonths && inputMonths.value !== '' && !(Number.isInteger(Number(inputMonths.value)) && Number(inputMonths.value) > 0)
+          ? inputMonths
+          : null,
+      ].filter(Boolean);
       if (invalidInputs.length) {
         invalidInputs.forEach((input) => input.classList.add('invalid'));
         invalidInputs[0].focus();
@@ -4562,24 +4538,6 @@ function bindTransactionControls() {
       if (inputName) pageState.planWizard.name = inputName.value;
       if (inputAmount) pageState.planWizard.amount = inputAmount.value;
       if (inputMonths) pageState.planWizard.months = inputMonths.value;
-      renderPlanWizardStep();
-      return;
-    }
-
-    if (event.target.closest('[data-plan-back]')) {
-      const prev = Number(event.target.closest('[data-plan-back]').dataset.planBack);
-      pageState.planWizard.step = prev;
-      renderPlanWizardStep();
-      return;
-    }
-
-    if (event.target.closest('[data-plan-strategy]')) {
-      pageState.planWizard.mode = event.target.closest('[data-plan-strategy]').dataset.planStrategy;
-      renderPlanWizardStep();
-      return;
-    }
-
-    if (event.target.closest('[data-plan-confirm]')) {
       addPlanFromWizard();
       return;
     }

@@ -22,6 +22,7 @@ import { PlanError } from './services/plan.service';
 import { TransactionError } from './services/transaction.service';
 import { CategoryError } from './services/category.service';
 import { SimulateError } from './services/simulate.service';
+import { SpendingLimitError } from './services/spendingLimit.service';
 import { MoneyError } from './utils/money';
 
 export const app = express();
@@ -94,7 +95,8 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     err instanceof PlanError ||
     err instanceof TransactionError ||
     err instanceof CategoryError ||
-    err instanceof SimulateError
+    err instanceof SimulateError ||
+    err instanceof SpendingLimitError
   ) {
     res.status(err.status).json({ ok: false, error: err.message });
     return;

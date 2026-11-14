@@ -17,11 +17,14 @@
 // ทางด่วน regex และคำสั่งตายตัวต่อได้ ไม่มีเส้นทางไหนที่ throw ออกไปถึงผู้ใช้
 
 import { AI_DISCLAIMER, CHAT_HISTORY_TURNS } from '../../config/constants';
+import { env } from '../../config/env';
 import { listTransactionsByUser } from '../../db/queries/transactions';
 import { formatBaht, toSatang } from '../../utils/money';
 import { redactSensitiveText } from '../../utils/redact';
-import { getTodayIso } from '../../utils/thaiDate';
-import { runCommand, type CommandName } from '../command.service';
+import { formatThaiDate, getTodayIso } from '../../utils/thaiDate';
+import { PlanError, previewSavingPlan, type PlanPreview } from '../plan.service';
+import type { PlanConfidence } from '../../line/flex/planCard';
+import type { CommandName } from '../command.service';
 import { FALLBACK_EXPENSE_CATEGORY, resolveCategoryName } from '../category.service';
 import { answerHelpTopic } from '../help.service';
 import { createPending } from '../pending.service';
@@ -35,6 +38,11 @@ export type AiReply =
   | { kind: 'unavailable' }
   /** ตอบได้เลย — ทั้งกรณี AI ถามกลับ และกรณีอ่านข้อมูลมาตอบ */
   | { kind: 'text'; text: string }
+  /**
+   * ตรงกับคำสั่งตายตัว (สรุป/เหลือ/งบ/แผน) — ผู้เรียกตอบด้วยทางเดียวกับคำสั่งที่พิมพ์ตรง ๆ
+   * จะได้การ์ดใบเดียวกัน ไม่ใช่การ์ดตอนพิมพ์ "งบ" แต่ข้อความล้วนตอนถาม "งบเหลือเท่าไหร่"
+   */
+  | { kind: 'command'; command: CommandName }
   /** ต้องให้ผู้ใช้กดยืนยันก่อน (⚖️ G2) */
   | { kind: 'pending'; pendingId: string; text: string };
 
@@ -330,7 +338,7 @@ async function runToolCall(
 
     // ── tool ที่อ่านข้อมูล → ตอบได้เลย ตัวเลขทุกตัวมาจาก S5 (⚖️ G1) ──────────
     case 'get_summary': {
-      // ใช้ runCommand ตัวเดียวกับคำสั่งตายตัว เพื่อให้ผู้ใช้ถามด้วยภาษาคน
+      // ส่งต่อเป็นคำสั่งตายตัวตัวเดียวกัน (การ์ด/ข้อความชุดเดียวกับที่พิมพ์ตรง ๆ) เพื่อให้ผู้ใช้ถามด้วยภาษาคน
       // แล้วได้ตัวเลขชุดเดียวกับที่พิมพ์ "สรุป" เป๊ะ ๆ ไม่มีสองความจริงในระบบ
       const command: CommandName =
         call.period === 'this_month'
@@ -342,7 +350,7 @@ async function runToolCall(
               : call.period === 'budget'
                 ? 'budget'
                 : 'plans';
-      return { kind: 'text', text: await runCommand(userId, command) };
+      return { kind: 'command', command };
     }
 
     case 'query_transactions':
@@ -351,6 +359,22 @@ async function runToolCall(
     case 'simulate_purchase': {
       const result = await simulatePurchase(userId, call.priceSatang, todayIso);
       return { kind: 'text', text: describeSimulation(call.itemName, result) };
+    }
+
+    case 'plan_goal': {
+      try {
+        const preview = await previewSavingPlan(userId, call.targetSatang, call.months ?? undefined, todayIso);
+        return { kind: 'text', text: describePlanGoal(call.itemName, call.targetSatang, preview) };
+      } catch (err) {
+        // ออมไม่ไหว / แผนเต็ม / ยังไม่รู้รายได้ — PlanError มีเหตุผลเป็นตัวเลขที่ผู้ใช้ทำอะไรต่อได้ (S5.3)
+        if (err instanceof PlanError) {
+          return {
+            kind: 'text',
+            text: [`🎯 ออม "${call.itemName}" ${formatBaht(call.targetSatang)}`, '', err.message].join('\n'),
+          };
+        }
+        throw err;
+      }
     }
 
     case 'explain_feature':
@@ -514,6 +538,40 @@ function describeSimulation(
   }
 
   lines.push('', AI_DISCLAIMER);
+  return lines.join('\n');
+}
+
+const CONFIDENCE_NOTE: Record<PlanConfidence, string> = {
+  low: 'ความมั่นใจต่ำ — ข้อมูลรายรับรายจ่ายยังน้อย ตัวเลขจะแม่นขึ้นเมื่อจดไปสักพัก',
+  medium: 'ความมั่นใจกลาง — คิดจากข้อมูลไม่ถึง 3 เดือน',
+  high: 'ความมั่นใจสูง — คิดจากข้อมูล 3 เดือนย้อนหลัง',
+};
+
+/**
+ * คำตอบของ "อยากออมซื้อ X ราคา Y ออมกี่เดือนดี"
+ * ⚖️ G1: ตัวเลขทุกตัวมาจาก plan.service (ชุดเดียวกับที่หน้าเว็บเสนอตอนสร้างแผน) ที่นี่แค่จัดรูปแบบ
+ */
+function describePlanGoal(itemName: string, targetSatang: number, preview: PlanPreview): string {
+  const lines = [
+    `🎯 ออม "${itemName}" ${formatBaht(targetSatang)}`,
+    `ตอนนี้คุณออมเพิ่มได้ราวเดือนละ ${formatBaht(preview.capacity.capacitySatang)}`,
+  ];
+  if (preview.requestedMonthsNote) lines.push('', preview.requestedMonthsNote);
+
+  lines.push('', 'ทางเลือก');
+  for (const option of preview.options) {
+    lines.push(
+      `${option.label} — เดือนละ ${formatBaht(option.monthlySaveSatang)} · ${option.months} เดือน (ครบ ${formatThaiDate(new Date(`${option.targetDate}T12:00:00+07:00`))})`
+    );
+  }
+
+  lines.push(
+    '',
+    CONFIDENCE_NOTE[preview.capacity.confidence],
+    `สร้างแผนจริงได้ที่หน้าเว็บ → วิเคราะห์ → สร้างแผนใหม่${env.appBaseUrl ? `\n${env.appBaseUrl}/analyze.html` : ''}`,
+    '',
+    AI_DISCLAIMER
+  );
   return lines.join('\n');
 }
 

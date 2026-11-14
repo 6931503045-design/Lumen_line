@@ -19,8 +19,18 @@ vi.mock('../src/db/queries/transactions', () => ({
   findLatestChatTransaction: vi.fn(),
   softDeleteTransaction: vi.fn(),
 }));
+vi.mock('../src/services/spendingLimit.service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/spendingLimit.service')>()),
+  getDailyAllowance: vi.fn(),
+  getSpendingLimits: vi.fn(),
+}));
 
 import { getSafeToSpend, getUserSummary } from '../src/services/summary.service';
+import {
+  defaultSpendingLimits,
+  getDailyAllowance,
+  getSpendingLimits,
+} from '../src/services/spendingLimit.service';
 import { getBudgetOverview } from '../src/services/budget.service';
 import { listPlansWithProgress, transferToPlan } from '../src/services/plan.service';
 import {
@@ -39,6 +49,9 @@ const USER = 'user-1';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // ค่าเริ่มต้น: ผู้ใช้ไม่ได้ตั้งเพดานรายวัน → "เหลือ" ใช้สูตร S5.2 เดิม
+  vi.mocked(getDailyAllowance).mockResolvedValue(null);
+  vi.mocked(getSpendingLimits).mockResolvedValue(defaultSpendingLimits());
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(getUserSummary).mockResolvedValue({
     monthIncomeSatang: 0,
@@ -454,6 +467,66 @@ describe('พรุ่งนี้ใช้ได้เท่าไหร่ (re
       const text = await runCommand(USER, 'remaining_tomorrow');
       expect(getSafeToSpend).not.toHaveBeenCalled();
       expect(text).toContain('เดือนใหม่');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('🔴 คำถามเรื่อง "งบ" ต้องได้การ์ดงบ ไม่ใช่ยอดใช้ได้ต่อวัน', () => {
+  // ผู้ใช้ทดสอบถาม "งบเดือนนี้เหลือเท่าไหร่" แล้วได้ "วันนี้ใช้ได้อีก ..." กลับไป
+  it.each(['งบเดือนนี้เหลือเท่าไหร่', 'งบเหลือเท่าไหร่ครับ', 'งบเดือนนี้', 'เช็คงบ'])('"%s" → budget', (text) => {
+    expect(matchCommand(text)).toBe('budget');
+  });
+
+  it('"เหลือเท่าไหร่" ที่ไม่มีคำว่างบยังเป็นยอดใช้ได้ต่อวันเหมือนเดิม', () => {
+    expect(matchCommand('เหลือเท่าไหร่')).toBe('remaining');
+  });
+});
+
+describe('🔴 เหลือ — ใช้เพดานรายวันที่ผู้ใช้ตั้งไว้ในเว็บ (ร่าง §S5.10)', () => {
+  // ผู้ใช้ทดสอบตั้งเพดานรายวันในเว็บ แต่บอทยังตอบ "เงินเหลือทั้งเดือน ÷ วันที่เหลือ"
+
+  it('ตั้งเองไว้ ฿300 ใช้ไป ฿120 → วันนี้ใช้ได้อีก ฿180 และบอกที่มาว่าคิดจากเพดาน', async () => {
+    vi.mocked(getDailyAllowance).mockResolvedValue({
+      mode: 'manual', profile: 'moderate', ceilingSatang: 30000, spentTodaySatang: 12000, remainingSatang: 18000,
+    });
+    const reply = await runCommand(USER, 'remaining');
+    expect(reply.split('\n')[0]).toContain('฿180.00');
+    expect(reply).toContain('เพดานรายวันที่คุณตั้งไว้ ฿300.00');
+    expect(reply).toContain('ใช้ไปแล้ววันนี้ ฿120.00');
+    // ไม่ใช่สูตรเดิม
+    expect(reply).not.toContain('หารอีก');
+    expect(getSafeToSpend).not.toHaveBeenCalled();
+  });
+
+  it('ใช้เกินเพดานแล้ว → บอกว่าเกินเท่าไหร่ ไม่ใช่ใช้ได้อีกติดลบ', async () => {
+    vi.mocked(getDailyAllowance).mockResolvedValue({
+      mode: 'manual', profile: 'moderate', ceilingSatang: 30000, spentTodaySatang: 35000, remainingSatang: -5000,
+    });
+    const reply = await runCommand(USER, 'remaining');
+    expect(reply.split('\n')[0]).toContain('เกินเพดานแล้ว ฿50.00');
+  });
+
+  it('ให้ระบบคิดแบบประหยัด → บอกว่าเป็นเพดานที่ระบบคิด และบอกรูปแบบ', async () => {
+    vi.mocked(getDailyAllowance).mockResolvedValue({
+      mode: 'system', profile: 'frugal', ceilingSatang: 13590, spentTodaySatang: 0, remainingSatang: 13590,
+    });
+    const reply = await runCommand(USER, 'remaining');
+    expect(reply).toContain('เพดานรายวันที่ระบบคิดให้ (แบบประหยัด)');
+  });
+
+  it('พรุ่งนี้ — เพดานตั้งเองได้เต็มจำนวน ไม่ใช่สูตร S5.2', async () => {
+    vi.mocked(getSpendingLimits).mockResolvedValue({
+      ...defaultSpendingLimits(),
+      daily: { enabled: true, mode: 'manual', limitSatang: 30000 },
+    });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-14T05:00:00Z'));
+    try {
+      const reply = await runCommand(USER, 'remaining_tomorrow');
+      expect(reply.split('\n')[0]).toContain('฿300.00');
+      expect(getSafeToSpend).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
