@@ -22,7 +22,7 @@ import { env } from '../config/env';
 import { redactSensitiveText } from '../utils/redact';
 import { logger } from '../utils/logger';
 import { getUserByEmailToken } from '../db/queries/users';
-import { insertUserEmail, markEmailParsed } from '../db/queries/emails';
+import { findUserEmail, insertUserEmail, markEmailParsed } from '../db/queries/emails';
 import { backfillRefNumber } from '../db/queries/transactions';
 import { createTransaction } from './transaction.service';
 import { formatBudgetAlert } from './budget.service';
@@ -33,7 +33,7 @@ import { checkBankDkim } from './email/dkim';
 import {
   describeTokenHeaders,
   findTokenFromHeaders,
-  headerValue,
+  topHeaderValue,
 } from './email/recipient';
 
 const IMAP_HOST = 'imap.gmail.com';
@@ -75,8 +75,11 @@ const EMPTY_RESULT: EmailPollResult = {
   skipped: 0,
 };
 
-/** ประมวลผลอีเมลหนึ่งฉบับ คืนผลว่าจัดอยู่ในหมวดไหนของ EmailPollResult */
-async function processMessage(
+/**
+ * ประมวลผลอีเมลหนึ่งฉบับ คืนผลว่าจัดอยู่ในหมวดไหนของ EmailPollResult
+ * export ไว้ให้เทสต์เรียกตรงได้โดยไม่ต้องต่อ IMAP (tests/emailProcess.test.ts)
+ */
+export async function processMessage(
   mail: ParsedMail
 ): Promise<'created' | 'duplicate' | 'unparsed' | 'skipped'> {
   // ── 1. หาเจ้าของจาก token ────────────────────────────────────────────────
@@ -99,7 +102,11 @@ async function processMessage(
   const text = mail.text ?? '';
 
   // ── 2. ตรวจ DKIM ก่อนเชื่ออะไรในอีเมลนี้ ─────────────────────────────────
-  const dkim = checkBankDkim(headerValue(mail, 'authentication-results'), ALL_BANK_DKIM_DOMAINS);
+  // 🔒 ตัวบนสุดเท่านั้น — ตัวที่อยู่ต่ำกว่าอาจเป็น header ที่ผู้ส่งแนบมาเอง (ดู dkim.ts)
+  const dkim = checkBankDkim(
+    topHeaderValue(mail, 'authentication-results'),
+    ALL_BANK_DKIM_DOMAINS
+  );
   if (!dkim.passed) {
     logger.warn(
       `[email] ข้าม: DKIM ไม่ผ่านโดเมนธนาคาร (ลงนามโดย: ${dkim.signedBy.join(', ') || 'ไม่มี'})`
@@ -116,7 +123,7 @@ async function processMessage(
   // ── 3 + 4. กันซ้ำด้วย Message-ID แล้วบันทึกเนื้อที่ปิดข้อมูลส่วนตัวแล้ว ───────
   // insert ทำหน้าที่ทั้งกันซ้ำและบันทึกในคำสั่งเดียว: ถ้าชน unique = เคยอ่านแล้ว
   const received = mail.date ?? new Date();
-  const stored = await insertUserEmail({
+  let stored = await insertUserEmail({
     userId: owner.id,
     messageId,
     bodyRedacted: redactSensitiveText(text),
@@ -124,7 +131,19 @@ async function processMessage(
   });
 
   if (!stored) {
-    return 'skipped'; // เคยอ่านฉบับนี้ไปแล้ว
+    // 🔴 แก้บั๊ก: เดิมเจอแถวเดิมแล้วข้ามทันที ทำให้รายการเงินหายเงียบได้ —
+    // ถ้ารอบก่อนบันทึกอีเมลลง user_emails แล้วไปพังตอนสร้างรายการ (Supabase ล่ม เน็ตหลุด)
+    // อีเมลจะยังไม่ถูก mark ว่าอ่าน รอบนี้จึงหยิบมาใหม่ แต่มาชนแถวเดิมตรงนี้แล้วถูกข้าม
+    // จากนั้นถูก mark ว่าอ่านแล้ว = ไม่มีรอบไหนสร้างรายการให้อีกเลย
+    //
+    // ตอนนี้แยกสองกรณี: parsed=true คือทำจบไปแล้วจริง ข้ามได้
+    // parsed=false คืองานค้าง ทำต่อจากแถวเดิม — ปลอดภัยต่อการทำซ้ำเพราะ S10 dedup ด้านล่าง
+    // จับได้ถ้ารายการถูกสร้างไปแล้วก่อนพัง (จะผูก matched_transaction_id ให้แทนการสร้างซ้ำ)
+    const existing = await findUserEmail(owner.id, messageId);
+    if (!existing || existing.parsed) {
+      return 'skipped'; // เคยอ่านและทำจบไปแล้ว
+    }
+    stored = existing;
   }
 
   // ── 5. อ่านรายละเอียดด้วย regex ของธนาคารนั้น ─────────────────────────────

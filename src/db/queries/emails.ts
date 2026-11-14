@@ -48,6 +48,28 @@ export async function insertUserEmail(
   return data;
 }
 
+/**
+ * หาอีเมลที่เคยบันทึกไว้แล้วจาก Message-ID — ใช้ตอน insertUserEmail ชนของเดิม
+ * เพื่อแยกว่า "ทำจบไปแล้ว" (parsed=true) หรือ "รอบก่อนพังกลางทาง" (parsed=false)
+ * ⚖️ G6: กรอง user_id เสมอ Message-ID เดียวกันของผู้ใช้คนอื่นไม่เกี่ยวกัน
+ */
+export async function findUserEmail(
+  userId: string,
+  messageId: string
+): Promise<StoredEmail | null> {
+  const { data, error } = await supabase
+    .from('user_emails')
+    .select('id, parsed')
+    .eq('user_id', userId)
+    .eq('message_id', messageId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
 /** บันทึกผลหลัง parse — ผูกกับรายการที่สร้าง หรือรายการเดิมที่ตรวจพบว่าซ้ำ */
 export async function markEmailParsed(
   emailId: string,
