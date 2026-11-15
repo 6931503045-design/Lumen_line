@@ -64,13 +64,19 @@ export async function replyFlex(
    * ข้อความเสริมที่ส่งต่อท้ายการ์ดใน reply เดียวกัน (ใช้กับคำเตือนงบรายหมวด S5.8)
    * LINE ให้ส่งได้สูงสุด 5 ข้อความต่อ 1 reply token และคิดเป็น "ครั้งเดียว" — ไม่กินโควตาเพิ่ม
    */
-  extraText?: string
+  extraText?: string,
+  /** ปุ่ม quick reply ติดท้ายข้อความเสริม (เช่น "หมวดน่าจะเป็น อาหาร ใช่ไหม?") — ต้องมี extraText */
+  extraQuickReply?: Array<PostbackQuickReplyItem | UriQuickReplyItem>
 ): Promise<void> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const messages: any[] = [flexMessage as any];
     if (extraText) {
-      messages.push({ type: 'text', text: extraText });
+      messages.push({
+        type: 'text',
+        text: extraText,
+        ...(extraQuickReply && extraQuickReply.length > 0 ? { quickReply: { items: extraQuickReply } } : {}),
+      });
     }
 
     await lineClient.replyMessage({ replyToken, messages });

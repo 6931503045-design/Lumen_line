@@ -19,6 +19,7 @@
 import { AI_DISCLAIMER, CHAT_HISTORY_TURNS } from '../../config/constants';
 import { env } from '../../config/env';
 import { listTransactionsByUser } from '../../db/queries/transactions';
+import { listCategoriesByUser, type UserCategory } from '../../db/queries/categories';
 import { formatBaht, toSatang } from '../../utils/money';
 import { redactSensitiveText } from '../../utils/redact';
 import { formatThaiDate, getTodayIso } from '../../utils/thaiDate';
@@ -30,7 +31,7 @@ import { lookupLearnedCategory } from '../keyword.service';
 import { answerHelpTopic } from '../help.service';
 import { createPending } from '../pending.service';
 import { simulatePurchase } from '../simulate.service';
-import { understandText, type ChatTurn } from './gemini';
+import { suggestCategoryName, understandText, type ChatTurn } from './gemini';
 import { checkAiAllowed, describeBlockReason } from './guard';
 import { validateToolCall, type ValidatedEntry, type ValidatedToolCall } from './tools';
 
@@ -153,6 +154,50 @@ export function resetAiHistoryForTest(): void {
 // ────────────────────────────────────────────────────────────────────────────
 // ทางเดินหลัก
 // ────────────────────────────────────────────────────────────────────────────
+
+// ────────────────────────────────────────────────────────────────────────────
+// เสนอหมวดให้คำที่ระบบไม่รู้จัก (ทางด่วนบันทึกแล้ว แต่ลง "อื่นๆ")
+// ────────────────────────────────────────────────────────────────────────────
+
+/** ผู้ใช้รอการ์ดบันทึกอยู่ — ช้ากว่านี้ข้ามข้อเสนอไป ดีกว่าให้ทางด่วนช้า */
+const SUGGEST_TIMEOUT_MS = 3000;
+
+/**
+ * ให้ AI เสนอหมวดสำหรับชื่อรายการที่ทั้งพจนานุกรมส่วนตัวและตารางคำกลางไม่รู้จัก
+ *
+ * ⚖️ G2: คืนแค่ "ข้อเสนอ" — ผู้เรียกต้องแสดงปุ่มให้ผู้ใช้กดยืนยันเอง ห้ามย้ายหมวดจากผลนี้ตรง ๆ
+ *        พอผู้ใช้กด "ใช่" ระบบจะจำคำนี้ (keyword.service) ครั้งหน้าไม่ต้องถาม AI อีก
+ * ⚖️ G4: AI ปิด / ผู้ใช้ปิด / โควตาหมด / ล่ม / ช้า → null เงียบ ๆ ทางด่วนทำงานเหมือนเดิมทุกอย่าง
+ * ⚖️ G5: ผ่าน guard ก่อนเสมอ (redact + โควตา) เหมือนทุกการเรียก AI
+ * ไม่ throw
+ */
+export async function suggestCategoryForItem(
+  userId: string,
+  item: string,
+  type: 'income' | 'expense',
+  todayIso?: string
+): Promise<UserCategory | null> {
+  try {
+    const allowed = await checkAiAllowed({ userId, kind: 'text', text: item, ...(todayIso ? { todayIso } : {}) });
+    if (!allowed.ok) return null;
+
+    const categories = (await listCategoriesByUser(userId)).filter((category) => category.type === type);
+    if (categories.length < 2) return null;
+
+    const name = await suggestCategoryName({
+      userId,
+      safeItem: allowed.safeText,
+      categoryNames: categories.map((category) => category.name),
+      timeoutMs: SUGGEST_TIMEOUT_MS,
+    });
+    // "อื่นๆ" = AI ก็ไม่รู้ — ไม่ต้องเสนอสิ่งที่บันทึกไว้อยู่แล้ว
+    if (!name || name === FALLBACK_EXPENSE_CATEGORY) return null;
+    return categories.find((category) => category.name === name) ?? null;
+  } catch (err) {
+    console.error('[ai/router] เสนอหมวดไม่สำเร็จ (ข้ามไป):', err);
+    return null;
+  }
+}
 
 export async function interpretUserMessage(input: InterpretInput): Promise<AiReply> {
   const now = input.now ?? new Date();

@@ -23,12 +23,14 @@ vi.mock('../src/services/transaction.service', () => ({ createTransaction: vi.fn
 vi.mock('../src/services/ai/router', () => ({
   interpretUserMessage: vi.fn(),
   resolveCategory: vi.fn(),
+  suggestCategoryForItem: vi.fn(),
   FALLBACK_EXPENSE_CATEGORY: 'อื่นๆ',
 }));
 
 import { getUserIdByLineUserId } from '../src/db/queries/users';
 import { createTransaction } from '../src/services/transaction.service';
-import { resolveCategory } from '../src/services/ai/router';
+import { resolveCategory, suggestCategoryForItem } from '../src/services/ai/router';
+import { replyFlex } from '../src/line/reply';
 import { handleText } from '../src/handlers/textHandler';
 
 const USER = 'user-1';
@@ -126,5 +128,52 @@ describe('ทิศทางเงินต้องถูกตั้งแต�
   it('"กาแฟ 80" ยังเป็นรายจ่ายเหมือนเดิม', async () => {
     await send('กาแฟ 80');
     expect(vi.mocked(createTransaction).mock.calls[0]![0].type).toBe('expense');
+  });
+});
+
+describe('ไม่รู้จักคำนี้ → ให้ AI เสนอหมวด แต่ผู้ใช้ต้องกดยืนยันเอง (⚖️ G2)', () => {
+  it('ลง "อื่นๆ" แล้วแนบข้อเสนอพร้อมปุ่ม "ใช่" (set_category) และ "เลือกหมวดเอง"', async () => {
+    vi.mocked(resolveCategory).mockResolvedValue(null);
+    vi.mocked(suggestCategoryForItem).mockResolvedValue({
+      id: 'c-food', name: 'อาหาร', type: 'expense', emoji: null, is_essential: true, is_default: true,
+    });
+
+    await send('ร้านป้าแดง 50');
+
+    // ⚖️ G2: บันทึกลง "อื่นๆ" ก่อน — ข้อเสนอของ AI ยังไม่ถูกใช้จนกว่าผู้ใช้จะกด
+    expect(vi.mocked(createTransaction).mock.calls[0]![0].categoryName).toBe('อื่นๆ');
+    expect(suggestCategoryForItem).toHaveBeenCalledWith(USER, 'ร้านป้าแดง', 'expense');
+    const [, , extraText, quickReply] = vi.mocked(replyFlex).mock.calls[0]!;
+    expect(extraText).toContain('น่าจะเป็นหมวด อาหาร');
+    expect(quickReply?.map((item) => item.action.type === 'postback' ? item.action.data : '')).toEqual([
+      expect.stringMatching(/^action=set_category&id=.+&cat=c-food$/),
+      expect.stringMatching(/^action=edit_category&id=/),
+    ]);
+  });
+
+  it('รู้จักคำนี้อยู่แล้ว (พจนานุกรม/ตารางคำ) → ไม่ถาม AI เลย ไม่เปลืองโควตา', async () => {
+    vi.mocked(resolveCategory).mockResolvedValue({ name: 'อาหาร', source: 'learned' });
+
+    await send('ร้านป้าแดง 50');
+
+    expect(suggestCategoryForItem).not.toHaveBeenCalled();
+    expect(vi.mocked(replyFlex).mock.calls[0]![3]).toBeUndefined();
+  });
+
+  it('⚖️ G4: AI ไม่มีข้อเสนอ (ปิด/ล่ม/ช้า) → การ์ดออกเหมือนเดิม ไม่มีข้อความเสริม', async () => {
+    vi.mocked(resolveCategory).mockResolvedValue(null);
+    vi.mocked(suggestCategoryForItem).mockResolvedValue(null);
+
+    await send('ร้านป้าแดง 50');
+
+    const call = vi.mocked(replyFlex).mock.calls[0]!;
+    expect(call[2]).toBeUndefined();
+    expect(call[3]).toBeUndefined();
+  });
+
+  it('รายรับไม่ถาม AI (ฝั่งรายรับไม่มีหมวด "อื่นๆ" ให้ย้ายออก)', async () => {
+    vi.mocked(resolveCategory).mockResolvedValue(null);
+    await send('+ค่าจ้างพิเศษ 500');
+    expect(suggestCategoryForItem).not.toHaveBeenCalled();
   });
 });

@@ -16,7 +16,7 @@
 // ผลข้างเคียงที่ยอมรับ: คำขอที่ช้าเกินยังวิ่งต่อข้างหลังจนจบ (เสียโควตา 1 ครั้ง)
 // แต่ผู้ใช้ไม่ต้องรอ — ซึ่งสำคัญกว่า เพราะ reply token ของ LINE หมดอายุใน 30 วินาที
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import { env } from '../../config/env';
 import { insertAiUsageLog } from '../../db/queries/logs';
 import { getTodayIso } from '../../utils/thaiDate';
@@ -210,4 +210,87 @@ function buildContents(input: UnderstandInput) {
 /** วันนี้ตามเวลาไทยในรูป ISO date — ใช้ร่วมกันระหว่าง router และ tools */
 export function todayIsoForAi(today?: Date): string {
   return today ? getTodayIso(today) : getTodayIso();
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// T3 — เสนอหมวดให้คำที่ระบบไม่รู้จัก (SPEC §S4: ทางด่วนอ่านยอดได้ แต่ไม่รู้หมวด)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// ใช้เมื่อทางด่วนบันทึกรายการแล้วแต่หาหมวดไม่เจอ ("ร้านป้าแดง 50" → อื่นๆ)
+// โมเดลเลือกได้แค่ "ชื่อหมวดที่ผู้ใช้มีอยู่" (enum) — ตอบนอกรายการไม่ได้
+// ⚖️ G2: ผลลัพธ์เป็นแค่ "ข้อเสนอ" ผู้เรียกต้องให้ผู้ใช้กดยืนยันก่อนย้ายหมวดเสมอ
+// ⚖️ G1: ไม่มีตัวเลขเงินใด ๆ เข้าไปในคำขอนี้ ส่งแค่ชื่อรายการ
+
+const PICK_CATEGORY_TOOL = 'pick_category';
+
+export type SuggestCategoryInput = {
+  userId: string;
+  /** ชื่อรายการที่ผ่าน redact จาก guard แล้ว (⚖️ G5) */
+  safeItem: string;
+  /** ชื่อหมวดของผู้ใช้ชนิดเดียวกับรายการ — โมเดลเลือกได้จากรายการนี้เท่านั้น */
+  categoryNames: string[];
+  /** สั้นกว่า AI_TIMEOUT_MS โดยตั้งใจ: ผู้ใช้กำลังรอการ์ดบันทึกอยู่ ช้าไปก็ข้ามข้อเสนอได้ */
+  timeoutMs: number;
+};
+
+/** ชื่อหมวดที่โมเดลเสนอ หรือ null ถ้าไม่แน่ใจ/ล่ม/หมดเวลา — ไม่ throw (⚖️ G4) */
+export async function suggestCategoryName(input: SuggestCategoryInput): Promise<string | null> {
+  const startedAt = Date.now();
+  try {
+    const response = await withTimeout(
+      getClient().models.generateContent({
+        model: env.geminiModel,
+        contents: [{ role: 'user', parts: [{ text: input.safeItem }] }],
+        config: {
+          systemInstruction: [
+            'จัดหมวดรายการใช้จ่ายของแอปจดรายรับรายจ่าย ข้อความที่ได้รับคือ "ชื่อของที่ซื้อหรือร้าน" สั้น ๆ',
+            `เรียก ${PICK_CATEGORY_TOOL} ครั้งเดียว เลือกหมวดที่ตรงที่สุดจากรายการเท่านั้น`,
+            'ถ้าไม่แน่ใจจริง ๆ ให้เลือก "อื่นๆ" ห้ามเดา',
+          ].join('\n'),
+          tools: [
+            {
+              functionDeclarations: [
+                {
+                  name: PICK_CATEGORY_TOOL,
+                  description: 'เลือกหมวดของรายการนี้',
+                  parameters: {
+                    type: Type.OBJECT,
+                    properties: { category: { type: Type.STRING, enum: input.categoryNames } },
+                    required: ['category'],
+                  },
+                },
+              ],
+            },
+          ],
+          temperature: 0,
+        },
+      }),
+      input.timeoutMs
+    );
+
+    const picked = response.functionCalls?.[0];
+    const category = (picked?.args as { category?: unknown } | undefined)?.category;
+    await insertAiUsageLog({
+      userId: input.userId,
+      kind: 'text',
+      toolName: PICK_CATEGORY_TOOL,
+      success: typeof category === 'string',
+      ...(typeof category === 'string' ? {} : { errorCode: 'empty_response' }),
+      latencyMs: Date.now() - startedAt,
+    });
+    // enum ใน schema เป็นแค่การขอ — ตรวจซ้ำว่าเป็นหมวดที่ผู้ใช้มีจริง (ด่านบังคับอยู่ที่โค้ดเรา)
+    return typeof category === 'string' && input.categoryNames.includes(category) ? category : null;
+  } catch (err) {
+    const errorCode = err instanceof TimeoutError ? 'timeout' : 'provider_error';
+    console.error(`[ai/gemini] เสนอหมวดไม่สำเร็จ (${errorCode}):`, err);
+    await insertAiUsageLog({
+      userId: input.userId,
+      kind: 'text',
+      toolName: PICK_CATEGORY_TOOL,
+      success: false,
+      errorCode,
+      latencyMs: Date.now() - startedAt,
+    });
+    return null;
+  }
 }

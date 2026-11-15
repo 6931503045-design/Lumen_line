@@ -45,6 +45,7 @@ import {
   FALLBACK_EXPENSE_CATEGORY,
   interpretUserMessage,
   resolveCategory,
+  suggestCategoryForItem,
 } from '../services/ai/router';
 import { MAX_AMOUNT_SATANG } from '../config/constants';
 import { env } from '../config/env';
@@ -158,10 +159,49 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
       env.appBaseUrl
     );
 
+    // ทั้งพจนานุกรมส่วนตัวและตารางคำกลางไม่รู้จักคำนี้ (ลง "อื่นๆ") → ให้ AI "เสนอ" หมวด
+    // ⚖️ G2: ไม่ย้ายหมวดให้เอง ผู้ใช้กด "ใช่" ก่อน (set_category) แล้วระบบจะจำคำนี้ไว้
+    // ⚖️ G4: AI ใช้ไม่ได้/ช้า → ไม่มีข้อเสนอ การ์ดออกเหมือนเดิม
+    const suggestion =
+      !matched && entryType === 'expense'
+        ? await suggestCategoryForItem(userId, parsed.category, 'expense')
+        : null;
+
     // S5.8: รายการนี้ทำให้ข้ามเกณฑ์งบพอดี — แนบไปกับ reply เดียวกัน
     // reply มี quota แยกจาก push และไม่จำกัดจำนวน จึงเตือนตรงนี้ได้ฟรี
     // ถ้าปล่อยไปเตือนทีหลังต้องใช้ push ซึ่งมีแค่ 280 ครั้งต่อเดือนทั้งระบบ
-    await replyFlex(replyToken, card, tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : undefined);
+    const extraLines = [
+      tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : null,
+      suggestion ? `🤔 "${parsed.category}" น่าจะเป็นหมวด ${suggestion.name} ใช่ไหมครับ?` : null,
+    ].filter((line): line is string => Boolean(line));
+
+    await replyFlex(
+      replyToken,
+      card,
+      extraLines.length > 0 ? extraLines.join('\n\n') : undefined,
+      suggestion
+        ? [
+            {
+              type: 'action',
+              action: {
+                type: 'postback',
+                label: `ใช่ ${suggestion.name}`.slice(0, 20),
+                data: `action=set_category&id=${tx.id}&cat=${suggestion.id}`,
+                displayText: `ใช่ หมวด ${suggestion.name}`,
+              },
+            },
+            {
+              type: 'action',
+              action: {
+                type: 'postback',
+                label: 'เลือกหมวดเอง',
+                data: `action=edit_category&id=${tx.id}`,
+                displayText: 'เลือกหมวดเอง',
+              },
+            },
+          ]
+        : undefined
+    );
   } catch (err) {
     console.error('[textHandler] createTransaction error:', err);
     // ยอดเกินเพดานต่อรายการเป็นเรื่องของสิ่งที่ผู้ใช้พิมพ์ ไม่ใช่ระบบพัง
