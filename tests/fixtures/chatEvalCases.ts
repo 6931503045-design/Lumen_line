@@ -61,7 +61,7 @@ export const CHAT_EVAL_CASES: ChatEvalCase[] = [
   { text: 'ข้าวมันไก่ 50', expect: { route: 'save', type: 'expense', amountSatang: 5000, category: 'อาหาร' } },
   { text: 'ชานมไข่มุก 65', expect: { route: 'save', type: 'expense', amountSatang: 6500, category: 'อาหาร' } },
   { text: 'coffee 80', expect: { route: 'save', type: 'expense', amountSatang: 8000, category: 'อาหาร' } },
-  { text: 'lineman 89', expect: { route: 'save', type: 'expense', amountSatang: 8900, category: 'อาหาร' }, gap: 'ตารางคำกลางยังไม่มีแอปสั่งอาหาร' },
+  { text: 'lineman 89', expect: { route: 'save', type: 'expense', amountSatang: 8900, category: 'อาหาร' } },
   { text: 'ค่าไฟ 900', expect: { route: 'save', type: 'expense', amountSatang: 90000, category: 'ที่พัก/บิล' } },
   { text: 'ค่าน้ำ 150', expect: { route: 'save', type: 'expense', amountSatang: 15000, category: 'ที่พัก/บิล' } },
   { text: 'ค่าหอ 3500', expect: { route: 'save', type: 'expense', amountSatang: 350000, category: 'ที่พัก/บิล' } },
@@ -78,6 +78,15 @@ export const CHAT_EVAL_CASES: ChatEvalCase[] = [
   { text: 'เสื้อ 390', expect: { route: 'save', type: 'expense', amountSatang: 39000, category: 'ช้อปปิ้ง' } },
   { text: 'netflix 169', expect: { route: 'save', type: 'expense', amountSatang: 16900, category: 'บันเทิง' } },
   { text: 'ดูหนัง 220', expect: { route: 'save', type: 'expense', amountSatang: 22000, category: 'บันเทิง' } },
+  { text: 'อเมซอน 60', expect: { route: 'save', type: 'expense', amountSatang: 6000, category: 'อาหาร' } },
+  { text: 'foodpanda 150', expect: { route: 'save', type: 'expense', amountSatang: 15000, category: 'อาหาร' } },
+  { text: 'ais 299', expect: { route: 'save', type: 'expense', amountSatang: 29900, category: 'ที่พัก/บิล' } },
+  { text: 'ค่าสมัครสอบ 500', expect: { route: 'save', type: 'expense', amountSatang: 50000, category: 'การศึกษา' } },
+  { text: 'toeic 1800', expect: { route: 'save', type: 'expense', amountSatang: 180000, category: 'การศึกษา' } },
+  { text: 'แว่นตา 1500', expect: { route: 'save', type: 'expense', amountSatang: 150000, category: 'สุขภาพ' } },
+  { text: 'ค่าวิน 20', expect: { route: 'save', type: 'expense', amountSatang: 2000, category: 'เดินทาง' } },
+  // "ค่าขนม" ฝั่งรายจ่าย = ของกิน (คำว่า "ขนม" ในตาราง) ไม่ใช่เงินที่พ่อแม่ให้
+  { text: 'ค่าขนม 20', expect: { route: 'save', type: 'expense', amountSatang: 2000, category: 'อาหาร' } },
   // คำที่ไม่มีใครรู้จัก (ยังไม่ได้สอน) → "อื่นๆ" ถูกต้องตามกติกา ผู้ใช้กดเปลี่ยนหมวดแล้วระบบจะจำ
   { text: 'ร้านป้าแดง 50', expect: { route: 'save', type: 'expense', amountSatang: 5000, category: 'อื่นๆ' } },
 
@@ -85,6 +94,8 @@ export const CHAT_EVAL_CASES: ChatEvalCase[] = [
   { text: '+เงินเดือน 15000', expect: { route: 'save', type: 'income', amountSatang: 1500000, category: 'เงินเดือน' } },
   { text: 'เงินเดือน 15000', expect: { route: 'save', type: 'income', amountSatang: 1500000, category: 'เงินเดือน' } },
   { text: 'ได้เงินค่าขนม 500', expect: { route: 'save', type: 'income', amountSatang: 50000, category: null } },
+  { text: 'แม่โอน 3000', expect: { route: 'save', type: 'income', amountSatang: 300000, category: 'เงินคืน/รับโอน' } },
+  { text: 'พ่อให้ 1000', expect: { route: 'save', type: 'income', amountSatang: 100000, category: 'เงินคืน/รับโอน' } },
   { text: 'salary 35000', expect: { route: 'save', type: 'income', amountSatang: 3500000, category: 'เงินเดือน' } },
 
   // ── ต้องไม่บันทึก ─────────────────────────────────────────────────────────
