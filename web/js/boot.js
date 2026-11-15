@@ -179,13 +179,56 @@
    * จะไม่มี /api/* ให้เรียก — กรณีนี้ต้องให้ดู UI ด้วยข้อมูลตัวอย่างต่อไปได้ ไม่ใช่ปิดหน้าทิ้ง
    * แต่ต้องบอกให้ชัดว่าไม่ใช่ข้อมูลจริง
    */
+  /** ?empty=1 = ดูหน้าจอแบบ "ผู้ใช้ใหม่" ที่ยังไม่มีข้อมูลเลย (ใช้ได้เฉพาะโหมดตัวอย่าง) */
+  const EMPTY_PREVIEW = new URLSearchParams(window.location.search).get('empty') === '1';
+
+  /**
+   * ล้างข้อมูลตัวอย่างให้เหมือนผู้ใช้ที่เพิ่งเพิ่มเพื่อนบอท — ให้คนตรวจกดดู empty state ได้จริง
+   * (เกณฑ์ M3 ขอ "ทางที่ผิด (empty/error state)" แต่ข้อมูลตัวอย่างเต็มทุกหน้า จึงไม่มีทางเห็น)
+   * แก้ในที่เดิม (ไม่แทนที่ object) เพราะ app.js จับ reference ของ window.mockData ไว้ตั้งแต่โหลด
+   * เหลือหมวดตั้งต้นไว้แต่ไม่มีงบ/ยอดใช้ เพราะผู้ใช้ใหม่จริงก็ได้หมวดตั้งต้นมาตั้งแต่สมัคร
+   */
+  function applyEmptyPreview() {
+    const mock = window.mockData;
+    if (!mock) return;
+    mock.transactions.length = 0;
+    mock.plans.length = 0;
+    mock.categories.forEach((cat) => {
+      cat.used = 0;
+      cat.limit = 0;
+      cat.percentage = 0;
+    });
+    mock.monthlyHistory.forEach((month) => {
+      Object.keys(month.usage).forEach((id) => { month.usage[id] = 0; });
+    });
+    Object.assign(mock.summary, {
+      balance: 0, income: 0, expense: 0, safeToSpend: 0, progress: 0,
+      daysOfData: 0, monthlyBudgetLimit: 0, monthlyBudgetUsed: 0, forecastBalance: 0,
+      confidence: 'low', safeToSpendConfidence: 'low',
+    });
+    mock.donutData.values = mock.donutData.values.map(() => 0);
+    mock.lineData.income = mock.lineData.income.map(() => 0);
+    mock.lineData.expense = mock.lineData.expense.map(() => 0);
+  }
+
   function enterPreviewMode() {
     previewMode = true;
+    if (EMPTY_PREVIEW) applyEmptyPreview();
     stopLoading();
     showPrototypeBar();
     // คืนค่าให้ app.js ทำงานแบบเดิมทุกอย่าง: ไม่มี backend ให้บันทึก การแก้ข้อมูลในเครื่องจึงเป็นทางเดียว
     window.__jodtangApiWired = false;
     delete window.jodtangPersist;
+    // ตัวกรองหน้ารายการตั้งต้นที่ "เดือนปัจจุบันจริง" แต่ข้อมูลตัวอย่างเป็นเดือนตายตัว (ก.ย. 2026)
+    // พอเลยเดือนนั้นไป หน้ารายการในโหมดตัวอย่างขึ้น "ไม่พบรายการ" ทั้งที่มีข้อมูล — คนตรวจเห็นหน้าว่าง
+    // ย้ายไปเดือนของวันอ้างอิงของข้อมูลตัวอย่างแทน (getLimitToday คืนวันนั้นเมื่อ flag ข้างบนเป็น false)
+    // transactionState / getMonthBounds ประกาศระดับบนสุดใน app.js จึงเรียกจากที่นี่ได้ (แบบเดียวกับ dashboardState)
+    if (typeof transactionState !== 'undefined' && typeof getMonthBounds === 'function'
+      && typeof getLimitToday === 'function' && typeof parseDateKey === 'function') {
+      const bounds = getMonthBounds(parseDateKey(getLimitToday()));
+      transactionState.rangeStart = bounds.start;
+      transactionState.rangeEnd = bounds.end;
+    }
     if (typeof bindSettingsActions === 'function') bindSettingsActions();
     // หน้าถูกวาดไปแล้วตอนที่ยังไม่รู้ว่ามี backend (flag ยังเป็น true อยู่ทำให้ getLimitToday ใช้วันที่จริง)
     // วาดใหม่หลังคืน flag เพื่อให้เพดานใช้วันที่ของข้อมูลตัวอย่าง
@@ -199,9 +242,21 @@
     const banner = document.createElement('div');
     banner.className = 'an-sim-verdict warn';
     banner.style.marginBottom = 'var(--space-3)';
-    banner.innerHTML = 'กำลังดูตัวอย่างหน้าตาเว็บ ตัวเลขทั้งหมดเป็นข้อมูลสมมติ ไม่ใช่ข้อมูลของคุณ'
-      + '<br><small style="font-weight:400">หน้านี้เปิดจากที่ที่ไม่มีระบบหลังบ้าน ถ้าต้องการข้อมูลจริงให้เข้าผ่านลิงก์ของแอป</small>';
+    banner.innerHTML = (EMPTY_PREVIEW
+      ? 'กำลังดูแบบ <b>ผู้ใช้ใหม่ที่ยังไม่มีข้อมูล</b> (empty state)'
+      : 'กำลังดูตัวอย่างหน้าตาเว็บ ตัวเลขทั้งหมดเป็นข้อมูลสมมติ ไม่ใช่ข้อมูลของคุณ')
+      + '<br><small style="font-weight:400">หน้านี้เปิดจากที่ที่ไม่มีระบบหลังบ้าน ถ้าต้องการข้อมูลจริงให้เข้าผ่านลิงก์ของแอป · '
+      + `<a href="${previewToggleHref()}">${EMPTY_PREVIEW ? 'กลับไปดูแบบมีข้อมูล' : 'ดูแบบผู้ใช้ใหม่ (ไม่มีข้อมูล)'}</a></small>`;
     main.prepend(banner);
+  }
+
+  /** ลิงก์สลับโหมด มีข้อมูล ↔ ว่าง ในหน้าเดิม — ลิงก์ค่าคงที่ ไม่มีข้อความจากผู้ใช้ปน */
+  function previewToggleHref() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('preview', '1');
+    if (EMPTY_PREVIEW) url.searchParams.delete('empty');
+    else url.searchParams.set('empty', '1');
+    return url.pathname.slice(url.pathname.lastIndexOf('/') + 1) + url.search;
   }
 
   /** หน้าที่ยังไม่ได้ต่อ API ต้องบอกให้ชัดว่าตัวเลขที่เห็นไม่ใช่ของจริง */
@@ -1021,6 +1076,15 @@
       return;
     }
 
+    // เปิดไฟล์ตรงจากเครื่อง (ดับเบิลคลิก web/*.html → file://) = ไม่มี backend แน่นอน
+    // fetch('/api/me') บน file:// ล้มแบบไม่มี status ซึ่งปกติแปลว่า "เน็ตหลุด" → showOffline()
+    // แต่กรณีนี้ไม่มีข้อมูลจริงของใครให้โชว์ผิดเลย จึงเข้าโหมดตัวอย่างได้อย่างปลอดภัย
+    // (เกณฑ์ M3: prototype ต้อง "เปิดดูได้ในเบราว์เซอร์ ไม่ต้องมี server/DB")
+    if (window.location.protocol === 'file:') {
+      enterPreviewMode();
+      return;
+    }
+
     let me;
     try {
       me = await api.fetchMe();
@@ -1081,7 +1145,8 @@
     window.renderMonthlyBudgetSummary = function wrapped() {
       // dashboardState ประกาศด้วย const ใน app.js จึงไม่อยู่บน window แต่อยู่ใน global scope
       const key = typeof dashboardState !== 'undefined' ? dashboardState.activeMonthKey : null;
-      if (key && !loadedMonths.has(key)) {
+      // โหมดตัวอย่างไม่มี backend — ใช้งบจาก mock-data.js ตรงๆ ไม่ต้องยิง API ให้ล้มเปล่าๆ
+      if (key && !previewMode && !loadedMonths.has(key)) {
         loadMonthBudgets(key).then(() => originalRender()).catch(() => originalRender());
         return;
       }

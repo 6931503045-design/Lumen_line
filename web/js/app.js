@@ -175,9 +175,39 @@ function sameId(a, b) {
   return String(a) === String(b);
 }
 
+// ผู้ใช้ใหม่ที่ยังไม่มีรายการเลย ต้องเห็นว่า "ยังไม่มี + ทำยังไงต่อ" ไม่ใช่กล่องว่างหรือ "ไม่พบตามเงื่อนไข"
+// (อันหลังทำให้เข้าใจว่าตัวเองกรองอะไรผิดไป) — ข้อความคงที่ ไม่มีข้อความจากผู้ใช้ปน
+const NO_TRANSACTIONS_YET = '<div class="empty-state">ยังไม่มีรายการ — พิมพ์ในแชท LINE เช่น <b>กาแฟ 80</b> หรือกด "เพิ่มรายการ"</div>';
+
 function safeNumber(value) {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * ตรวจยอดในฟอร์มก่อนบันทึก — ยอดต้องมากกว่า 0 เสมอ (⚖️ G3: เงินติดลบไม่ได้ ทิศทางดูจาก type)
+ *
+ * ทำไมต้องตรวจที่หน้าเว็บด้วย: backend ตรวจอยู่แล้ว แต่ในโหมดข้อมูลตัวอย่าง (ไม่มี backend)
+ * ฟอร์มบันทึกลงในเครื่องตรง ๆ เคยรับรายการ ฿0 ทั้งที่หน้าสารบัญ prototype บอกว่าระบบปฏิเสธ
+ * แสดงข้อความใต้ช่องแทนการเปิด modal ใหม่ ผู้ใช้จะได้ไม่เสียค่าที่กรอกไว้
+ * @returns true = ยอดใช้ไม่ได้ (ผู้เรียกต้องหยุด)
+ */
+function rejectInvalidAmount(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return false;
+  // ช่องยอดอยู่ใน .amount-input-wrap (มีป้าย ฿) — ต้องวางข้อความต่อท้ายกล่องนั้น ไม่ใช่แทรกเข้าไปข้างใน
+  const anchor = input.closest('.amount-input-wrap') || input;
+  const old = anchor.parentElement.querySelector('.form-error');
+  if (old) old.remove();
+  if (safeNumber(input.value) > 0) return false;
+  const error = document.createElement('p');
+  error.className = 'form-error';
+  error.setAttribute('role', 'alert');
+  error.style.cssText = 'color:var(--danger);font-size:13px;margin:6px 0 0';
+  error.textContent = 'กรุณาใส่จำนวนเงินมากกว่า 0';
+  anchor.insertAdjacentElement('afterend', error);
+  input.focus();
+  return true;
 }
 
 // ยอดเต็มบาทไม่ต้องมี .00 (฿1,350 อ่านง่ายกว่า ฿1,350.00) — มีเศษสตางค์จริงค่อยโชว์ 2 ตำแหน่ง
@@ -952,7 +982,9 @@ function renderDashboard() {
 
   renderHeroPeriod();
 
-  if (transactionList) {
+  if (transactionList && mock.transactions.length === 0) {
+    transactionList.innerHTML = `<li>${NO_TRANSACTIONS_YET}</li>`;
+  } else if (transactionList) {
     transactionList.innerHTML = mock.transactions
       .slice(0, 4)
       .map((item) => {
@@ -1362,7 +1394,8 @@ function renderTransactionsPage() {
   // ⚖️ G1: ห้ามบวกยอดเงินเองในหน้าเว็บ — ยอดรวมต้องมาจาก API
   // backend มี /api/summary ให้เฉพาะ "เดือนปัจจุบัน" ยังไม่มี endpoint สรุปตามช่วงวันที่ที่ผู้ใช้เลือกเอง
   // ช่วงอื่นจึงแสดงว่ายังไม่มีข้อมูล แทนที่จะบวกจากรายการที่โหลดมา (ซึ่งถูกตัดที่ 200 รายการ จะได้ยอดผิด)
-  const defaultRange = getMonthBounds(new Date());
+  // getLimitToday(): ต่อ API = วันนี้จริง · โหมดตัวอย่าง = วันอ้างอิงของข้อมูลตัวอย่าง (เดือนที่มีข้อมูล)
+  const defaultRange = getMonthBounds(parseDateKey(getLimitToday()));
   const isThisMonth = transactionState.rangeStart === defaultRange.start
     && transactionState.rangeEnd === defaultRange.end
     && !transactionState.categoryFilter;
@@ -1522,7 +1555,8 @@ function renderTransactionsPage() {
       })
       .join('');
 
-    transactionTable.innerHTML = html || '<div class="empty-state">ไม่พบรายการตามเงื่อนไข</div>';
+    transactionTable.innerHTML = html
+      || (mock.transactions.length === 0 ? NO_TRANSACTIONS_YET : '<div class="empty-state">ไม่พบรายการตามเงื่อนไข</div>');
   }
 
   const bottomNav = document.querySelector('.bottom-nav');
@@ -3597,6 +3631,7 @@ function openAddTransactionModal() {
   const saveButton = document.querySelector('[data-save-transaction]');
   if (saveButton) {
     saveButton.addEventListener('click', () => {
+      if (rejectInvalidAmount('newTxnAmount')) return;
       const title = document.getElementById('newTxnTitle')?.value || 'รายการใหม่';
       const category = document.getElementById('newTxnCategory')?.value || 'อื่น ๆ';
       const type = document.querySelector('[data-new-transaction-type].active')?.dataset.newTransactionType || 'expense';
@@ -3719,6 +3754,7 @@ function editTransaction(transactionId) {
     updateButton.addEventListener('click', () => {
       const nextItem = mock.transactions.find((item) => sameId(item.id, transactionId));
       if (!nextItem) return;
+      if (rejectInvalidAmount('editTxnAmount')) return;
       const selectedType = document.querySelector('[data-edit-type].active')?.dataset.editType || nextItem.type;
       const nextDate = document.getElementById('editTxnDate')?.value || nextItem.dateKey || new Date().toISOString().slice(0, 10);
       const amountValue = safeNumber(document.getElementById('editTxnAmount')?.value) * 100;
@@ -3892,6 +3928,16 @@ function deleteCategory(categoryId) {
   if (window.jodtangPersist) {
     // backend ปฏิเสธพร้อมบอกจำนวนรายการที่ยังผูกอยู่ ถ้าหมวดนี้ถูกใช้งานอยู่
     window.jodtangPersist.deleteCategory(categoryId);
+    return;
+  }
+
+  // โหมดข้อมูลตัวอย่างต้องปฏิเสธแบบเดียวกับ backend (category.service.ts describeBlocker)
+  // เดิมลบทิ้งทันที ทั้งที่หน้าสารบัญ prototype บอกคนตรวจว่าระบบปฏิเสธ
+  const target = mock.categories.find((item) => sameId(item.id, categoryId));
+  const inUse = target ? mock.transactions.filter((tx) => tx.category === target.name).length : 0;
+  if (inUse > 0) {
+    closeModal();
+    showAlertModal(`ลบไม่ได้ — มี ${inUse} รายการอยู่ในหมวดนี้ ย้ายไปหมวดอื่นก่อนแล้วค่อยลบครับ`, 'ลบหมวดหมู่ไม่ได้');
     return;
   }
 

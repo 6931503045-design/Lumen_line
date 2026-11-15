@@ -4187,3 +4187,14 @@ button.an-legend-row:hover { background: var(--surface-soft); }
 @media (prefers-reduced-motion: reduce) {
   .jt-loading .page-content::before { animation: none; }
 }
+
+/* แถวทางที่ผิดในหน้าสารบัญ prototype ที่กดเปิดหน้าจอนั้นได้ */
+a.proto-cov-row.link {
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+a.proto-cov-row.link:hover,
+a.proto-cov-row.link:focus-visible {
+  border-color: var(--lime-strong);
+}

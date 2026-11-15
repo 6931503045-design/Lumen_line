@@ -2,6 +2,30 @@
 
 ขั้นตอน deploy แบบละเอียดอยู่ที่ [docs/DEPLOY.md](docs/DEPLOY.md)
 
+## 🖱️ วิธีเปิด Clickable Prototype (ไม่ต้องมี server / DB)
+
+**ทางที่ 1 — เปิดไฟล์ในเครื่อง (ไม่ต้องติดตั้งอะไร)**
+
+1. clone หรือดาวน์โหลด repo นี้
+2. ดับเบิลคลิกไฟล์ `web/prototype.html` เพื่อเปิดในเบราว์เซอร์ (Chrome / Edge / Safari)
+3. หน้านั้นคือ**สารบัญหน้าจอ** แยกตาม user journey — กดเปิดหน้าไหนก็ได้ ทุกหน้าใช้ข้อมูลตัวอย่าง (mock) และมีแถบ `Covers:` บนสุดบอกว่าหน้านั้นตอบ FR ข้อไหน
+4. **ทางที่ผิด (empty / error state):** ท้ายหน้าสารบัญมีรายการให้กดดูทีละแบบ หรือกดลิงก์ "ดูแบบผู้ใช้ใหม่ (ไม่มีข้อมูล)" บนแถบเหลืองของทุกหน้า (เท่ากับเติม `?empty=1` ท้าย URL)
+
+**ทางที่ 2 — เปิดจากเว็บที่ deploy แล้ว:** https://lumen-line.onrender.com/prototype.html (ไม่ต้องล็อกอิน กด "ดูตัวอย่างหน้าจอก่อน")
+
+| หน้าจอ | ไฟล์ | Covers |
+|---|---|---|
+| สารบัญหน้าจอ | `web/prototype.html` | — |
+| แชท LINE (จำลอง) | `web/chat.html` | FR-01, FR-03 |
+| ภาพรวม | `web/index.html` | FR-03, FR-04, FR-05, FR-07 |
+| รายการ | `web/transactions.html` | FR-02, FR-03, FR-04 |
+| หมวดหมู่ | `web/categories.html` | FR-06, FR-10 |
+| วิเคราะห์ | `web/analyze.html` | FR-05, FR-07, FR-08, FR-16 |
+| ตั้งค่า | `web/settings.html` | FR-02, FR-09, FR-13 |
+
+> ไม่มีเน็ตก็เปิดได้ — มีแค่ฟอนต์ (Google Fonts) ที่จะกลายเป็นฟอนต์ของเครื่องแทน
+> ถ้าจะรันระบบจริงทั้งหมด (บอท LINE + API + DB) ดูหัวข้อวิธีรันด้านล่าง
+
 
 https://botroadmap.my.canva.site/ this like is for roadmap
 
