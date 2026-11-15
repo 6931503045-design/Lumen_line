@@ -43,6 +43,8 @@ describe.skipIf(!process.env.GEMINI_API_KEY)('Gemini เลือก tool ถู
   it(`ถูกอย่างน้อย ${Math.round(MIN_ACCURACY * 100)}%`, async () => {
     const rows: string[] = [];
     let correct = 0;
+    // ล่ม/โควตาเต็ม (429) ไม่ใช่ "ตอบผิด" — ไม่นับรวมในความแม่นยำ ไม่งั้นตัวเลขหลอกว่า prompt แย่
+    let unanswered = 0;
 
     for (const testCase of aiCases) {
       const result = await understandText({
@@ -52,13 +54,22 @@ describe.skipIf(!process.env.GEMINI_API_KEY)('Gemini เลือก tool ถู
         today: new Date(),
       });
 
+      if (result.kind === 'error') {
+        unanswered += 1;
+        rows.push(`· "${testCase.text}" — ไม่ได้คำตอบ (${result.errorCode}) ไม่นับ`);
+        await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+        continue;
+      }
+
       let verdict: string;
       if (result.kind !== 'tool') {
-        verdict = result.kind === 'text' ? `ตอบเป็นข้อความ: "${result.text.slice(0, 60)}"` : `ล่ม: ${result.errorCode}`;
+        verdict = `ตอบเป็นข้อความ: "${result.text.slice(0, 60)}"`;
       } else if (result.name !== testCase.expect.tool) {
         verdict = `เลือก ${result.name} แทน ${testCase.expect.tool}`;
       } else {
-        verdict = argsMismatch(testCase.expect.args, result.args as Record<string, unknown>) ?? 'ok';
+        const wrong = argsMismatch(testCase.expect.args, result.args as Record<string, unknown>);
+        // แสดง args ทั้งก้อนของข้อที่ผิด — ต้องเห็นว่าโมเดลส่งอะไรมาจริงถึงจะรู้ว่าแก้ prompt ตรงไหน
+        verdict = wrong ? `${wrong} · args=${JSON.stringify(result.args)}` : 'ok';
       }
 
       if (verdict === 'ok') correct += 1;
@@ -66,8 +77,15 @@ describe.skipIf(!process.env.GEMINI_API_KEY)('Gemini เลือก tool ถู
       await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
     }
 
-    const accuracy = correct / aiCases.length;
-    console.log(`\n[eval:ai] ${process.env.GEMINI_MODEL ?? '(GEMINI_MODEL ค่าเริ่มต้น)'} ถูก ${correct}/${aiCases.length} (${Math.round(accuracy * 100)}%)\n${rows.join('\n')}`);
+    const answered = aiCases.length - unanswered;
+    const accuracy = answered > 0 ? correct / answered : 0;
+    console.log(
+      `\n[eval:ai] ${process.env.GEMINI_MODEL ?? '(GEMINI_MODEL ค่าเริ่มต้น)'} ถูก ${correct}/${answered} (${Math.round(accuracy * 100)}%)` +
+        (unanswered ? ` · ไม่ได้คำตอบ ${unanswered} ข้อ (โควตาเต็ม/ล่ม — รอสักนาทีแล้วรันใหม่)` : '') +
+        `\n${rows.join('\n')}`
+    );
+    // ได้คำตอบไม่ถึงครึ่ง = วัดอะไรไม่ได้ ต้องรันใหม่ ไม่ใช่สรุปว่าแม่นหรือไม่แม่น
+    expect(answered, 'ได้คำตอบไม่ถึงครึ่ง — โควตา Gemini น่าจะเต็ม รอแล้วรันใหม่').toBeGreaterThanOrEqual(aiCases.length / 2);
     expect(accuracy).toBeGreaterThanOrEqual(MIN_ACCURACY);
   }, 300_000);
 });

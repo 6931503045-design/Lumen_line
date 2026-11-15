@@ -506,3 +506,12 @@ describe('plan_goal — ยอดเป้าหมายและจำนว�
     expect(result).toMatchObject({ ok: false, errorCode: 'bad_amount' });
   });
 });
+
+describe('create_transaction — โมเดลลืมใส่ type', () => {
+  // วัดผลกับ Gemini จริงแล้วเจอ: ประกาศว่าบังคับแต่โมเดลไม่ส่งมา — ถือเป็นรายจ่าย
+  // (ยังเป็นแค่ pending การ์ดยืนยันแสดง "รายจ่าย" ให้ผู้ใช้เห็นก่อนกด ⚖️ G2)
+  it('ไม่มี type → expense', () => {
+    const result = validateToolCall('create_transaction', { amount: 300, item: 'กินข้าว' }, TODAY);
+    expect(result).toMatchObject({ ok: true, call: { entry: { type: 'expense', amountSatang: 30000 } } });
+  });
+});

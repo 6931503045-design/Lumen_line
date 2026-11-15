@@ -319,7 +319,10 @@ const bahtSchema = z.union([z.number(), z.string()]);
 const itemSchema = z.string().trim().min(1).max(100);
 
 const entrySchema = z.object({
-  type: z.enum(['income', 'expense']),
+  // ไม่ส่ง type มา = รายจ่าย — วัดผลกับ Gemini จริงแล้วโมเดลลืมใส่ทั้งที่ประกาศว่าบังคับ
+  // ("เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย") ถ้าปฏิเสธ ผู้ใช้จะโดนถามกลับทั้งที่ประโยคชัดอยู่แล้ว
+  // ปลอดภัยเพราะยังเป็นแค่ pending — การ์ดยืนยันแสดง "รายจ่าย" ให้ผู้ใช้เห็นก่อนกด (⚖️ G2)
+  type: z.enum(['income', 'expense']).default('expense'),
   amount: bahtSchema,
   item: itemSchema,
   split_count: z.union([z.number(), z.string()]).optional(),

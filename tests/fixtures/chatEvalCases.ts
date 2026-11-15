@@ -113,7 +113,8 @@ export const CHAT_EVAL_CASES: ChatEvalCase[] = [
     real: true,
   },
   { text: 'อยากเก็บเงินซื้อโน้ตบุ๊ก 25000 ภายใน 10 เดือน', expect: { route: 'ai', tool: 'plan_goal', args: { target: 25000, months: 10 } } },
-  { text: 'เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย', expect: { route: 'ai', tool: 'create_transaction', args: { type: 'expense', amount: 300 } } },
+  // "กับเพื่อน" ไม่ใช่การหาร — split_count ต้องไม่มี (วัดผลจริงเคยได้ split_count=2 → บันทึกแค่ครึ่ง)
+  { text: 'เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย', expect: { route: 'ai', tool: 'create_transaction', args: { amount: 300, split_count: undefined } } },
   { text: 'ค่าข้าว 300 หาร 3 คน', expect: { route: 'ai', tool: 'create_transaction', args: { amount: 300, split_count: 3 } } },
   { text: 'ซื้อหูฟัง 1500 ได้ไหม', expect: { route: 'ai', tool: 'simulate_purchase', args: { price: 1500 } } },
   { text: 'แก้รายการล่าสุดเป็น 90', expect: { route: 'ai', tool: 'update_transaction' } },

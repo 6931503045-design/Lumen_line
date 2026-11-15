@@ -959,3 +959,35 @@ describe('suggestCategoryForItem — AI เสนอหมวดให้คำ�
     spy.mockRestore();
   });
 });
+
+describe('🔴 ด่าน G1: ทิ้งการหารบิลที่ผู้ใช้ไม่ได้พูดว่าหาร', () => {
+  // เจอจากการวัดผลกับ Gemini จริง: "เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย" → split_count=2
+  // ถ้าปล่อยไป จะบันทึก ฿150 แทน ฿300
+  function aiReturns(args: Record<string, unknown>) {
+    vi.mocked(understandText).mockResolvedValue({ kind: 'tool', name: 'create_transaction', args });
+  }
+  const payload = () =>
+    (vi.mocked(createPending).mock.calls.at(-1)![0].payload as { amountSatang: number; splitCount: number });
+
+  it('"กินข้าวกับเพื่อน" ไม่ใช่การหาร → บันทึกยอดเต็ม', async () => {
+    aiReturns({ type: 'expense', amount: 300, item: 'กินข้าว', split_count: 2 });
+    await ask('เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย');
+    expect(payload()).toMatchObject({ amountSatang: 30000, splitCount: 1 });
+  });
+
+  it('ผู้ใช้พูดว่า "หาร" → หารจริง', async () => {
+    aiReturns({ type: 'expense', amount: 300, item: 'ค่าข้าว', split_count: 3 });
+    await ask('ค่าข้าว 300 หาร 3 คน');
+    expect(payload()).toMatchObject({ amountSatang: 10000, splitCount: 3 });
+  });
+
+  it('AI ถามกลับ "หารกี่คน" แล้วผู้ใช้ตอบแค่ "3" → ยังหาร (ดูข้อความก่อนหน้าด้วย)', async () => {
+    // ประวัติเก็บข้อความที่ guard redact แล้ว — ให้ guard คืนข้อความจริงเหมือนระบบจริง (ไม่มีอะไรให้ปิด)
+    vi.mocked(checkAiAllowed).mockImplementation(async ({ text }) => ({ ok: true, safeText: text }));
+    vi.mocked(understandText).mockResolvedValueOnce({ kind: 'text', text: 'หารกันกี่คนครับ' });
+    await ask('ค่าข้าว 300 หารกับเพื่อน');
+    aiReturns({ type: 'expense', amount: 300, item: 'ค่าข้าว', split_count: 3 });
+    await ask('3');
+    expect(payload()).toMatchObject({ amountSatang: 10000, splitCount: 3 });
+  });
+});

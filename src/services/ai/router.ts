@@ -263,12 +263,19 @@ export async function interpretUserMessage(input: InterpretInput): Promise<AiRep
     return { kind: 'text', text: validated.askUser };
   }
 
+  // ⚖️ G1: โมเดลหารบิลเองโดยผู้ใช้ไม่ได้พูดว่าหาร → ทิ้ง split ใช้ยอดเต็มตามที่ผู้ใช้พิมพ์
+  // ดูข้อความก่อนหน้าของผู้ใช้ด้วย: AI ถาม "หารกันกี่คน" แล้วผู้ใช้ตอบแค่ "3" ก็ยังเป็นการหารจริง
+  const call = dropUnspokenSplit(validated.call, [
+    ...priorTurns.filter((turn) => turn.role === 'user').map((turn) => turn.text),
+    input.text,
+  ].join('\n'));
+
   try {
-    const reply = await runToolCall(input.userId, validated.call, todayIso, now);
+    const reply = await runToolCall(input.userId, call, todayIso, now);
     pushExchange(
       input.userId,
       allowed.safeText,
-      describeToolOutcome(validated.call, reply),
+      describeToolOutcome(call, reply),
       now.getTime()
     );
 
@@ -631,6 +638,28 @@ function describePlanGoal(itemName: string, targetSatang: number, preview: PlanP
     AI_DISCLAIMER
   );
   return lines.join('\n');
+}
+
+/** คำที่บอกว่าผู้ใช้หารบิลจริง — ไม่มีคำพวกนี้ = จ่ายเองเต็มจำนวน */
+const SPLIT_WORDS = /หาร|แชร์|แบ่ง|คนละ|ช่วยกันจ่าย|split|share/i;
+
+function withoutSplit(entry: ValidatedEntry): ValidatedEntry {
+  // ยอดเต็มตามที่ผู้ใช้พิมพ์มีอยู่แล้วใน totalSatang — ไม่มีการคิดเลขใหม่ (⚖️ G1)
+  return entry.splitCount > 1 ? { ...entry, amountSatang: entry.totalSatang, splitCount: 1 } : entry;
+}
+
+/**
+ * 🔴 ทิ้ง split_count ที่โมเดลใส่มาเองโดยผู้ใช้ไม่ได้พูดว่าหาร
+ *
+ * เจอจากการวัดผลกับ Gemini จริง: "เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย" → split_count=2
+ * ถ้าปล่อยไป ระบบจะบันทึก ฿150 แทน ฿300 — prompt สั่งห้ามแล้ว แต่ prompt เป็นแค่การขอ
+ * ด่านนี้คือการบังคับ (เหตุผลเดียวกับ mentionsUnseenNumber)
+ */
+export function dropUnspokenSplit(call: ValidatedToolCall, userText: string): ValidatedToolCall {
+  if (SPLIT_WORDS.test(userText)) return call;
+  if (call.name === 'create_transaction') return { ...call, entry: withoutSplit(call.entry) };
+  if (call.name === 'create_transaction_batch') return { ...call, entries: call.entries.map(withoutSplit) };
+  return call;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
