@@ -10,7 +10,7 @@ Messages typed into the bot stay in Thai — the bot reads Thai. The meaning is 
 | 2 | Teerapat | LINE chat demo | 1:30–3:30 |
 | 3 | Aitthiphat | Web demo | 3:30–5:45 |
 | 4 | Teerat | Money Engine + unhappy paths | 5:45–7:45 |
-| 5 | Sorrawis | Golden Thread + lessons | 7:45–9:15 |
+| 5 | Sorrawis | Golden Thread + lessons | 7:45–9:25 |
 
 > ⏱️ If a rehearsal still runs over 10 minutes, cut the parts marked ✂️ first.
 
@@ -26,11 +26,11 @@ Messages typed into the bot stay in Thai — the bot reads Thai. The meaning is 
 >
 > *[Wait 2 seconds]*
 >
-> That's our first problem. Most apps take several steps per entry, so people stop logging within two or three weeks.
-> The second problem: even if you log everything, the app only tells you where your money went. It doesn't answer the two questions you actually care about:
+> *[Slide 2]* That's our first problem. Most apps take several steps per entry, so people stop logging within two or three weeks.
+> *[Slide 3]* The second problem: even if you log everything, the app only tells you where your money went. It doesn't answer the two questions you actually care about:
 > **"How much can I still spend today?"** and **"I want this thing — how do I save for it?"**
 
-*[Slide 2]*
+*[Slide 4]*
 
 > Our users are students who get their money as a monthly lump sum, and who already have LINE open all day.
 > So we built it on LINE. No new app to install, and you log an expense in one message.
@@ -41,7 +41,7 @@ Messages typed into the bot stay in Thai — the bot reads Thai. The meaning is 
 
 ## 2 · Teerapat — LINE chat demo (~2:00)
 
-*[Switch to the phone screen]*
+*[Slide 6, then switch to the phone screen]*
 
 > Say I just bought a coffee. I only type this.
 
@@ -75,9 +75,9 @@ Messages typed into the bot stay in Thai — the bot reads Thai. The meaning is 
 > You open the website straight from LINE and log in with your LINE account. No sign-up.
 > The Overview page shows what you can spend today, the same number as in the chat, plus the entries we just typed. This is **FR-04**.
 
-*[Transactions page → point at the "อีเมล" (Email) tag]*
+*[Settings page → point at "จดอัตโนมัติจากอีเมลธนาคาร" (auto-record from bank email)]*
 
-> This entry has an "Email" tag. Nobody typed it. It came from a K PLUS bank email that was forwarded in, and it showed up on its own within 5 minutes. This is **FR-02**.
+> This is my personal forwarding address. Forward a K PLUS email here, and it shows up as an entry on its own within 5 minutes. No typing at all. That's **FR-02**.
 
 *[Categories page]*
 
@@ -88,7 +88,7 @@ Messages typed into the bot stay in Thai — the bot reads Thai. The meaning is 
 > The second question: I want headphones for 3,000 baht. The system offers three options — fast, balanced, and relaxed — each showing how much to save per month and for how many months. This is **FR-07**.
 > Once I pick one, I can move money into the plan and track progress, and the bot warns me if I fall behind. That's **FR-08**.
 
-✂️
+✂️ *[Slide 8 — System]*
 
 > Behind the scenes it's a Node.js server on Render with data in Supabase, and every push has to pass the tests before it deploys.
 
@@ -98,11 +98,13 @@ Messages typed into the bot stay in Thai — the bot reads Thai. The meaning is 
 
 ## 4 · Teerat — Money Engine and unhappy paths (~2:00)
 
+*[Slide 9]*
+
 > In a money app, one wrong number and users stop trusting it. Our principle is: **AI is an interpreter, not an accountant.**
 > AI never calculates money. Money is stored as whole satang, so the error is zero satang. That's **NFR-02**.
 > And if AI wants to record anything, the user has to confirm first.
 >
-> Most messages are read by plain code. Out of 84 real chat messages, only 11% needed AI.
+> *[Slide 10 — Router]* Most messages are read by plain code. Out of 84 real chat messages, only 11% needed AI.
 > Turn AI off and all 8 Must requirements still work. That's **NFR-01**.
 >
 > Now let's look at what happens when things go wrong. If I type something incomplete:
@@ -128,25 +130,30 @@ Messages typed into the bot stay in Thai — the bot reads Thai. The meaning is 
 
 ---
 
-## 5 · Sorrawis — Golden Thread and lessons (~1:30)
+## 5 · Sorrawis — Golden Thread and lessons (~1:40)
 
-*[Slide 5 — Golden Thread]*
+*[Switch to the GitHub tab: `docs/FINAL_REPORT.md` §9 — Golden Thread table (open it before the talk)]*
 
-> This table proves everything connects. Take one row.
+> This is the Golden Thread table from our final report. Every row runs from a problem, to a requirement, to a design, to a feature, to a test. Take one row.
 > The problem "How much can I still spend today?" becomes **FR-05**, designed in the Money Engine where AI is not allowed, delivered as the `เหลือ` command you just saw, and backed by a passing test.
-> *[Point at the sequence diagram]* And this is the diagram for **FR-01**: the path the "coffee 80" message takes.
->
-> Every time we change the code, **1,299 automated tests** must pass before anything reaches the live site.
+> *[Scroll up to §4.3 — sequence diagram]* And this is the sequence diagram for **FR-01**: the path the "coffee 80" message takes.
 
-✂️
+*[Slide 11 — Proof]*
+
+> Every time we change the code, **1,299 automated tests** must pass before anything reaches the live site.
+> And everything — code, docs, diagrams and the clickable prototype — lives in our GitHub repo. The README shows how to open the prototype with no server.
+
+✂️ *[Slide 12 — True story]*
 
 > We once had budget-alert code, written with AI help, that looked right on every line — but it rounded 79.99966% up to 80% and warned too early. The tests caught it before any user did.
 
-*[Slide 6]*
+*[Slide 13 — What we learned]*
 
 > We used AI to help write code, under rules our team wrote down. And our biggest lesson is:
 > **"AI speeds up writing. It doesn't speed up knowing it's right."**
->
+
+*[Slide 14]*
+
 > Thank you. Any questions?
 
 *[Invite the whole team to the front]*
