@@ -57,6 +57,7 @@ import { CHAT_EVAL_CASES, type ChatEvalCase } from './fixtures/chatEvalCases';
 type Outcome =
   | { route: 'command'; command: string }
   | { route: 'save'; type: string; amountSatang: number; category: string | null }
+  | { route: 'save_batch'; items: Array<{ type: string; amountSatang: number; category: string | null }> }
   | { route: 'help' }
   | { route: 'ai' }
   | { route: 'none' };
@@ -86,10 +87,13 @@ async function run(text: string): Promise<Outcome> {
 
   const command = vi.mocked(runCommandCard).mock.calls[0]?.[1];
   if (command) return { route: 'command', command };
-  const saved = vi.mocked(createTransaction).mock.calls[0]?.[0];
-  if (saved) {
-    return { route: 'save', type: saved.type, amountSatang: saved.amountSatang, category: saved.categoryName ?? null };
-  }
+  const saves = vi.mocked(createTransaction).mock.calls.map(([input]) => ({
+    type: input.type,
+    amountSatang: input.amountSatang,
+    category: input.categoryName ?? null,
+  }));
+  if (saves.length > 1) return { route: 'save_batch', items: saves };
+  if (saves.length === 1) return { route: 'save', ...saves[0]! };
   if (vi.mocked(answerHelpTopic).mock.calls.length > 0) return { route: 'help' };
   if (vi.mocked(interpretUserMessage).mock.calls.length > 0) return { route: 'ai' };
   return { route: 'none' };
@@ -98,10 +102,25 @@ async function run(text: string): Promise<Outcome> {
 /** ผลตรงกับที่คาดไหม — คืนเหตุผลถ้าไม่ตรง */
 function mismatch(testCase: ChatEvalCase, outcome: Outcome): string | null {
   const want = testCase.expect;
-  if (want.route === 'not_saved') return outcome.route === 'save' ? 'บันทึกไปแล้ว ทั้งที่ต้องไม่บันทึก' : null;
+  if (want.route === 'not_saved') {
+    return outcome.route === 'save' || outcome.route === 'save_batch' ? 'บันทึกไปแล้ว ทั้งที่ต้องไม่บันทึก' : null;
+  }
   if (want.route !== outcome.route) return `ไปทาง ${outcome.route} แทน ${want.route}`;
   if (want.route === 'command' && outcome.route === 'command' && want.command !== outcome.command) {
     return `ได้คำสั่ง ${outcome.command} แทน ${want.command}`;
+  }
+  if (want.route === 'save_batch' && outcome.route === 'save_batch') {
+    if (want.items.length !== outcome.items.length) return `ได้ ${outcome.items.length} รายการ แทน ${want.items.length}`;
+    for (const [i, item] of want.items.entries()) {
+      const got = outcome.items[i]!;
+      if (
+        item.type !== got.type ||
+        item.amountSatang !== got.amountSatang ||
+        (item.category !== null && item.category !== got.category)
+      ) {
+        return `รายการที่ ${i + 1} ได้ ${got.type} ${got.amountSatang} ${got.category ?? '(ว่าง)'} แทน ${item.type} ${item.amountSatang} ${item.category}`;
+      }
+    }
   }
   if (want.route === 'save' && outcome.route === 'save') {
     if (want.type !== outcome.type) return `ได้ ${outcome.type} แทน ${want.type}`;
@@ -137,6 +156,9 @@ describe('ชุดประโยคจริง — บอทเข้าใ�
   afterAll(() => {
     const passed = results.filter((r) => r.ok).length;
     console.log(`\n[chatEval] เข้าใจถูก ${passed}/${results.length} ประโยค (${Math.round((passed / results.length) * 100)}%)`);
+    // ตัวชี้วัดว่าบอทพึ่ง AI แค่ไหน — ควรลดลงเรื่อย ๆ เมื่อกฎครอบรูปประโยคได้มากขึ้น
+    const needAi = CHAT_EVAL_CASES.filter((c) => c.expect.route === 'ai').length;
+    console.log(`[chatEval] ต้องพึ่ง AI ${needAi}/${CHAT_EVAL_CASES.length} ประโยค (${Math.round((needAi / CHAT_EVAL_CASES.length) * 100)}%) — ที่เหลือตอบด้วยกฎ`);
     for (const r of results.filter((x) => !x.ok)) {
       console.log(`  ✗ "${r.text}" — ${r.why}${r.gap ? ` (gap: ${r.gap})` : ''}`);
     }
@@ -147,6 +169,7 @@ function describeExpect(testCase: ChatEvalCase): string {
   const want = testCase.expect;
   if (want.route === 'command') return `คำสั่ง ${want.command}`;
   if (want.route === 'save') return `บันทึก${want.type === 'income' ? 'รายรับ' : 'รายจ่าย'} ${want.amountSatang / 100}${want.category ? ` หมวด ${want.category}` : ''}`;
+  if (want.route === 'save_batch') return `บันทึก ${want.items.length} รายการ`;
   if (want.route === 'ai') return 'ส่งให้ AI';
   if (want.route === 'help') return 'ตอบจากคู่มือ';
   return 'ไม่บันทึก';

@@ -21,6 +21,7 @@ import { buildBudgetCard, type BudgetCardRow } from '../line/flex/budgetCard';
 import { AI_DISCLAIMER } from '../config/constants';
 import { env } from '../config/env';
 import { getSafeToSpend, getUserSummary, type SafeToSpend } from './summary.service';
+import { buildTodaySummaryText } from './dailySummary.service';
 import { getBudgetOverview } from './budget.service';
 import { listPlansWithProgress, transferToPlan } from './plan.service';
 import {
@@ -38,6 +39,7 @@ import { findLatestChatTransaction, softDeleteTransaction } from '../db/queries/
 
 export type CommandName =
   | 'summary'
+  | 'today'
   | 'remaining'
   | 'remaining_tomorrow'
   | 'remaining_week'
@@ -47,7 +49,9 @@ export type CommandName =
   | 'plans'
   | 'budget'
   | 'help'
-  | 'privacy';
+  | 'privacy'
+  | 'greeting'
+  | 'thanks';
 
 /**
  * คำสั่งที่รองรับ — คีย์คือข้อความที่ผู้ใช้พิมพ์
@@ -56,6 +60,10 @@ export type CommandName =
  */
 const COMMANDS: Record<string, CommandName> = {
   'สรุป': 'summary',
+  'วันนี้': 'today',
+  'สรุปวันนี้': 'today',
+  'วันนี้ใช้ไปเท่าไหร่': 'today',
+  'today': 'today',
   'เหลือ': 'remaining',
   'แผน': 'plans',
   'งบ': 'budget',
@@ -193,7 +201,63 @@ export function matchCommand(text: string): CommandName | null {
   const exact = COMMANDS[text.trim()];
   if (exact) return exact;
   const normalized = normalizeCommandText(text);
-  return normalized ? (NORMALIZED_COMMANDS.get(normalized) ?? null) : null;
+  const fromTable = normalized ? (NORMALIZED_COMMANDS.get(normalized) ?? null) : null;
+  return fromTable ?? matchSmallTalk(text) ?? matchQuestionIntent(text);
+}
+
+/**
+ * ทักทาย/ขอบคุณ — เดิมไปถึง AI ทุกครั้ง เปลืองโควตากับข้อความที่ตอบเองได้
+ * ต้องเป็นทั้งข้อความ (ตัดคำสุภาพ/อีโมจิออกแล้ว) — "สวัสดีครับ อยากถามว่า..." ยังไปทางอื่น
+ */
+function matchSmallTalk(text: string): CommandName | null {
+  const t = text
+    .trim()
+    .toLowerCase()
+    .replace(/[\s!.~😊🙏👋😄😀❤️♥️]+/gu, '')
+    .replace(/(ครับ|คับ|ค่ะ|คะ|ค่า|จ้า|จ้ะ|นะ|มาก|มากๆ|ๆ)+$/u, '');
+  if (/^(สวัสดี|หวัดดี|ดีจ้า|ดีครับ|ดีค่ะ|hello|hi|hey)$/.test(t)) return 'greeting';
+  if (/^(ขอบคุณ|ขอบใจ|แต๊งกิ้ว|thankyou|thanks|thx|ty)$/.test(t)) return 'thanks';
+  return null;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// คำถามเรื่องเงินที่ไม่ตรงตาราง — จับจากคำสำคัญ ไม่ต้องรอ AI
+// ────────────────────────────────────────────────────────────────────────────
+//
+// 🔴 ทำไมต้องมี: ตารางคำสั่งต้องตรงทั้งประโยค คนพิมพ์คำถามเดียวกันได้ร้อยแบบ
+// ("เดือนนี้ใช้ไปเท่าไหร่แล้ว" "สรุปให้หน่อย" "งบอาหารเหลือเท่าไหร่") จึงไปถึง AI หมด
+// ทั้งที่ AI ก็แค่เลือกคำสั่งตัวเดียวกันนี้กลับมา — ช้า เปลืองโควตา และใช้ไม่ได้ตอนปิด AI (⚖️ G4)
+//
+// ทำไมไม่ชนการจดเงิน (เหตุผลเดิมที่ SPEC §S1 ให้เทียบทั้งข้อความ — "จ่ายค่าสรุปโครงการ 200"):
+// ทำงานเฉพาะข้อความที่ "ไม่มีตัวเลขเลย" ข้อความจดเงินมีตัวเลขเสมอ จึงไม่มีทางมาถึงตรงนี้
+// และต้องเป็นประโยคคำถาม/ขอดู ไม่ใช่ถามวิธีใช้ (ไปคู่มือ) หรือสั่งแก้/ลบ (ไป AI)
+
+/** ประโยคถามหรือขอดู */
+const ASKING = /เท่าไหร่|เท่าไร|กี่บาท|ไหม|มั้ย|ไหน|บ้าง|หน่อย|\?|สรุป|ดู|เช็ค|ขอ|how much|left|show/i;
+/** ถามวิธีใช้ — ให้คู่มือ (help.service) หรือ AI ตอบ */
+const HOW_TO = /ยังไง|อย่างไร|ทำไง|ที่ไหน|วิธี|how to|how do/i;
+/** สั่งแก้/ลบ/ตั้งค่า — ไม่ใช่คำถาม */
+const COMMAND_VERB = /^(ไม่ใช่|แก้|เปลี่ยน|ลบ|ยกเลิก|ตั้ง|เพิ่ม|สร้าง)/;
+
+function matchQuestionIntent(text: string): CommandName | null {
+  const t = text.trim().toLowerCase();
+  if (!t || [...t].length > 60) return null;
+  if (/[0-9๐-๙]/u.test(t)) return null;
+  if (HOW_TO.test(t) || COMMAND_VERB.test(t) || !ASKING.test(t)) return null;
+
+  // ลำดับมีผล: เรื่องเฉพาะ (งบ/เพดาน/แผน) มาก่อนคำกว้าง ๆ (เหลือ/ใช้ไป)
+  // "งบอาหารเหลือเท่าไหร่" ต้องได้งบ ไม่ใช่ยอดใช้ได้ต่อวัน
+  if (/งบ|budget/.test(t)) return 'budget';
+  if (/เพดาน|limit/.test(t)) return 'limits';
+  if (/รายการประจำ|recurring/.test(t)) return 'recurring';
+  if (/แผน|ออม|เก็บเงิน|saving|plan/.test(t)) return 'plans';
+  if (/พรุ่งนี้|tomorrow/.test(t)) return 'remaining_tomorrow';
+  if (/สัปดาห์|อาทิตย์|วีค|week/.test(t)) return 'remaining_week';
+  if (/ใช้ได้|เหลือ|ใช้อีก|left|can spend/.test(t)) return /เดือน|month/.test(t) ? 'remaining_month' : 'remaining';
+  if (/ใช้ไป|จ่ายไป|หมดไป|ใช้เงิน|รายจ่าย|รายรับ|สรุป|spent|summary/.test(t)) {
+    return /วันนี้|today/.test(t) ? 'today' : 'summary';
+  }
+  return null;
 }
 
 /**
@@ -791,6 +855,8 @@ export async function runCommand(userId: string, command: CommandName): Promise<
   switch (command) {
     case 'summary':
       return buildSummary(userId);
+    case 'today':
+      return buildTodaySummaryText(userId);
     case 'remaining':
       return buildRemaining(userId);
     case 'remaining_tomorrow':
@@ -811,6 +877,10 @@ export async function runCommand(userId: string, command: CommandName): Promise<
       return HELP_TEXT;
     case 'privacy':
       return PRIVACY_NOTICE;
+    case 'greeting':
+      return 'สวัสดีครับ 👋 จดเงินได้เลย เช่น "กาแฟ 80" · ถามได้ เช่น "เหลือ" "สรุป" · พิมพ์ "ช่วยเหลือ" ดูคำสั่งทั้งหมด';
+    case 'thanks':
+      return 'ยินดีครับ 😊';
   }
 }
 

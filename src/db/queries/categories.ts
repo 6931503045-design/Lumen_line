@@ -309,3 +309,33 @@ export async function deleteCategoryForUser(
   }
   return (data ?? []).length > 0;
 }
+
+/** ดูย้อนหลังกี่รายการตอนจัดอันดับหมวดที่ใช้บ่อย — พอให้เห็นนิสัยล่าสุด และไม่ดึงทั้งประวัติ */
+const RECENT_USAGE_WINDOW = 300;
+
+/**
+ * category_id ของรายการล่าสุดของผู้ใช้ (ชนิดเดียวกัน ไม่นับที่ลบแล้ว) — เอาไปนับว่าหมวดไหนใช้บ่อย
+ * ⚖️ G6: กรอง user_id เสมอ
+ */
+export async function listRecentCategoryIds(
+  userId: string,
+  type: 'income' | 'expense',
+  limit: number = RECENT_USAGE_WINDOW
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('category_id')
+    .eq('user_id', userId)
+    .eq('type', type)
+    .is('deleted_at', null)
+    .not('category_id', 'is', null)
+    .order('occurred_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+  return (data ?? [])
+    .map((row) => (row as { category_id: string | null }).category_id)
+    .filter((id): id is string => Boolean(id));
+}

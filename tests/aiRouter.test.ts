@@ -17,7 +17,7 @@ vi.mock('../src/services/ai/guard', () => ({
   describeBlockReason: (reason: string) => reason,
 }));
 
-vi.mock('../src/services/ai/gemini', () => ({ understandText: vi.fn(), suggestCategoryName: vi.fn() }));
+vi.mock('../src/services/ai/gemini', () => ({ understandText: vi.fn() }));
 vi.mock('../src/services/pending.service', () => ({ createPending: vi.fn() }));
 vi.mock('../src/db/queries/categories', () => ({ listCategoriesByUser: vi.fn() }));
 vi.mock('../src/db/queries/transactions', () => ({ listTransactionsByUser: vi.fn() }));
@@ -35,13 +35,12 @@ import { createPending } from '../src/services/pending.service';
 import { findLearnedKeyword } from '../src/db/queries/keywords';
 import { simulatePurchase } from '../src/services/simulate.service';
 import { PlanError, previewSavingPlan } from '../src/services/plan.service';
-import { suggestCategoryName, understandText } from '../src/services/ai/gemini';
+import { understandText } from '../src/services/ai/gemini';
 import { checkAiAllowed } from '../src/services/ai/guard';
 import {
   AI_ANSWER_DROPPED_REPLY,
   interpretUserMessage,
   resetAiHistoryForTest,
-  suggestCategoryForItem,
 } from '../src/services/ai/router';
 
 const TODAY = '2026-10-07';
@@ -920,43 +919,6 @@ describe('🔴 plan_goal — "อยากออมซื้อ CPU 4500 ออ�
     await ask('อยากออมซื้อ CPU 4500');
 
     expect(createPending).not.toHaveBeenCalled();
-  });
-});
-
-describe('suggestCategoryForItem — AI เสนอหมวดให้คำที่ไม่รู้จัก', () => {
-  it('ผ่าน guard ก่อน แล้วส่งเฉพาะข้อความที่ redact แล้ว + ชื่อหมวดชนิดเดียวกัน (⚖️ G5)', async () => {
-    vi.mocked(suggestCategoryName).mockResolvedValue('อาหาร');
-
-    const result = await suggestCategoryForItem('u1', 'ร้านป้าแดง', 'expense', TODAY);
-
-    expect(result).toMatchObject({ id: 'c1', name: 'อาหาร' });
-    expect(checkAiAllowed).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1', text: 'ร้านป้าแดง' }));
-    expect(suggestCategoryName).toHaveBeenCalledWith(
-      expect.objectContaining({ safeItem: 'ข้อความที่ปิดข้อมูลแล้ว', categoryNames: ['อาหาร', 'เดินทาง'] })
-    );
-  });
-
-  it('⚖️ G4: guard ไม่ให้เรียก (ปิด AI / โควตาหมด) → null และไม่เรียกโมเดล', async () => {
-    vi.mocked(checkAiAllowed).mockResolvedValue({ ok: false, reason: 'ai_disabled_globally' });
-    expect(await suggestCategoryForItem('u1', 'ร้านป้าแดง', 'expense', TODAY)).toBeNull();
-    expect(suggestCategoryName).not.toHaveBeenCalled();
-  });
-
-  it('โมเดลตอบ "อื่นๆ" หรือไม่แน่ใจ → ไม่เสนอ', async () => {
-    vi.mocked(suggestCategoryName).mockResolvedValue(null);
-    expect(await suggestCategoryForItem('u1', 'ร้านป้าแดง', 'expense', TODAY)).toBeNull();
-  });
-
-  it('โมเดลตอบชื่อที่ผู้ใช้ไม่มี → ไม่เสนอ (ด่านบังคับอยู่ที่โค้ดเรา ไม่ใช่ enum ของ schema)', async () => {
-    vi.mocked(suggestCategoryName).mockResolvedValue('หมวดที่ไม่มีอยู่');
-    expect(await suggestCategoryForItem('u1', 'ร้านป้าแดง', 'expense', TODAY)).toBeNull();
-  });
-
-  it('พังกลางทาง → null ไม่ throw (ทางด่วนต้องบันทึกได้เสมอ)', async () => {
-    vi.mocked(listCategoriesByUser).mockRejectedValue(new Error('DB ล่ม'));
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    expect(await suggestCategoryForItem('u1', 'ร้านป้าแดง', 'expense', TODAY)).toBeNull();
-    spy.mockRestore();
   });
 });
 

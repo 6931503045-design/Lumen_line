@@ -36,8 +36,9 @@ describe('คำสั่งตายตัวภาษาอังกฤษ', (
     expect(matchCommand('เหลือเท่าไหร่ครับ')).toBe('remaining');
   });
 
-  it('ยังเทียบทั้งข้อความ ไม่ใช่ includes', () => {
-    expect(matchCommand('show me the summary please')).toBeNull();
+  it('ประโยคคำถามภาษาอังกฤษจับจากคำสำคัญ แต่ข้อความที่มีตัวเลขไม่ใช่คำสั่ง', () => {
+    expect(matchCommand('show me the summary please')).toBe('summary');
+    expect(matchCommand('summary report 200')).toBeNull();
   });
 });
 

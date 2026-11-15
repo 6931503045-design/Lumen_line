@@ -44,7 +44,12 @@ function sumSatang(rows: SummaryRow[], type: 'income' | 'expense'): number {
   return add(...rows.filter((row) => row.type === type).map((row) => toSatang(row.amount)));
 }
 
-export function dailySummaryMessage(dateLabel: string, figures: DailyFigures): string {
+export function dailySummaryMessage(
+  dateLabel: string,
+  figures: DailyFigures,
+  /** false = ผู้ใช้ถามเอง ("วันนี้ใช้ไปเท่าไหร่") ไม่ต้องบอกวิธีปิดการแจ้งเตือน */
+  showOptOut = true
+): string {
   const lines = [`📊 สรุปวันนี้ ${dateLabel}`];
 
   if (figures.expenseCount === 0 && figures.incomeSatang === 0) {
@@ -66,8 +71,18 @@ export function dailySummaryMessage(dateLabel: string, figures: DailyFigures): s
     lines.push(`📧 มีอีเมลธนาคาร ${figures.unparsedEmails} ฉบับที่ระบบอ่านยอดไม่ออก`);
   }
 
-  lines.push('', 'ปิดสรุปรายวันได้ที่หน้าเว็บ → ตั้งค่า');
+  if (showOptOut) lines.push('', 'ปิดสรุปรายวันได้ที่หน้าเว็บ → ตั้งค่า');
   return lines.join('\n');
+}
+
+/**
+ * "วันนี้ใช้ไปเท่าไหร่" — ตัวเลขชุดเดียวกับสรุปรายวัน 21:00 แต่ผู้ใช้ถามเองเมื่อไหร่ก็ได้
+ * เดิมคำถามนี้ไปถึง AI แล้วได้ "สรุปทั้งเดือน" กลับไป ซึ่งไม่ได้ตอบคำถาม
+ * ⚖️ G1: ตัวเลขทุกตัวมาจาก collectFigures (S5) ที่นี่แค่จัดรูปแบบ
+ */
+export async function buildTodaySummaryText(userId: string, now: Date = new Date()): Promise<string> {
+  const figures = await collectFigures(userId, getTodayIso(now));
+  return dailySummaryMessage(formatThaiDate(now), figures, false);
 }
 
 async function collectFigures(userId: string, todayIso: string): Promise<DailyFigures> {

@@ -16,6 +16,8 @@ vi.mock('../src/db/queries/categories', () => ({
   countTransactionsUsingCategory: vi.fn(),
   countCategoryUsage: vi.fn(),
   detachDeletedTransactionsFromCategory: vi.fn(),
+  listCategoriesByUser: vi.fn(),
+  listRecentCategoryIds: vi.fn(),
 }));
 
 import {
@@ -24,11 +26,14 @@ import {
   detachDeletedTransactionsFromCategory,
   findCategoryOwnedByUser,
   insertCategory,
+  listCategoriesByUser,
+  listRecentCategoryIds,
   updateCategoryForUser,
 } from '../src/db/queries/categories';
 import {
   CategoryError,
   createCategory,
+  listTopCategories,
   removeCategory,
   updateCategory,
 } from '../src/services/category.service';
@@ -256,5 +261,38 @@ describe('removeCategory', () => {
     vi.mocked(deleteCategoryForUser).mockRejectedValue(new Error('เน็ตหลุด'));
 
     await expect(removeCategory(USER, CAT)).rejects.toThrow('เน็ตหลุด');
+  });
+});
+
+describe('listTopCategories — ปุ่มหมวดที่ใช้บ่อย แทนการถาม AI', () => {
+  const cat = (id: string, name: string, type: 'income' | 'expense' = 'expense') => ({
+    id, name, type, emoji: null, is_essential: false, is_default: true,
+  });
+  const CATS = [
+    cat('food', 'อาหาร'),
+    cat('travel', 'เดินทาง'),
+    cat('shop', 'ช้อปปิ้ง'),
+    cat('bill', 'บิล'),
+    cat('other', 'อื่นๆ'),
+    cat('salary', 'เงินเดือน', 'income'),
+  ];
+
+  it('เรียงตามจำนวนครั้งที่ใช้ ไม่นับ "อื่นๆ" และไม่ปนหมวดรายรับ', async () => {
+    vi.mocked(listCategoriesByUser).mockResolvedValue(CATS);
+    vi.mocked(listRecentCategoryIds).mockResolvedValue(['shop', 'other', 'other', 'other', 'shop', 'travel', 'salary']);
+
+    const top = await listTopCategories(USER, 'expense', 3);
+
+    expect(top.map((c) => c.id)).toEqual(['shop', 'travel', 'food']);
+    expect(listRecentCategoryIds).toHaveBeenCalledWith(USER, 'expense');
+  });
+
+  it('ผู้ใช้ใหม่ยังไม่มีประวัติ → ใช้ลำดับหมวดตั้งต้น', async () => {
+    vi.mocked(listCategoriesByUser).mockResolvedValue(CATS);
+    vi.mocked(listRecentCategoryIds).mockResolvedValue([]);
+
+    const top = await listTopCategories(USER, 'expense', 4);
+
+    expect(top.map((c) => c.name)).toEqual(['อาหาร', 'เดินทาง', 'ช้อปปิ้ง', 'บิล']);
   });
 });

@@ -20,7 +20,7 @@ import { listTransactionRowsInRange } from '../src/db/queries/summary';
 import { countUnparsedEmails } from '../src/db/queries/emails';
 import { getSafeToSpend } from '../src/services/summary.service';
 import { sendPush } from '../src/line/push';
-import { dailySummaryMessage, sendDailySummaries } from '../src/services/dailySummary.service';
+import { buildTodaySummaryText, dailySummaryMessage, sendDailySummaries } from '../src/services/dailySummary.service';
 
 const TODAY = '2026-09-17';
 const NOW = new Date('2026-09-17T14:00:00Z'); // 21:00 ไทย
@@ -188,5 +188,19 @@ describe('ข้อความสรุป', () => {
       unparsedEmails: 0,
     });
     expect(text).toContain('ปิดสรุปรายวันได้ที่หน้าเว็บ');
+  });
+});
+
+describe('buildTodaySummaryText — ผู้ใช้ถามเอง "วันนี้ใช้ไปเท่าไหร่"', () => {
+  it('ใช้ตัวเลขชุดเดียวกับสรุป 21:00 แต่ไม่มีบรรทัดวิธีปิดการแจ้งเตือน และไม่ push', async () => {
+    vi.mocked(listTransactionRowsInRange).mockResolvedValue([row('expense', '50.00'), row('expense', '30.00')]);
+
+    const text = await buildTodaySummaryText('u1', NOW);
+
+    expect(text).toContain('รายจ่าย ฿80');
+    expect(text).toContain('(2 รายการ)');
+    expect(text).not.toContain('ปิดสรุปรายวัน');
+    expect(sendPush).not.toHaveBeenCalled();
+    expect(listTransactionRowsInRange).toHaveBeenCalledWith('u1', TODAY, '2026-09-18');
   });
 });

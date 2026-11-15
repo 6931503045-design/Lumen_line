@@ -19,6 +19,8 @@ export type ChatExpectation =
   | { route: 'command'; command: CommandName }
   /** ทางด่วนบันทึกเงิน — category: null = ไม่ตรวจหมวด (กำกวมจริง ๆ) */
   | { route: 'save'; type: 'expense' | 'income'; amountSatang: number; category: string | null }
+  /** หลายรายการในข้อความเดียว อ่านด้วยกฎ บันทึกทันที */
+  | { route: 'save_batch'; items: Array<{ type: 'expense' | 'income'; amountSatang: number; category: string | null }> }
   /** คำถามวิธีใช้ ตอบจากคู่มือ */
   | { route: 'help' }
   /** ต้องให้ AI ตีความ — tool/args ใช้กับการวัดผลแบบใช้ AI จริงเท่านั้น */
@@ -91,7 +93,48 @@ export const CHAT_EVAL_CASES: ChatEvalCase[] = [
   // "ค่าขนม" ฝั่งรายจ่าย = ของกิน (คำว่า "ขนม" ในตาราง) ไม่ใช่เงินที่พ่อแม่ให้
   { text: 'ค่าขนม 20', expect: { route: 'save', type: 'expense', amountSatang: 2000, category: 'อาหาร' } },
   // คำที่ไม่มีใครรู้จัก (ยังไม่ได้สอน) → "อื่นๆ" ถูกต้องตามกติกา ผู้ใช้กดเปลี่ยนหมวดแล้วระบบจะจำ
+  { text: 'ซื้อกาแฟ 80', expect: { route: 'save', type: 'expense', amountSatang: 8000, category: 'อาหาร' } },
+  { text: 'จ่ายค่าหอ 3500', expect: { route: 'save', type: 'expense', amountSatang: 350000, category: 'ที่พัก/บิล' } },
   { text: 'ร้านป้าแดง 50', expect: { route: 'save', type: 'expense', amountSatang: 5000, category: 'อื่นๆ' } },
+
+  // ── หลายรายการในข้อความเดียว (เดิมไป AI ทั้งหมด) ─────────────────────────
+  {
+    text: 'เมื่อวานซื้อไส้กรอกอีสาน 50 บาท กับข้าวเย็น 46',
+    expect: { route: 'save_batch', items: [
+      { type: 'expense', amountSatang: 5000, category: 'อาหาร' },
+      { type: 'expense', amountSatang: 4600, category: 'อาหาร' },
+    ] },
+    real: true,
+  },
+  {
+    text: 'ข้าว 50 กาแฟ 40',
+    expect: { route: 'save_batch', items: [
+      { type: 'expense', amountSatang: 5000, category: 'อาหาร' },
+      { type: 'expense', amountSatang: 4000, category: 'อาหาร' },
+    ] },
+  },
+  {
+    text: 'ค่ารถ 30, ข้าว 45, ชานม 55',
+    expect: { route: 'save_batch', items: [
+      { type: 'expense', amountSatang: 3000, category: 'เดินทาง' },
+      { type: 'expense', amountSatang: 4500, category: 'อาหาร' },
+      { type: 'expense', amountSatang: 5500, category: 'อาหาร' },
+    ] },
+  },
+  {
+    text: 'grab 120\nlineman 89',
+    expect: { route: 'save_batch', items: [
+      { type: 'expense', amountSatang: 12000, category: 'เดินทาง' },
+      { type: 'expense', amountSatang: 8900, category: 'อาหาร' },
+    ] },
+  },
+  {
+    text: 'กับข้าว 30 และ ข้าวเหนียว 10',
+    expect: { route: 'save_batch', items: [
+      { type: 'expense', amountSatang: 3000, category: 'อาหาร' },
+      { type: 'expense', amountSatang: 1000, category: 'อาหาร' },
+    ] },
+  },
 
   // ── ทางด่วนบันทึกเงิน: รายรับ ─────────────────────────────────────────────
   { text: '+เงินเดือน 15000', expect: { route: 'save', type: 'income', amountSatang: 1500000, category: 'เงินเดือน' } },
@@ -118,12 +161,18 @@ export const CHAT_EVAL_CASES: ChatEvalCase[] = [
   { text: 'อยากเก็บเงินซื้อโน้ตบุ๊ก 25000 ภายใน 10 เดือน', expect: { route: 'ai', tool: 'plan_goal', args: { target: 25000, months: 10 } } },
   // "กับเพื่อน" ไม่ใช่การหาร — split_count ต้องไม่มี (วัดผลจริงเคยได้ split_count=2 → บันทึกแค่ครึ่ง)
   { text: 'เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย', expect: { route: 'ai', tool: 'create_transaction', args: { amount: 300, split_count: undefined } } },
-  { text: 'เมื่อวานซื้อไส้กรอกอีสาน 50 บาท กับข้าวเย็น 46', expect: { route: 'ai', tool: 'create_transaction_batch' }, real: true },
   { text: 'ค่าข้าว 300 หาร 3 คน', expect: { route: 'ai', tool: 'create_transaction', args: { amount: 300, split_count: 3 } } },
   { text: 'ซื้อหูฟัง 1500 ได้ไหม', expect: { route: 'ai', tool: 'simulate_purchase', args: { price: 1500 } } },
   { text: 'แก้รายการล่าสุดเป็น 90', expect: { route: 'ai', tool: 'update_transaction' } },
   { text: 'ลบรายการล่าสุดให้หน่อย', expect: { route: 'ai', tool: 'delete_transaction' } },
   { text: 'ค่าหอจ่ายทุกวันที่ 5 เดือนละ 3500', expect: { route: 'ai', tool: 'create_recurring', args: { amount: 3500, frequency: 'monthly' } } },
   { text: 'เดือนนี้ใช้ค่ากาแฟไปกี่ครั้ง', expect: { route: 'ai', tool: 'query_transactions' } },
-  { text: 'งบอาหารเหลืออีกเท่าไหร่', expect: { route: 'ai', tool: 'get_summary', args: { period: 'budget' } } },
+  // ── คำถามที่เดิมไปถึง AI — ตอนนี้จับจากคำสำคัญ ───────────────────────────────
+  { text: 'งบอาหารเหลืออีกเท่าไหร่', expect: { route: 'command', command: 'budget' } },
+  { text: 'วันนี้ใช้ไปเท่าไหร่', expect: { route: 'command', command: 'today' } },
+  { text: 'เดือนนี้ใช้ไปเท่าไหร่แล้ว', expect: { route: 'command', command: 'summary' } },
+  { text: 'สรุปให้หน่อย', expect: { route: 'command', command: 'summary' } },
+  { text: 'แผนออมไปถึงไหนแล้ว', expect: { route: 'command', command: 'plans' } },
+  { text: 'สวัสดีครับ', expect: { route: 'command', command: 'greeting' } },
+  { text: 'ขอบคุณครับ', expect: { route: 'command', command: 'thanks' } },
 ];
