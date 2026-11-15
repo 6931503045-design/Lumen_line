@@ -305,6 +305,16 @@
       addBotText('พิมพ์ "ชื่อ จำนวนเงิน" เพื่อจดรายจ่าย เช่น กาแฟ 80 · ใส่ + ข้างหน้าสำหรับรายรับ เช่น +เงินเดือน 15000 · ส่งรูปสลิปมาก็ได้');
       return;
     }
+    // FR-05 — ของจริงคิดที่ Money Engine (S5.2) ที่นี่ใช้ยอดจาก mock-data.js เดียวกับหน้าเว็บ (฿85)
+    // ต้องมี เพราะบทพูดให้ใช้หน้านี้เป็นแผนสำรองตอนบอทล่ม และ Speaker 2 พิมพ์ "เหลือ"
+    if (text === 'เหลือ') {
+      const { card, body } = cardShell('วันนี้ใช้ได้อีก', 'งบที่เหลือ ÷ วันที่เหลือในเดือน');
+      body.appendChild(el('p', '', '฿85')).style.cssText = 'font-size:28px;font-weight:800;margin:4px 0';
+      body.appendChild(el('div', 'chat-time', 'รวมวันนี้ด้วย · หักเงินที่กันไว้ให้แผนออมแล้ว'));
+      footer(card, [{ label: 'ดูหน้าภาพรวม', onClick: () => { window.location.href = 'index.html?preview=1'; } }]);
+      scrollDown();
+      return;
+    }
     if (/^สรุป/.test(text)) {
       addBotText('ดูสรุปเดือนนี้ได้ที่หน้า "ภาพรวม" ครับ (FR-04) — เปิดจากแถบด้านบน');
       return;
