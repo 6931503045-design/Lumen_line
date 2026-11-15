@@ -1,6 +1,9 @@
 # โน้ตผู้พูด — Final Demo ทีม Lumen (JOD tang)
 
 **5 คน · ~14 นาที** (ถ้าได้เวลา 10 นาที ให้ข้ามทุกส่วนที่ติด *Optional*)
+
+> 📌 **บทที่ใช้จริงตอนนี้คือฉบับ ~9 นาที → [`SCRIPT.md`](SCRIPT.md) / [`SCRIPT.pdf`](SCRIPT.pdf)** (คำพูดรายคน)
+> โน้ตนี้ใช้เป็นข้อมูลเสริม: checklist ก่อนขึ้นพูด · ตารางเช็ก Must FR · คำถาม Q&A · สไลด์ที่ต้องแก้
 สไลด์: [`Demo_Lumen.pdf`](Demo_Lumen.pdf) · บทเต็ม: https://jodtang-guide.t47709884.workers.dev/#script
 
 > **เกณฑ์ M3 ที่โน้ตนี้ออกแบบมาให้ได้คะแนนครบ**
