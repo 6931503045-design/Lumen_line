@@ -212,6 +212,15 @@ function getPlanStrategyMeta(mode) {
   return map[mode] || map.balanced;
 }
 
+/**
+ * ตัดอีโมจิตัวหน้าออกจากข้อความที่ backend ส่งมา (เช่นชื่อแผน "⚡ เร็ว — CPU")
+ * อีโมจิพวกนั้นตั้งใจไว้สำหรับข้อความในแชท LINE — หน้าเว็บใช้ไอคอน SVG ชุดเดียวกันทั้งเว็บแทน
+ * เพราะอีโมจิหน้าตาเปลี่ยนตามยี่ห้อมือถือ และไม่เข้ากับธีม
+ */
+function stripLeadingEmoji(text) {
+  return String(text || '').replace(/^(?:\p{Extended_Pictographic}|️|‍)+\s*/u, '');
+}
+
 function getConfidenceMeta(level) {
   const map = {
     low: { label: 'ข้อมูลยังน้อย', className: 'low' },
@@ -3115,7 +3124,7 @@ function renderPlanningDisclaimer() {
   note.id = 'planningDisclaimer';
   note.className = 'ai-disclaimer';
   note.style.textAlign = 'center';
-  note.textContent = 'ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน';
+  note.innerHTML = `${renderIcon('info', 'inline-icon')}<span>ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</span>`;
   main.append(note);
 }
 

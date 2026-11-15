@@ -1080,6 +1080,9 @@ h3 {
   color: var(--text-strong);
 }
 
+/* ไอคอนเล็กวางในบรรทัดข้อความ (แทนอีโมจิ) */
+.inline-icon { width: 1.1em; height: 1.1em; vertical-align: -0.2em; margin-right: 4px; flex-shrink: 0; }
+
 .ai-disclaimer {
   font-size: 0.72rem;
   color: var(--muted);
