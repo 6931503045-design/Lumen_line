@@ -99,15 +99,18 @@ Messages typed into the bot stay in Thai — the bot reads Thai. The meaning is 
 ## 4 · Teerat — Money Engine and unhappy paths (~2:00)
 
 > In a money app, one wrong number and users stop trusting it. Our principle is: **AI is an interpreter, not an accountant.**
-> AI never calculates money. Money is stored as whole satang so decimals can't drift. And if AI wants to record anything, the user has to confirm first.
+> AI never calculates money. Money is stored as whole satang, so the error is zero satang. That's **NFR-02**.
+> And if AI wants to record anything, the user has to confirm first.
 >
-> Most messages are read by plain code. Out of 84 real chat messages, only 11% needed AI. Turn AI off and the app still works.
+> Most messages are read by plain code. Out of 84 real chat messages, only 11% needed AI.
+> Turn AI off and all 8 Must requirements still work. That's **NFR-01**.
 >
 > Now let's look at what happens when things go wrong. If I type something incomplete:
 
 *[Type `กาแฟ` ("coffee", no amount)]*
 
 > The system doesn't guess. It says it couldn't read the message, shows the right format, and saves nothing.
+> This is the unhappy path of **FR-01**, acceptance test number 4 in our SRS.
 >
 > And if I type a long, natural sentence:
 
@@ -117,7 +120,7 @@ Messages typed into the bot stay in Thai — the bot reads Thai. The meaning is 
 
 *[Tap ยืนยัน (Confirm)]*
 
-> Only now is it saved. AI never gets to touch the money on its own.
+> Only now is it saved. AI never gets to touch the money on its own. This is **FR-14**: AI helps read, but a person always confirms.
 >
 > Next, **[Speaker 5's name]** will prove it.
 
