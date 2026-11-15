@@ -16,3 +16,13 @@ process.env.SUPABASE_URL ??= 'https://test.supabase.co';
 process.env.SUPABASE_SERVICE_ROLE_KEY ??= 'test-service-role-key';
 process.env.SESSION_SECRET ??= 'test-session-secret-0123456789abcdef';
 process.env.AI_ENABLED ??= 'false';
+
+// พจนานุกรมส่วนตัว (L3) ถูกค้นทุกครั้งที่หาหมวด — ทั้งแชท สลิป AI และรายการประจำ
+// ถ้าไม่ mock ไว้ตรงกลาง ทุกไฟล์เทสต์ที่ลากไปถึง resolveCategory จะยิงไป Supabase ปลอม
+// แล้วค้างจนหมดเวลา 5 วินาที — ค่าเริ่มต้นคือ "ยังไม่เคยสอนคำไหน" ไฟล์ที่ต้องการค่าอื่นตั้งเองได้
+// (ใช้ vi.fn() เปล่าโดยตั้งใจ: คืน undefined ซึ่ง keyword.service ถือว่าไม่เจอ แม้ไฟล์ไหนจะ resetAllMocks)
+import { vi } from 'vitest';
+vi.mock('../src/db/queries/keywords', () => ({
+  findLearnedKeyword: vi.fn(),
+  upsertLearnedKeyword: vi.fn(),
+}));

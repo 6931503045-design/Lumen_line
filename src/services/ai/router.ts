@@ -19,17 +19,19 @@
 import { AI_DISCLAIMER, CHAT_HISTORY_TURNS } from '../../config/constants';
 import { env } from '../../config/env';
 import { listTransactionsByUser } from '../../db/queries/transactions';
+import { listCategoriesByUser, type UserCategory } from '../../db/queries/categories';
 import { formatBaht, toSatang } from '../../utils/money';
 import { redactSensitiveText } from '../../utils/redact';
 import { formatThaiDate, getTodayIso } from '../../utils/thaiDate';
 import { PlanError, previewSavingPlan, type PlanPreview } from '../plan.service';
 import type { PlanConfidence } from '../../line/flex/planCard';
 import type { CommandName } from '../command.service';
-import { FALLBACK_EXPENSE_CATEGORY, resolveCategoryName } from '../category.service';
+import { FALLBACK_EXPENSE_CATEGORY, resolveCategory, resolveCategoryName } from '../category.service';
+import { lookupLearnedCategory } from '../keyword.service';
 import { answerHelpTopic } from '../help.service';
 import { createPending } from '../pending.service';
 import { simulatePurchase } from '../simulate.service';
-import { understandText, type ChatTurn } from './gemini';
+import { suggestCategoryName, understandText, type ChatTurn } from './gemini';
 import { checkAiAllowed, describeBlockReason } from './guard';
 import { validateToolCall, type ValidatedEntry, type ValidatedToolCall } from './tools';
 
@@ -153,6 +155,50 @@ export function resetAiHistoryForTest(): void {
 // ทางเดินหลัก
 // ────────────────────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────────────────────
+// เสนอหมวดให้คำที่ระบบไม่รู้จัก (ทางด่วนบันทึกแล้ว แต่ลง "อื่นๆ")
+// ────────────────────────────────────────────────────────────────────────────
+
+/** ผู้ใช้รอการ์ดบันทึกอยู่ — ช้ากว่านี้ข้ามข้อเสนอไป ดีกว่าให้ทางด่วนช้า */
+const SUGGEST_TIMEOUT_MS = 3000;
+
+/**
+ * ให้ AI เสนอหมวดสำหรับชื่อรายการที่ทั้งพจนานุกรมส่วนตัวและตารางคำกลางไม่รู้จัก
+ *
+ * ⚖️ G2: คืนแค่ "ข้อเสนอ" — ผู้เรียกต้องแสดงปุ่มให้ผู้ใช้กดยืนยันเอง ห้ามย้ายหมวดจากผลนี้ตรง ๆ
+ *        พอผู้ใช้กด "ใช่" ระบบจะจำคำนี้ (keyword.service) ครั้งหน้าไม่ต้องถาม AI อีก
+ * ⚖️ G4: AI ปิด / ผู้ใช้ปิด / โควตาหมด / ล่ม / ช้า → null เงียบ ๆ ทางด่วนทำงานเหมือนเดิมทุกอย่าง
+ * ⚖️ G5: ผ่าน guard ก่อนเสมอ (redact + โควตา) เหมือนทุกการเรียก AI
+ * ไม่ throw
+ */
+export async function suggestCategoryForItem(
+  userId: string,
+  item: string,
+  type: 'income' | 'expense',
+  todayIso?: string
+): Promise<UserCategory | null> {
+  try {
+    const allowed = await checkAiAllowed({ userId, kind: 'text', text: item, ...(todayIso ? { todayIso } : {}) });
+    if (!allowed.ok) return null;
+
+    const categories = (await listCategoriesByUser(userId)).filter((category) => category.type === type);
+    if (categories.length < 2) return null;
+
+    const name = await suggestCategoryName({
+      userId,
+      safeItem: allowed.safeText,
+      categoryNames: categories.map((category) => category.name),
+      timeoutMs: SUGGEST_TIMEOUT_MS,
+    });
+    // "อื่นๆ" = AI ก็ไม่รู้ — ไม่ต้องเสนอสิ่งที่บันทึกไว้อยู่แล้ว
+    if (!name || name === FALLBACK_EXPENSE_CATEGORY) return null;
+    return categories.find((category) => category.name === name) ?? null;
+  } catch (err) {
+    console.error('[ai/router] เสนอหมวดไม่สำเร็จ (ข้ามไป):', err);
+    return null;
+  }
+}
+
 export async function interpretUserMessage(input: InterpretInput): Promise<AiReply> {
   const now = input.now ?? new Date();
   const todayIso = input.todayIso ?? getTodayIso(now);
@@ -217,12 +263,19 @@ export async function interpretUserMessage(input: InterpretInput): Promise<AiRep
     return { kind: 'text', text: validated.askUser };
   }
 
+  // ⚖️ G1: โมเดลหารบิลเองโดยผู้ใช้ไม่ได้พูดว่าหาร → ทิ้ง split ใช้ยอดเต็มตามที่ผู้ใช้พิมพ์
+  // ดูข้อความก่อนหน้าของผู้ใช้ด้วย: AI ถาม "หารกันกี่คน" แล้วผู้ใช้ตอบแค่ "3" ก็ยังเป็นการหารจริง
+  const call = dropUnspokenSplit(validated.call, [
+    ...priorTurns.filter((turn) => turn.role === 'user').map((turn) => turn.text),
+    input.text,
+  ].join('\n'));
+
   try {
-    const reply = await runToolCall(input.userId, validated.call, todayIso, now);
+    const reply = await runToolCall(input.userId, call, todayIso, now);
     pushExchange(
       input.userId,
       allowed.safeText,
-      describeToolOutcome(validated.call, reply),
+      describeToolOutcome(call, reply),
       now.getTime()
     );
 
@@ -402,7 +455,7 @@ async function runToolCall(
 
 // resolveCategoryName / FALLBACK_EXPENSE_CATEGORY ย้ายไปอยู่ category.service แล้ว
 // เพราะรายการประจำต้องใช้กฎเดียวกัน — export ต่อจากที่นี่ให้ผู้เรียกเดิม (textHandler, imageHandler)
-export { FALLBACK_EXPENSE_CATEGORY, resolveCategoryName };
+export { FALLBACK_EXPENSE_CATEGORY, resolveCategory, resolveCategoryName };
 
 /**
  * เติมชื่อหมวดจริงลงใน entry ก่อนเก็บเป็น payload ของ pending
@@ -415,7 +468,10 @@ async function resolveEntryCategory(
   userId: string,
   entry: ValidatedEntry
 ): Promise<Record<string, unknown>> {
-  const matched = await resolveCategoryName(userId, entry.categoryHint, entry.type);
+  // พจนานุกรมส่วนตัว (L3) ใช้ "ชื่อรายการที่ผู้ใช้พิมพ์" ไม่ใช่หมวดที่ AI เดา —
+  // ผู้ใช้เคยสอนว่า "ร้านป้าแดง" = อาหาร ก็ต้องได้อาหาร ไม่ว่า AI จะเดาหมวดอะไรมา
+  const learned = await lookupLearnedCategory(userId, entry.item, entry.type);
+  const matched = learned ?? (await resolveCategoryName(userId, entry.categoryHint, entry.type));
   const categoryName =
     matched ?? (entry.type === 'expense' ? FALLBACK_EXPENSE_CATEGORY : null);
 
@@ -582,6 +638,28 @@ function describePlanGoal(itemName: string, targetSatang: number, preview: PlanP
     AI_DISCLAIMER
   );
   return lines.join('\n');
+}
+
+/** คำที่บอกว่าผู้ใช้หารบิลจริง — ไม่มีคำพวกนี้ = จ่ายเองเต็มจำนวน */
+const SPLIT_WORDS = /หาร|แชร์|แบ่ง|คนละ|ช่วยกันจ่าย|split|share/i;
+
+function withoutSplit(entry: ValidatedEntry): ValidatedEntry {
+  // ยอดเต็มตามที่ผู้ใช้พิมพ์มีอยู่แล้วใน totalSatang — ไม่มีการคิดเลขใหม่ (⚖️ G1)
+  return entry.splitCount > 1 ? { ...entry, amountSatang: entry.totalSatang, splitCount: 1 } : entry;
+}
+
+/**
+ * 🔴 ทิ้ง split_count ที่โมเดลใส่มาเองโดยผู้ใช้ไม่ได้พูดว่าหาร
+ *
+ * เจอจากการวัดผลกับ Gemini จริง: "เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย" → split_count=2
+ * ถ้าปล่อยไป ระบบจะบันทึก ฿150 แทน ฿300 — prompt สั่งห้ามแล้ว แต่ prompt เป็นแค่การขอ
+ * ด่านนี้คือการบังคับ (เหตุผลเดียวกับ mentionsUnseenNumber)
+ */
+export function dropUnspokenSplit(call: ValidatedToolCall, userText: string): ValidatedToolCall {
+  if (SPLIT_WORDS.test(userText)) return call;
+  if (call.name === 'create_transaction') return { ...call, entry: withoutSplit(call.entry) };
+  if (call.name === 'create_transaction_batch') return { ...call, entries: call.entries.map(withoutSplit) };
+  return call;
 }
 
 // ────────────────────────────────────────────────────────────────────────────

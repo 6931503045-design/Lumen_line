@@ -17,6 +17,7 @@ import {
   type UserCategory,
 } from '../db/queries/categories';
 import { MAX_AMOUNT_SATANG } from '../config/constants';
+import { learnCategory } from './keyword.service';
 import {
   evaluateBudgetAlert,
   getCategoryBudgetStatus,
@@ -242,6 +243,13 @@ export async function updateTransactionForUser(
   }
 
   const finalCategoryId = categoryId !== undefined ? categoryId : existing.category_id;
+
+  // ผู้ใช้เลือกหมวดเอง (ปุ่มเปลี่ยนหมวดในแชท / แก้ในเว็บ / ยืนยันคำขอแก้ของ AI) = สอนระบบ
+  // จำชื่อรายการ → หมวดนี้ไว้ ครั้งหน้าพิมพ์คำเดิมได้หมวดนี้เลย (SPEC §S4 L3)
+  // learnCategory ไม่ throw — จำไม่ได้ก็ไม่ทำให้การแก้ที่สำเร็จแล้วกลายเป็นล้มเหลว
+  if (categoryId) {
+    await learnCategory(userId, input.note ?? existing.note, categoryId);
+  }
 
   return {
     id: updated.id,

@@ -8,7 +8,8 @@
 > - ✅ S9 อ่านสลิป — `handlers/imageHandler.ts` + `services/ai/vision.ts`
 > - ✅ job `dailySummary` · S5.7 จำลองการซื้อ (`simulate.service.ts`) · `PATCH /api/categories/:id` · rich menu (`scripts/install-richmenu.ts`)
 > - ✅ security headers (กัน clickjacking) + อัปเดต dependency ที่มีช่องโหว่
-> - 🟡 ยังค้าง: S4 L2/L3 พจนานุกรม (`keyword.service.ts` ยังว่าง) · rate limit `/api` (ต้องเพิ่ม dependency)
+> - ✅ S4 L2/L3: ตารางคำกลาง + พจนานุกรมส่วนตัวที่เรียนรู้จากการเปลี่ยนหมวด + AI เสนอหมวด (15 พ.ย.)
+> - 🟡 ยังค้าง: rate limit `/api` (ต้องเพิ่ม dependency)
 >
 > ตาราง "ความคืบหน้าตาม SPEC" ด้านล่างอัปเดตแล้ว ส่วนตารางอื่นเก็บไว้เป็นประวัติ
 
@@ -78,7 +79,7 @@
 | S1 LINE Gateway | ✅ | คำสั่งแชท + รับรูป + rich menu ครบ |
 | S2 Frontend | ✅ | |
 | S3 Core API | ✅ | |
-| S4 Text Parser | 🟡 | มีแต่ regex L1 + L4 (AI) — L2/L3 ยังไม่ได้เขียน |
+| S4 Text Parser | ✅ | L1 regex · L2 ตารางคำกลาง · L3 พจนานุกรมส่วนตัว · L4 AI · วัดผลด้วย tests/chatEval.test.ts |
 | S5 Money Engine | ✅ | รวม S5.7 จำลองการซื้อแล้ว |
 | S6 Database | ✅ | |
 | S7 Scheduler | ✅ | ครบ 5 job |
@@ -89,7 +90,7 @@
 | S12 Pending Actions | ✅ | |
 | S13 Push & Quota | ✅ | |
 
-ตารางที่ยังไม่มีโค้ดแตะเลย: `user_keyword_map` (รอ S4 L2/L3)
+ทุกตารางมีโค้ดใช้งานแล้ว
 
 ---
 

@@ -71,6 +71,9 @@ export const CATEGORY_HINTS: Record<string, string> = {
     'snack', 'snacks', 'drink', 'drinks', 'water', 'juice', 'soda', 'meal', 'noodle', 'noodles',
     'grocery', 'groceries', 'bread', 'cake', 'dessert', 'pizza', 'burger', 'kfc', 'mcdonald',
     'starbucks', 'cafe', 'restaurant', 'buffet', 'shabu', 'beer', 'fruit', 'icecream', '7-11',
+    // แอปสั่งอาหาร + ร้านกาแฟที่นักศึกษาเรียกชื่อตรง ๆ (เพิ่มจากชุดประโยคทดสอบ tests/fixtures/chatEvalCases.ts)
+    'ไลน์แมน', 'แกร็บฟู้ด', 'ฟู้ดแพนด้า', 'โรบินฮู้ด', 'อเมซอน', 'คาเฟ่อเมซอน', 'ชาไทย', 'ข้าวกล่อง',
+    'lineman', 'grabfood', 'foodpanda', 'robinhood', 'amazon', 'mixue', 'swensen', 'swensens',
   ]),
   // ── เดินทาง ──────────────────────────────────────────────────────────────
   ...group(TRAVEL, [
@@ -79,6 +82,8 @@ export const CATEGORY_HINTS: Record<string, string> = {
     'ทางด่วน', 'ที่จอดรถ', 'ค่าจอดรถ', 'ซ่อมรถ', 'ล้างรถ',
     'taxi', 'grab', 'bolt', 'uber', 'bus', 'bts', 'mrt', 'train', 'flight', 'gas', 'fuel',
     'petrol', 'transport', 'parking', 'toll',
+    'ค่าวิน', 'ค่าแท็กซี่', 'บีทีเอส', 'เอ็มอาร์ที', 'แอร์พอร์ตลิงก์',
+    'arl', 'airportlink', 'motorbike', 'ferry',
   ]),
   // ── ช้อปปิ้ง ─────────────────────────────────────────────────────────────
   ...group(SHOP, [
@@ -87,6 +92,8 @@ export const CATEGORY_HINTS: Record<string, string> = {
     'ช้อปปี้', 'ลาซาด้า', 'ของขวัญ', 'มือถือ', 'หูฟัง', 'สายชาร์จ',
     'shopping', 'shopee', 'lazada', 'clothes', 'shirt', 'pants', 'shoes', 'bag', 'gift',
     'makeup', 'skincare', 'cosmetics', 'shampoo', 'soap', 'headphones', 'charger',
+    'ช็อปปี้', 'ชีอิน', 'ไอโฟน', 'ไอแพด', 'โน้ตบุ๊ก', 'คีย์บอร์ด', 'เมาส์',
+    'shein', 'iphone', 'ipad', 'notebook', 'laptop', 'keyboard', 'mouse', 'uniqlo',
   ]),
   // ── ที่พัก/บิล ───────────────────────────────────────────────────────────
   ...group(BILL, [
@@ -95,6 +102,9 @@ export const CATEGORY_HINTS: Record<string, string> = {
     'ซักผ้า', 'บิล',
     'rent', 'dorm', 'electricity', 'electric', 'internet', 'wifi', 'bill', 'bills', 'laundry',
     'topup',
+    // เครือข่ายมือถือ — "ais 299" คือค่ามือถือ
+    'เอไอเอส', 'ทรู', 'ดีแทค', 'ค่าแพ็กเกจ', 'ค่าเน็ตมือถือ',
+    'ais', 'true', 'dtac', 'truemove',
   ]),
   // ── บันเทิง ──────────────────────────────────────────────────────────────
   ...group(FUN, [
@@ -102,6 +112,8 @@ export const CATEGORY_HINTS: Record<string, string> = {
     'ผับ', 'บาร์', 'ยูทูบ', 'เน็ตฟลิกซ์',
     'movie', 'movies', 'cinema', 'game', 'games', 'steam', 'netflix', 'spotify', 'youtube',
     'disney', 'concert', 'karaoke', 'party', 'trip', 'travel',
+    'ตั๋วหนัง', 'เมเจอร์', 'ดิสนีย์', 'สปอติฟาย',
+    'major', 'sfcinema', 'disney+', 'prime', 'hbo', 'twitch',
   ]),
   // ── สุขภาพ ───────────────────────────────────────────────────────────────
   ...group(HEALTH, [
@@ -109,6 +121,8 @@ export const CATEGORY_HINTS: Record<string, string> = {
     'ฟิตเนส', 'ยิม', 'วิตามิน', 'ตัดผม', 'นวด',
     'medicine', 'doctor', 'hospital', 'clinic', 'pharmacy', 'dentist', 'gym', 'fitness',
     'vitamin', 'vitamins', 'haircut', 'massage',
+    'ค่ารักษา', 'แว่น', 'แว่นตา', 'คอนแทคเลนส์', 'ฉีดวัคซีน',
+    'glasses', 'contactlens', 'vaccine',
   ]),
   // ── การศึกษา ─────────────────────────────────────────────────────────────
   ...group(EDU, [
@@ -116,6 +130,8 @@ export const CATEGORY_HINTS: Record<string, string> = {
     'เครื่องเขียน', 'ปากกา', 'สมุด', 'ชีท', 'ค่าแลป',
     'book', 'books', 'course', 'tuition', 'school', 'stationery', 'print', 'printing',
     'tutor', 'textbook',
+    'หน่วยกิต', 'ค่าหน่วยกิต', 'ค่าสมัครสอบ', 'สมัครสอบ', 'ค่าชีท', 'ค่าปริ้น', 'ค่าถ่ายเอกสาร', 'แลป',
+    'toeic', 'ielts', 'tcas', 'udemy', 'coursera',
   ]),
   // ── รายรับ ───────────────────────────────────────────────────────────────
   ...group(SALARY, ['เงินเดือน', 'salary', 'wage', 'wages']),
@@ -123,7 +139,12 @@ export const CATEGORY_HINTS: Record<string, string> = {
     'โบนัส', 'ค่าจ้าง', 'งานพิเศษ', 'พาร์ทไทม์', 'ฟรีแลนซ์', 'ขายของ', 'ทุน', 'ทุนการศึกษา',
     'bonus', 'freelance', 'parttime', 'part-time', 'scholarship', 'tips',
   ]),
-  ...group(REFUND, ['เงินคืน', 'โอนคืน', 'คืนเงิน', 'refund', 'cashback']),
+  // "ค่าขนม" ไม่ใส่โดยตั้งใจ: เป็นได้ทั้งรายรับจากพ่อแม่ และรายจ่ายค่าของกิน ("ค่าขนม 20")
+  // ปล่อยให้แต่ละคนสอนเองผ่านปุ่มเปลี่ยนหมวด (พจนานุกรมส่วนตัว) ดีกว่าเดาผิดให้ทุกคน
+  ...group(REFUND, [
+    'เงินคืน', 'โอนคืน', 'คืนเงิน', 'refund', 'cashback',
+    'แม่โอน', 'พ่อโอน', 'แม่ให้', 'พ่อให้', 'ได้รับโอน', 'รับโอน',
+  ]),
 };
 
 /** คำไทยที่สั้นกว่านี้ จับได้แค่แบบตรงทั้งข้อความ (ดูเหตุผลด้านบน) */
