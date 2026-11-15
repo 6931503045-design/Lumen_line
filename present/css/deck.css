@@ -373,23 +373,6 @@ p { line-height: 1.55; }
 }
 .card.paper .muted, .card.mist .muted { color: var(--paper-muted); }
 
-.plus {
-  position: absolute;
-  right: 26px;
-  top: 26px;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #0f130b;
-  color: #fff;
-  font-size: 26px;
-  font-weight: 400;
-  z-index: 2;
-}
-.card.dark .plus, .card.glass .plus { background: #fff; color: #0f130b; }
-
 .pill {
   display: inline-flex;
   align-items: center;
