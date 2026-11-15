@@ -26,7 +26,7 @@ window.DECK_EN = {
   'ข้อความ ต่อ 1 รายการ': 'message per entry',
   'เทสต์อัตโนมัติ ผ่านทั้งหมด': 'automated tests, all passing',
   'ของข้อความที่ต้องใช้ AI': 'of messages need AI',
-  'ถาม "เหลือ" ได้คำตอบทันที': 'Ask "left", get an instant answer',
+  'ถาม "เหลือ" ได้คำตอบทันที': 'Ask "เหลือ" (left), get an instant answer',
   'ไม่ใช้ AI': 'No AI',
   '< 1 วินาที': '< 1 second',
   'AI ไม่แตะเงิน': 'AI never touches money',
@@ -159,7 +159,6 @@ window.DECK_EN = {
   'ชื่อ + ยอด, หลายรายการ, คำอ่านไทย': 'name + amount, many items, Thai numerals',
   '3 · พจนานุกรมหมวด': '3 · Category dictionary',
   'คำกลาง + คำที่ผู้ใช้สอน': 'shared words + words the user taught',
-  'ร้านป้าแดง → อาหาร': 'Auntie Daeng → Food',
   'เฉพาะที่ 3 ชั้นแรกอ่านไม่ออก แล้วต้องกดยืนยัน': 'only what layers 1–3 miss, then confirmed',
 
   // ── 09 ทางที่ผิด ──
@@ -194,7 +193,7 @@ window.DECK_EN = {
   'แถบงบ + เตือนในแชท': 'Budget bar + chat alert',
   '"อยากได้ของ ต้องเก็บยังไง?"': '"How do I save for it?"',
   'เร็ว · สมดุล · สบาย': 'Fast · Balanced · Relaxed',
-  'เส้นทางของ "กาแฟ 80" ตั้งแต่พิมพ์จนได้การ์ด': 'the path of "coffee 80" from typing to reply card',
+  'เส้นทางของ "กาแฟ 80" ตั้งแต่พิมพ์จนได้การ์ด': 'the path of "กาแฟ 80" from typing to reply card',
   'กดเพื่อขยาย ⤢': 'Click to enlarge ⤢',
   'พิมพ์ "กาแฟ 80"': 'types "กาแฟ 80"',
   'ลายเซ็น · กันซ้ำ': 'signature · dedup',
@@ -246,15 +245,8 @@ window.DECK_EN = {
   'Backend · Money Engine · ฐานข้อมูล': 'Backend · Money Engine · database',
   'Technical Writer · การทดสอบ': 'Technical Writer · testing',
 
-  // ── คำสั่งที่ผู้ใช้พิมพ์ — ตอนเป็น EN ใช้คำสั่งภาษาอังกฤษที่บอทรองรับจริง ให้ตรงกับแชทจำลอง ──
-  'กาแฟ 80': 'coffee 80',
-  'ร้านป้าแดง 50': 'Auntie Daeng 50',
-  'เหลือ': 'left',
-  'สรุป': 'summary',
-  'ข้าว 50 กาแฟ 40': 'rice 50 coffee 40',
-  'เมื่อวานกินข้าวกับเพื่อน…': 'yesterday dinner with friends…',
-  'กาแฟ': 'coffee',
-  'ข้าว': 'rice',
+  // ── คำสั่งที่ผู้ใช้พิมพ์ (กาแฟ 80, เหลือ, ร้านป้าแดง 50 …) และแชทจำลอง ──
+  // ตั้งใจไม่ใส่ในตาราง: ตอน EN ก็ยังเป็นไทย ให้ตรงกับที่พิมพ์และที่เห็นบนจอมือถือสดในเดโมจริง
 
   // ── แผงปุ่มลัด ──
   'ปุ่มลัด': 'Keyboard shortcuts',
