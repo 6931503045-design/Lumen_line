@@ -198,87 +198,6 @@
     ]],
   };
 
-  // แชทเวอร์ชันอังกฤษ — ใช้ข้อความที่บอทรองรับจริง ("coffee 80", "left")
-  const recordedEn = (item, amount, cat, pct) => ({
-    card: true,
-    html: `<div class="lc-head">Recorded ${MASCOT}</div>
-      <div class="lc-body">
-        <div class="lc-row"><span class="lc-tag">Expense · ${cat}</span></div>
-        <div class="lc-row"><span>${item}</span><b>฿${amount}</b></div>
-        <div class="lc-row" style="font-size:15px;color:#6b7a5e"><span>${cat} budget this month</span><span>${pct}%</span></div>
-        <div class="lc-bar"><i style="--w:${pct}%"></i></div>
-      </div>`,
-  });
-  const remainingEn = {
-    card: true,
-    html: `<div class="lc-head">Left to spend today ${MASCOT}</div>
-      <div class="lc-body">
-        <div style="font-family:var(--font-display);font-size:44px;font-weight:700;line-height:1.1">฿245</div>
-        <div style="font-size:15px;color:#6b7a5e">From: money left this month ÷ days left<br>Analysis only, not financial advice</div>
-      </div>`,
-  };
-  const SCRIPTS_EN = {
-    cover: [[
-      [900, { me: 'coffee 80' }],
-      [1500, { typing: true }],
-      [2300, recordedEn('coffee', 80, 'Food', 62)],
-      [3800, { me: 'left' }],
-      [4300, { typing: true }],
-      [5000, remainingEn],
-    ]],
-    demo: [
-      [
-        [0, { step: 0 }],
-        [400, { me: 'coffee 80' }],
-        [1000, { typing: true }],
-        [1800, recordedEn('coffee', 80, 'Food', 62)],
-      ],
-      [
-        [0, { step: 1 }],
-        [400, { me: 'Auntie Daeng 50' }],
-        [1000, { typing: true }],
-        [1800, {
-          html: '🤔 I don’t know <b>Auntie Daeng</b> yet<br>Saved under <b>Other</b> for now — pick a category?<div class="chips" style="margin-top:10px"><span>Food</span><span>Travel</span><span>Shopping</span><span>Other</span></div>',
-        }],
-        [3300, { press: 'Food' }],
-        [3700, { typing: true }],
-        [4400, { html: '✅ Moved <b>Auntie Daeng</b> to <b>Food</b><br><span style="color:#6b7a5e;font-size:16px">Remembered — next time it goes there automatically</span>' }],
-      ],
-      [
-        [0, { step: 2 }],
-        [400, { me: 'left' }],
-        [1000, { typing: true }],
-        [1700, remainingEn],
-      ],
-    ],
-    missing: [[
-      [700, { me: 'coffee' }],
-      [1300, { typing: true }],
-      [2100, {
-        card: true,
-        html: '<div class="lc-head err">Couldn’t read that 🙏</div><div class="lc-body"><div>No amount found in the message</div><div style="color:#6b7a5e;font-size:16px">Try <b style="color:#111">name + amount</b>, e.g. <b style="color:#111">coffee 80</b></div></div>',
-      }],
-      [2900, { tag: true }],
-    ]],
-    long: [[
-      [900, { me: 'yesterday dinner with friends cost me three hundred' }],
-      [1600, { typing: true }],
-      [2800, {
-        card: true,
-        html: `<div class="lc-head warn">⏳ Not saved yet</div>
-          <div class="lc-body">
-            <div class="lc-row"><span class="lc-tag">Expense · Food</span><span style="font-size:14px;color:#6b7a5e">read by AI</span></div>
-            <div class="lc-row"><span>Dinner with friends · yesterday</span><b>฿300</b></div>
-            <div class="lc-btns"><span class="go">Confirm</span><span>Cancel</span></div>
-          </div>`,
-      }],
-      [4400, { pressBtn: 'Confirm' }],
-      [4900, { typing: true }],
-      [5600, recordedEn('Dinner with friends', 300, 'Food', 74)],
-      [6000, { tag: true }],
-    ]],
-  };
-
   const chatTimers = {};
 
   function chatBody(name) {
@@ -337,7 +256,8 @@
   /** เล่นแชทตั้งแต่ช่วงที่ fromSeg — ช่วงก่อนหน้าวาดทันทีไม่มีแอนิเมชัน */
   function playChat(name, fromSeg = 0) {
     const body = chatBody(name);
-    const script = (isEn() ? SCRIPTS_EN : SCRIPTS)[name];
+    // แชทจำลองเป็นไทยทั้งสองภาษา ให้ตรงกับบอทจริงและจอมือถือสด
+    const script = SCRIPTS[name];
     if (!body || !script) return;
     stopChat(name);
     body.innerHTML = '';
