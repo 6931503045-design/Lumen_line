@@ -16,13 +16,14 @@
 // ผลพลอยได้: ทางด่วน L1 รองรับ "กาแฟ ห้าสิบ" / "กาแฟ 80 บาท" / "ค่าเน็ต 1.2k" ได้แล้ว
 
 import { getUserIdByLineUserId } from '../db/queries/users';
-import { parseQuickExpenseText } from '../utils/regexParser';
+import { parseQuickExpenseBatch, parseQuickExpenseText, type BatchParseResult } from '../utils/regexParser';
 import { getTodayIso } from '../utils/thaiDate';
 import { isoDateToBangkokNoon, parseThaiDateText } from '../utils/thaiDateText';
 import { createTransaction } from '../services/transaction.service';
 import { formatBudgetAlert } from '../services/budget.service';
 import { formatBaht, MoneyError } from '../utils/money';
-import { replyFlex, replyText, replyTextWithQuickReply } from '../line/reply';
+import { replyFlex, replyText, replyTextWithQuickReply, type PostbackQuickReplyItem } from '../line/reply';
+import { listTopCategories } from '../services/category.service';
 import {
   matchCommand,
   matchSaveCommand,
@@ -32,7 +33,7 @@ import {
   runUndoLatest,
   type CommandName,
 } from '../services/command.service';
-import { buildRecordedCardFor } from '../line/recordedView';
+import { buildRecordedCardFor, type SavedEntryView } from '../line/recordedView';
 import { buildPendingCard } from '../line/flex/pendingCard';
 import { answerHelpTopic, matchHelpQuestion } from '../services/help.service';
 import {
@@ -45,7 +46,6 @@ import {
   FALLBACK_EXPENSE_CATEGORY,
   interpretUserMessage,
   resolveCategory,
-  suggestCategoryForItem,
 } from '../services/ai/router';
 import { MAX_AMOUNT_SATANG } from '../config/constants';
 import { env } from '../config/env';
@@ -87,6 +87,14 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
 
   // parsed.amountSatang = จำนวนที่ผู้ใช้พิมพ์ แปลงเป็นสตางค์แล้ว (G1: ดึงตรงๆ ไม่ประมาณ)
   if (parsed.confidence !== 'high' || parsed.amountSatang === undefined || !parsed.category) {
+    // ── หลายรายการในข้อความเดียว อ่านด้วยกฎได้ ไม่ต้องรอ AI ─────────────────────
+    // "ไส้กรอก 50 กับ ข้าวเย็น 46" เดิมไปถึง AI + ต้องกดยืนยัน ทั้งที่อ่านได้แน่นอน
+    const batch = parseQuickExpenseBatch(text);
+    if (batch) {
+      await saveQuickBatch(replyToken, userId, text, batch);
+      return;
+    }
+
     // ── คำถามวิธีใช้ที่จับได้แน่ ๆ ตอบจากคู่มือเลย ────────────────────────────
     // ไม่เปลืองโควตา AI และตอบได้แม้ปิด AI อยู่ (⚖️ G4)
     // ที่จับไม่ได้ AI ยังเลือก tool explain_feature ให้ได้อีกทาง
@@ -159,49 +167,21 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
       env.appBaseUrl
     );
 
-    // ทั้งพจนานุกรมส่วนตัวและตารางคำกลางไม่รู้จักคำนี้ (ลง "อื่นๆ") → ให้ AI "เสนอ" หมวด
-    // ⚖️ G2: ไม่ย้ายหมวดให้เอง ผู้ใช้กด "ใช่" ก่อน (set_category) แล้วระบบจะจำคำนี้ไว้
-    // ⚖️ G4: AI ใช้ไม่ได้/ช้า → ไม่มีข้อเสนอ การ์ดออกเหมือนเดิม
-    const suggestion =
-      !matched && entryType === 'expense'
-        ? await suggestCategoryForItem(userId, parsed.category, 'expense')
-        : null;
+    // ทั้งพจนานุกรมส่วนตัวและตารางคำกลางไม่รู้จักคำนี้ (ลง "อื่นๆ") → ให้ปุ่มหมวดที่ผู้ใช้ใช้บ่อย
+    // เดิมถาม AI ว่า "น่าจะหมวดอะไร" ทุกครั้ง (เปลืองโควตา ช้า และบางทีเดาผิด)
+    // คนส่วนใหญ่ใช้หมวดซ้ำ ๆ ไม่กี่หมวด ปุ่มจากประวัติจึงตรงแทบทุกครั้งโดยไม่ต้องใช้ AI
+    // ⚖️ G2: ไม่ย้ายหมวดให้เอง ผู้ใช้กดเลือก (set_category) แล้วระบบจะจำคำนี้ไว้ ครั้งหน้าไม่ถามอีก
+    const choices = !matched && entryType === 'expense' ? await topCategoryButtons(userId, tx.id) : null;
 
     // S5.8: รายการนี้ทำให้ข้ามเกณฑ์งบพอดี — แนบไปกับ reply เดียวกัน
     // reply มี quota แยกจาก push และไม่จำกัดจำนวน จึงเตือนตรงนี้ได้ฟรี
     // ถ้าปล่อยไปเตือนทีหลังต้องใช้ push ซึ่งมีแค่ 280 ครั้งต่อเดือนทั้งระบบ
     const extraLines = [
       tx.budgetAlert ? formatBudgetAlert(tx.budgetAlert) : null,
-      suggestion ? `🤔 "${parsed.category}" น่าจะเป็นหมวด ${suggestion.name} ใช่ไหมครับ?` : null,
+      choices ? `🤔 ยังไม่รู้จัก "${parsed.category}" เลยลงหมวด ${categoryName} ไว้ก่อน — เลือกหมวดให้หน่อย ครั้งหน้าจะจำได้ครับ` : null,
     ].filter((line): line is string => Boolean(line));
 
-    await replyFlex(
-      replyToken,
-      card,
-      extraLines.length > 0 ? extraLines.join('\n\n') : undefined,
-      suggestion
-        ? [
-            {
-              type: 'action',
-              action: {
-                type: 'postback',
-                label: `ใช่ ${suggestion.name}`.slice(0, 20),
-                data: `action=set_category&id=${tx.id}&cat=${suggestion.id}`,
-                displayText: `ใช่ หมวด ${suggestion.name}`,
-              },
-            },
-            {
-              type: 'action',
-              action: {
-                type: 'postback',
-                label: 'เลือกหมวดเอง',
-                data: `action=edit_category&id=${tx.id}`,
-                displayText: 'เลือกหมวดเอง',
-              },
-            },
-          ]
-        : undefined
-    );
+    await replyFlex(replyToken, card, extraLines.length > 0 ? extraLines.join('\n\n') : undefined, choices ?? undefined);
   } catch (err) {
     console.error('[textHandler] createTransaction error:', err);
     // ยอดเกินเพดานต่อรายการเป็นเรื่องของสิ่งที่ผู้ใช้พิมพ์ ไม่ใช่ระบบพัง
@@ -214,6 +194,43 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
     await replyFlex(replyToken, buildSaveFailedCard());
   }
 }
+/** ปุ่มหมวดที่ใช้บ่อยกี่ปุ่ม — 4 ปุ่มบวก "หมวดอื่น" ยังอยู่ในบรรทัดเดียวบนจอมือถือส่วนใหญ่ */
+const TOP_CATEGORY_BUTTONS = 4;
+
+/**
+ * ปุ่ม quick reply: หมวดที่ผู้ใช้ใช้บ่อย + "หมวดอื่น" (เปิดรายชื่อทั้งหมดผ่าน edit_category)
+ * ไม่มี AI ในทางนี้ · อ่านประวัติไม่สำเร็จ → null การ์ดยังออกได้ (ปุ่มเปลี่ยนหมวดบนการ์ดยังอยู่)
+ */
+async function topCategoryButtons(userId: string, transactionId: string): Promise<PostbackQuickReplyItem[] | null> {
+  try {
+    const top = await listTopCategories(userId, 'expense', TOP_CATEGORY_BUTTONS);
+    if (top.length === 0) return null;
+    return [
+      ...top.map((category): PostbackQuickReplyItem => ({
+        type: 'action',
+        action: {
+          type: 'postback',
+          label: `${category.emoji ? `${category.emoji} ` : ''}${category.name}`.slice(0, 20),
+          data: `action=set_category&id=${transactionId}&cat=${category.id}`,
+          displayText: `หมวด ${category.name}`,
+        },
+      })),
+      {
+        type: 'action',
+        action: {
+          type: 'postback',
+          label: 'หมวดอื่น',
+          data: `action=edit_category&id=${transactionId}`,
+          displayText: 'เลือกหมวดอื่น',
+        },
+      },
+    ];
+  } catch (err) {
+    console.error('[textHandler] อ่านหมวดที่ใช้บ่อยไม่สำเร็จ (ข้ามปุ่ม):', err);
+    return null;
+  }
+}
+
 /**
  * จัดการคำสั่งตายตัว — คืน true ถ้าข้อความนี้เป็นคำสั่งและตอบไปแล้ว
  *
@@ -278,6 +295,80 @@ async function handleCommands(
 
   await replyCommand(replyToken, userId, command);
   return true;
+}
+
+/**
+ * บันทึกหลายรายการจากทางด่วน (L1) — กฎเดียวกับรายการเดียวทุกอย่าง: หมวดจากพจนานุกรมส่วนตัว →
+ * ชื่อหมวด → ตารางคำกลาง, ไม่เจอ → รายจ่ายลง "อื่นๆ", วันที่ใช้ร่วมกันทั้งข้อความ ("เมื่อวาน...")
+ *
+ * ⚖️ G2 ไม่ต้องผ่าน pending: ไม่มี AI เกี่ยว ตัวเลขทุกตัวผู้ใช้พิมพ์เองและอ่านด้วยกฎตายตัว
+ * เหมือน "กาแฟ 80" — ผู้ใช้ลบรายการที่ผิดได้ทันทีจากไอคอนถังขยะบนการ์ด
+ */
+async function saveQuickBatch(
+  replyToken: string,
+  userId: string,
+  text: string,
+  batch: BatchParseResult
+): Promise<void> {
+  let occurredAt: Date | undefined;
+  if (batch.dateText) {
+    const occurredIso = parseThaiDateText(batch.dateText);
+    if (!occurredIso) {
+      // อ่านคำบอกวันที่ไม่ออก = ไม่เดา ให้ AI ถามกลับเหมือนรายการเดียว
+      await handleWithAi(replyToken, userId, text);
+      return;
+    }
+    if (occurredIso !== getTodayIso()) occurredAt = isoDateToBangkokNoon(occurredIso);
+  }
+
+  const saved: SavedEntryView[] = [];
+  const alerts: string[] = [];
+  let failed = 0;
+
+  // ทีละรายการ ไม่ใช่พร้อมกัน — การเตือนงบ 80%/100% ต้องเห็นยอดสะสมของรายการก่อนหน้าในชุดเดียวกัน
+  for (const item of batch.items) {
+    const matched = await resolveCategory(userId, item.category, item.type);
+    const categoryName =
+      matched?.name ?? (item.type === 'expense' ? FALLBACK_EXPENSE_CATEGORY : undefined);
+    try {
+      const tx = await createTransaction({
+        userId,
+        type: item.type,
+        amountSatang: item.amountSatang,
+        ...(categoryName ? { categoryName } : {}),
+        note: item.category,
+        ...(occurredAt ? { occurredAt } : {}),
+        source: 'chat',
+        parsedBy: matched?.source ?? 'regex',
+      });
+      saved.push({
+        transactionId: tx.id,
+        type: tx.type,
+        categoryName,
+        title: item.category,
+        amountSatang: tx.amountSatang,
+        occurredAtIso: tx.occurredAt,
+        budgetStatus: tx.budgetStatus,
+      });
+      if (tx.budgetAlert) alerts.push(formatBudgetAlert(tx.budgetAlert));
+    } catch (err) {
+      console.error('[textHandler] บันทึกรายการในชุดไม่สำเร็จ:', err);
+      failed += 1;
+    }
+  }
+
+  if (saved.length === 0) {
+    await replyFlex(replyToken, buildSaveFailedCard());
+    return;
+  }
+  if (failed > 0) {
+    alerts.push(`⚠️ บันทึกไม่สำเร็จ ${failed} รายการ — ลองส่งรายการนั้นใหม่อีกครั้งนะครับ`);
+  }
+  await replyFlex(
+    replyToken,
+    buildRecordedCardFor(saved, env.appBaseUrl),
+    alerts.length > 0 ? alerts.join('\n\n') : undefined
+  );
 }
 
 /**

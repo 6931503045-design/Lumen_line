@@ -30,6 +30,7 @@
 //   เพราะแยกไม่ออกว่าชื่อหมวดจบตรงไหน — เป็นเคสที่ต้องส่งต่อให้ L4 ตัดสิน ไม่ใช่เดาเอง
 
 import { parseThaiNumber } from './thaiNumber';
+import { CATEGORY_HINTS } from '../config/keywords';
 
 /** ตัวเลขอารบิกที่เขียนติดชื่อหมวด เช่น "ข้าว60", "ข้าว60บาท", "ค่าเน็ต1.2k" */
 const TRAILING_AMOUNT = /^(.+?)\s*([\d,]+(?:\.\d+)?\s*[kK]?\s*(?:บาท|บ|฿)?)$/;
@@ -247,7 +248,7 @@ function matchAttached(text: string): Extracted | null {
  * คืน null ถ้าฝั่งใดฝั่งหนึ่งใช้ไม่ได้ — ให้ผู้เรียกลองรูปแบบถัดไป
  */
 function build(amountTokens: string[], categoryTokens: string[]): Extracted | null {
-  const category = categoryTokens.join(' ').trim();
+  const category = cleanItemName(categoryTokens.join(' ').trim());
   if (!isValidCategoryName(category)) return null;
 
   const amountSatang = parseThaiNumber(amountTokens.join(' '));
@@ -257,10 +258,102 @@ function build(amountTokens: string[], categoryTokens: string[]): Extracted | nu
   return { amountSatang, category };
 }
 
+/** คำกริยาหน้าชื่อของ — "ซื้อกาแฟ" "จ่ายค่าหอ" "กินข้าว" "สั่งพิซซ่า" */
+const LEADING_VERB = /^(?:ซื้อ|จ่าย|กิน|สั่ง)\s*/;
+/** คำท้ายที่ไม่ใช่ชื่อของ — "กาแฟไป" "ข้าวหมดไป" "ขนมมา" */
+const TRAILING_FILLER = /\s*(?:หมดไป|ไป|มา|แล้ว)$/;
+
+/**
+ * ตัดคำกริยา/คำเสริมออกจากชื่อรายการ — "ซื้อกาแฟ" กับ "กาแฟ" ต้องเป็นของชิ้นเดียวกัน
+ *
+ * ทำไมต้องมี: ชื่อรายการคือ "คำ" ที่พจนานุกรมส่วนตัว (L3) จำไว้ ถ้าไม่ตัด ผู้ใช้สอน "กาแฟ" แล้ว
+ * พิมพ์ "ซื้อกาแฟ 80" ครั้งหน้าก็ยังไม่ตรงคำที่จำ และหน้ารายการมีชื่อเพี้ยน ๆ ปนกัน
+ *
+ * ⚠️ คำที่อยู่ในตารางคำกลางทั้งคำไม่ตัด ("ซื้อของ" → ช้อปปิ้ง ถ้าตัดเหลือ "ของ" จะหาหมวดไม่เจอ)
+ * ⚠️ ตัดแล้วเหลือสั้นกว่า 2 ตัวอักษรไม่ตัด ("กินไป" ต้องไม่กลายเป็น "")
+ */
+export function cleanItemName(name: string): string {
+  const original = name.trim();
+  if (CATEGORY_HINTS[original.toLowerCase()]) return original;
+
+  const usable = (text: string) => [...text].length >= 2 && !BARE_VERBS.has(text);
+
+  let cleaned = original;
+  const withoutVerb = cleaned.replace(LEADING_VERB, '');
+  if (usable(withoutVerb)) cleaned = withoutVerb;
+  const withoutFiller = cleaned.replace(TRAILING_FILLER, '');
+  if (usable(withoutFiller)) cleaned = withoutFiller;
+  return cleaned;
+}
+
+/** ตัดแล้วเหลือแค่คำกริยา/คำเสริมเดี่ยว ๆ = ไม่มีชื่อของเหลืออยู่ — เก็บข้อความเดิมดีกว่า ("ใช้ไป" ไม่ใช่ "ใช้") */
+const BARE_VERBS = new Set(['ใช้', 'จ่าย', 'ซื้อ', 'กิน', 'สั่ง', 'เติม', 'ไป', 'มา', 'แล้ว', 'หมดไป']);
+
 /**
  * ชื่อหมวดต้องไม่ว่างเปล่า และห้ามเป็นตัวเลข/comma/จุด/ช่องว่างล้วนๆ
  * (กันเคส "12345" ที่ไม่มีคำอธิบายเลย ไม่ให้ถูกตัดเป็น หมวด "1" + จำนวนเงิน "2345")
  */
 function isValidCategoryName(category: string): boolean {
   return category.length > 0 && !/^[\d,.\s]+$/.test(category);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// หลายรายการในข้อความเดียว — "ไส้กรอก 50 กับ ข้าวเย็น 46" · "ข้าว 50, กาแฟ 40" · "ข้าว 50 กาแฟ 40"
+// ────────────────────────────────────────────────────────────────────────────
+//
+// 🔴 ทำไมต้องมี: เดิมเจอตัวเลขสองชุดก็ส่ง AI ทันที (hasSeveralNumbers) ข้อความแบบนี้ผู้ใช้พิมพ์บ่อยมาก
+// เลยต้องรอ AI + กดยืนยันทุกครั้ง ทั้งที่อ่านด้วยกฎได้แน่นอน (เจอจากแชทจริง: "เมื่อวานซื้อไส้กรอกอีสาน 50 บาท กับข้าวเย็น 46")
+//
+// กติกา: ต้องอ่านได้ "ครบทุกตัวอักษร" เป็นคู่ ชื่อ+จำนวน ต่อกัน — เหลืออะไรที่อ่านไม่ออกแม้แต่นิดเดียวก็ส่ง AI
+// แต่ละคู่ผ่าน parseQuickExpenseText ตัวเดิม จึงได้กฎเดิมทั้งหมด (รายรับ/รายจ่าย, ยอด > 0, ตัดคำกริยา)
+// ⚠️ ชื่อที่มีตัวเลขปน ("7-11 45") อ่านแบบหลายรายการไม่ได้ — ส่ง AI เหมือนเดิม
+
+export type BatchItem = { amountSatang: number; category: string; type: 'income' | 'expense' };
+export type BatchParseResult = { items: BatchItem[]; dateText?: string };
+
+/** เท่ากับเพดานของ tool create_transaction_batch ฝั่ง AI */
+const MAX_BATCH_ITEMS = 10;
+
+/**
+ * ชื่อ (ไม่มีตัวเลข) + จำนวน + หน่วย — ใช้แบบ sticky ไล่จากซ้ายไปขวา
+ * หน่วยต่อคำสุภาพได้ ("50 บาทครับ") ไม่งั้น "ครับ" ไปติดหน้าชื่อรายการถัดไป
+ */
+const BATCH_PAIR =
+  /\s*([^\d,\n]+?)\s*(\d[\d,]*(?:\.\d+)?\s*[kK]?)\s*(?:(?:บาท|บ\.|บ|฿)(?:ครับ|คับ|ค่ะ|คะ|จ้า|นะ)?)?(?=[\s,]|$)/y;
+/** ตัวคั่นระหว่างรายการ — ใช้ได้ตั้งแต่รายการที่ 2 เท่านั้น ("กับข้าว 50" รายการแรกคือชื่ออาหาร) */
+const BATCH_SEPARATOR = /\s*(?:,|，|、|\n|และ|กับ)\s*/y;
+
+export function parseQuickExpenseBatch(input: string): BatchParseResult | null {
+  let text = input.trim();
+  if (!text || NEGATIVE_AMOUNT.test(text)) return null;
+  if (NEEDS_SENTENCE_READING.some((pattern) => pattern.test(text))) return null;
+
+  const dateText = DATE_WORD.exec(text)?.[0];
+  if (dateText) text = text.replace(dateText, ' ').replace(/[ \t]+/g, ' ').trim();
+
+  const items: BatchItem[] = [];
+  let position = 0;
+  while (position < text.length) {
+    if (items.length > 0) {
+      BATCH_SEPARATOR.lastIndex = position;
+      if (BATCH_SEPARATOR.exec(text)) position = BATCH_SEPARATOR.lastIndex;
+    }
+    BATCH_PAIR.lastIndex = position;
+    const pair = BATCH_PAIR.exec(text);
+    if (!pair) return null;
+    position = BATCH_PAIR.lastIndex;
+
+    const single = parseQuickExpenseText(`${pair[1]!.trim()} ${pair[2]!.trim()}`);
+    if (single.confidence !== 'high' || single.amountSatang === undefined || !single.category || single.dateText) {
+      return null;
+    }
+    items.push({ amountSatang: single.amountSatang, category: single.category, type: single.type ?? 'expense' });
+    if (items.length > MAX_BATCH_ITEMS) return null;
+
+    // ช่องว่าง/จุลภาคท้ายข้อความไม่ใช่ "ส่วนที่อ่านไม่ออก"
+    if (/^[\s,]*$/.test(text.slice(position))) break;
+  }
+
+  if (items.length < 2) return null;
+  return { items, ...(dateText ? { dateText } : {}) };
 }

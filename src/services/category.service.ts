@@ -18,6 +18,7 @@ import {
   findCategoryOwnedByUser,
   insertCategory,
   listCategoriesByUser,
+  listRecentCategoryIds,
   updateCategoryForUser,
   type UserCategory,
 } from '../db/queries/categories';
@@ -249,6 +250,34 @@ function describeBlocker(usage: CategoryUsage): string | null {
 
 /** หมวดสำรองของรายจ่ายเมื่อจับคู่ไม่ได้ (SPEC §S11.2 "ไม่เจอ = อื่นๆ") */
 export const FALLBACK_EXPENSE_CATEGORY = 'อื่นๆ';
+
+/**
+ * หมวดที่ผู้ใช้ใช้บ่อยที่สุด เรียงจากมากไปน้อย — ใช้เป็นปุ่มให้เลือกเมื่อระบบไม่รู้จักคำ
+ *
+ * แทนการถาม AI ว่า "น่าจะหมวดอะไร": คนส่วนใหญ่ใช้หมวดซ้ำ ๆ ไม่กี่หมวด ปุ่ม 4 หมวดแรกจึงตรงเกือบทุกครั้ง
+ * ไม่มีค่าใช้จ่าย ไม่มีโควตา ไม่ต้องรอ network ของ AI (⚖️ G4) และผู้ใช้เป็นคนเลือกเอง (⚖️ G2)
+ * ไม่นับ "อื่นๆ" (รายการนี้อยู่ที่นั่นแล้ว) · ผู้ใช้ใหม่ที่ยังไม่มีประวัติ → เติมด้วยลำดับหมวดตั้งต้น
+ */
+export async function listTopCategories(
+  userId: string,
+  type: 'income' | 'expense',
+  limit: number
+): Promise<UserCategory[]> {
+  const [categories, recentIds] = await Promise.all([
+    listCategoriesByUser(userId),
+    listRecentCategoryIds(userId, type),
+  ]);
+  const uses = new Map<string, number>();
+  for (const id of recentIds) uses.set(id, (uses.get(id) ?? 0) + 1);
+
+  return categories
+    .map((category, order) => ({ category, order }))
+    .filter(({ category }) => category.type === type && category.name !== FALLBACK_EXPENSE_CATEGORY)
+    // ใช้บ่อยก่อน · เท่ากันใช้ลำดับเดิมของผู้ใช้ (หมวดตั้งต้นเรียงจากที่คนใช้บ่อยไว้แล้ว)
+    .sort((a, b) => (uses.get(b.category.id) ?? 0) - (uses.get(a.category.id) ?? 0) || a.order - b.order)
+    .slice(0, limit)
+    .map(({ category }) => category);
+}
 
 /**
  * หมวดของผู้ใช้ที่ตรงกับคำนี้ (ประเภทเดียวกันเท่านั้น) — ตรงทั้งคำก่อน แล้วค่อยแบบมีคำของกันและกัน
