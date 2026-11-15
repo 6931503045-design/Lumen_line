@@ -32,6 +32,7 @@ import { listCategoriesByUser } from '../src/db/queries/categories';
 import { listTransactionsByUser } from '../src/db/queries/transactions';
 import { runCommand } from '../src/services/command.service';
 import { createPending } from '../src/services/pending.service';
+import { findLearnedKeyword } from '../src/db/queries/keywords';
 import { simulatePurchase } from '../src/services/simulate.service';
 import { PlanError, previewSavingPlan } from '../src/services/plan.service';
 import { understandText } from '../src/services/ai/gemini';
@@ -58,6 +59,8 @@ function ask(text: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   resetAiHistoryForTest();
+  // ค่าเริ่มต้น: ยังไม่เคยสอนคำไหน (เทสต์ที่ตั้ง mockImplementation ไว้ต้องไม่ค้างไปเทสต์ถัดไป)
+  vi.mocked(findLearnedKeyword).mockResolvedValue(null);
   vi.mocked(checkAiAllowed).mockResolvedValue({ ok: true, safeText: 'ข้อความที่ปิดข้อมูลแล้ว' });
   vi.mocked(listCategoriesByUser).mockResolvedValue(CATEGORIES as never);
   vi.mocked(listTransactionsByUser).mockResolvedValue([] as never);
@@ -128,6 +131,25 @@ describe('⚖️ G2 — tool ที่เขียนข้อมูลต้อ
         source: 'chat',
         payload: expect.objectContaining({ amountSatang: 8000, categoryName: 'อาหาร' }),
       })
+    );
+  });
+
+  it('🔴 หมวดที่ผู้ใช้เคยสอนไว้สำหรับชื่อรายการ ชนะหมวดที่ AI เดา (SPEC §S4 L3)', async () => {
+    vi.mocked(findLearnedKeyword).mockImplementation(async (_user, keyword) =>
+      keyword === 'ร้านป้าแดง'
+        ? { categoryId: 'c1', categoryName: 'อาหาร', categoryType: 'expense', hitCount: 1 }
+        : null
+    );
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'create_transaction',
+      args: { type: 'expense', amount: 50, item: 'ร้านป้าแดง', category_hint: 'เดินทาง' },
+    });
+
+    await ask('เมื่อวานกินร้านป้าแดงไป 50');
+
+    expect(createPending).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ categoryName: 'อาหาร' }) })
     );
   });
 

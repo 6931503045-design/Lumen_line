@@ -22,13 +22,13 @@ vi.mock('../src/line/reply', () => ({
 vi.mock('../src/services/transaction.service', () => ({ createTransaction: vi.fn() }));
 vi.mock('../src/services/ai/router', () => ({
   interpretUserMessage: vi.fn(),
-  resolveCategoryName: vi.fn(),
+  resolveCategory: vi.fn(),
   FALLBACK_EXPENSE_CATEGORY: 'อื่นๆ',
 }));
 
 import { getUserIdByLineUserId } from '../src/db/queries/users';
 import { createTransaction } from '../src/services/transaction.service';
-import { resolveCategoryName } from '../src/services/ai/router';
+import { resolveCategory } from '../src/services/ai/router';
 import { handleText } from '../src/handlers/textHandler';
 
 const USER = 'user-1';
@@ -56,7 +56,7 @@ beforeEach(() => {
 
 describe('ทางด่วนต้องไม่สร้างหมวดใหม่จากคำที่ผู้ใช้พิมพ์', () => {
   it('คำที่ไม่ตรงหมวดไหนเลย ลง "อื่นๆ" ไม่ใช่สร้างหมวดชื่อนั้น', async () => {
-    vi.mocked(resolveCategoryName).mockResolvedValue(null);
+    vi.mocked(resolveCategory).mockResolvedValue(null);
 
     await send('มะม่วง 500');
 
@@ -66,15 +66,31 @@ describe('ทางด่วนต้องไม่สร้างหมวด�
   });
 
   it('คำที่พิมพ์ยังถูกเก็บเป็นชื่อรายการ ไม่หายไปเฉย ๆ', async () => {
-    vi.mocked(resolveCategoryName).mockResolvedValue(null);
+    vi.mocked(resolveCategory).mockResolvedValue(null);
 
     await send('มะม่วง 500');
 
     expect(vi.mocked(createTransaction).mock.calls[0]![0].note).toBe('มะม่วง');
   });
 
+  it('หมวดจากพจนานุกรมส่วนตัว → บันทึก parsed_by=learned (SPEC §S4 L3)', async () => {
+    vi.mocked(resolveCategory).mockResolvedValue({ name: 'อาหาร', source: 'learned' });
+
+    await send('ร้านป้าแดง 50');
+
+    const arg = vi.mocked(createTransaction).mock.calls[0]![0];
+    expect(arg.categoryName).toBe('อาหาร');
+    expect(arg.parsedBy).toBe('learned');
+  });
+
+  it('จับคู่หมวดไม่ได้ → parsed_by=regex เหมือนเดิม', async () => {
+    vi.mocked(resolveCategory).mockResolvedValue(null);
+    await send('ร้านป้าแดง 50');
+    expect(vi.mocked(createTransaction).mock.calls[0]![0].parsedBy).toBe('regex');
+  });
+
   it('ถ้าตรงกับหมวดที่ผู้ใช้มีอยู่แล้ว ใช้หมวดนั้น', async () => {
-    vi.mocked(resolveCategoryName).mockResolvedValue('อาหาร');
+    vi.mocked(resolveCategory).mockResolvedValue({ name: 'อาหาร', source: 'dictionary' });
 
     await send('ข้าว 60');
 
@@ -84,7 +100,7 @@ describe('ทางด่วนต้องไม่สร้างหมวด�
   it('รายรับที่จับคู่ไม่ได้ ปล่อยว่าง ไม่โยนเข้า "อื่นๆ"', async () => {
     // ฝั่งรายรับไม่มีหมวด "อื่นๆ" และการโยนเงินเดือนเข้า "รายได้เสริม"
     // คือการติดป้ายผิด ไม่ใช่ค่าเริ่มต้นที่ปลอดภัย
-    vi.mocked(resolveCategoryName).mockResolvedValue(null);
+    vi.mocked(resolveCategory).mockResolvedValue(null);
 
     await send('ได้เงินค่าขนม 500');
 
@@ -94,7 +110,7 @@ describe('ทางด่วนต้องไม่สร้างหมวด�
 
 describe('ทิศทางเงินต้องถูกตั้งแต่ทางด่วน', () => {
   beforeEach(() => {
-    vi.mocked(resolveCategoryName).mockResolvedValue(null);
+    vi.mocked(resolveCategory).mockResolvedValue(null);
   });
 
   it('🔴 "ได้เงินค่าขนม 500" ต้องเป็นรายรับ ไม่ใช่รายจ่าย', async () => {

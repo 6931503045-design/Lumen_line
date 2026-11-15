@@ -22,6 +22,7 @@ import {
   type UserCategory,
 } from '../db/queries/categories';
 import { categoryHint } from '../config/keywords';
+import { lookupLearnedCategory } from './keyword.service';
 
 /** error ที่รู้ว่าจะตอบ status อะไร ให้ชั้น route แปลงเป็น HTTP ได้ตรงๆ */
 export class CategoryError extends Error {
@@ -275,19 +276,49 @@ export async function matchExistingCategory(
   );
 }
 
-/** ชื่อหมวดที่ตรงกับคำนี้ — คืน null ถ้าจับคู่ไม่ได้ (ใช้ในแชทและสลิป) */
-export async function resolveCategoryName(
+/**
+ * หมวดมาจากชั้นไหน — เก็บลง transactions.parsed_by ได้ตรง ๆ
+ *   learned    = พจนานุกรมส่วนตัว (L3) ที่ผู้ใช้เคยสอน
+ *   dictionary = ชื่อหมวดของผู้ใช้เอง หรือตารางคำกลาง (L2)
+ */
+export type CategorySource = 'learned' | 'dictionary';
+
+export type ResolvedCategory = { name: string; source: CategorySource };
+
+/**
+ * หมวดที่ตรงกับคำนี้ — คืน null ถ้าจับคู่ไม่ได้ (ใช้ในแชท สลิป และรายการประจำ)
+ *
+ * ลำดับ (SPEC §S4):
+ *   1. L3 พจนานุกรมส่วนตัว — สิ่งที่ผู้ใช้สอนเองต้องชนะทุกอย่าง
+ *      ("กาแฟ" ของคนที่ย้ายไปหมวด "เครื่องดื่ม" ต้องไม่กลับไป "อาหาร" ตามตารางกลาง)
+ *   2. ชื่อหมวดของผู้ใช้ตรง ๆ ("อาหาร 50")
+ *   3. L2 ตารางคำกลาง ("coffee"/"กาแฟ" → "อาหาร")
+ */
+export async function resolveCategory(
   userId: string,
   hint: string | null,
   type: 'income' | 'expense'
-): Promise<string | null> {
+): Promise<ResolvedCategory | null> {
+  const learned = await lookupLearnedCategory(userId, hint, type);
+  if (learned) return { name: learned, source: 'learned' };
+
   const direct = await matchExistingCategory(userId, hint, type);
-  if (direct) return direct.name;
+  if (direct) return { name: direct.name, source: 'dictionary' };
 
   // ไม่เจอ → แปลคำที่ใช้บ่อยเป็นชื่อหมวด แล้วจับคู่อีกรอบ ("coffee"/"กาแฟ" → "อาหาร")
   // ลองคำตรง ๆ ก่อนเสมอ เผื่อผู้ใช้ตั้งหมวดชื่อนั้นเอง
   // ยังจับคู่กับหมวดที่มีอยู่จริง และประเภทเดียวกัน (รายรับ/รายจ่าย) เท่านั้น ไม่สร้างหมวดใหม่
   const mapped = hint ? categoryHint(hint) : null;
   if (!mapped) return null;
-  return (await matchExistingCategory(userId, mapped, type))?.name ?? null;
+  const viaHint = await matchExistingCategory(userId, mapped, type);
+  return viaHint ? { name: viaHint.name, source: 'dictionary' } : null;
+}
+
+/** ชื่อหมวดที่ตรงกับคำนี้ — คืน null ถ้าจับคู่ไม่ได้ (ทางลัดของ resolveCategory) */
+export async function resolveCategoryName(
+  userId: string,
+  hint: string | null,
+  type: 'income' | 'expense'
+): Promise<string | null> {
+  return (await resolveCategory(userId, hint, type))?.name ?? null;
 }

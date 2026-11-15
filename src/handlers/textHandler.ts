@@ -44,7 +44,7 @@ import {
 import {
   FALLBACK_EXPENSE_CATEGORY,
   interpretUserMessage,
-  resolveCategoryName,
+  resolveCategory,
 } from '../services/ai/router';
 import { MAX_AMOUNT_SATANG } from '../config/constants';
 import { env } from '../config/env';
@@ -124,9 +124,9 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
   }
 
   const entryType = parsed.type ?? 'expense';
-  const matchedCategory = await resolveCategoryName(userId, parsed.category, entryType);
+  const matched = await resolveCategory(userId, parsed.category, entryType);
   const categoryName =
-    matchedCategory ?? (entryType === 'expense' ? FALLBACK_EXPENSE_CATEGORY : undefined);
+    matched?.name ?? (entryType === 'expense' ? FALLBACK_EXPENSE_CATEGORY : undefined);
 
   try {
     const tx = await createTransaction({
@@ -138,7 +138,8 @@ export async function handleText(event: LineTextMessageEvent): Promise<void> {
       note: parsed.category,
       ...(occurredAt ? { occurredAt } : {}),
       source: 'chat',
-      parsedBy: 'regex',
+      // บอกว่าหมวดมาจากชั้นไหน (SPEC §S4) — ใช้ดูว่าพจนานุกรมส่วนตัวช่วยได้จริงแค่ไหน
+      parsedBy: matched?.source ?? 'regex',
     });
 
     const card = buildRecordedCardFor(

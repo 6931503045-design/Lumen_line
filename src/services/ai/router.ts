@@ -25,7 +25,8 @@ import { formatThaiDate, getTodayIso } from '../../utils/thaiDate';
 import { PlanError, previewSavingPlan, type PlanPreview } from '../plan.service';
 import type { PlanConfidence } from '../../line/flex/planCard';
 import type { CommandName } from '../command.service';
-import { FALLBACK_EXPENSE_CATEGORY, resolveCategoryName } from '../category.service';
+import { FALLBACK_EXPENSE_CATEGORY, resolveCategory, resolveCategoryName } from '../category.service';
+import { lookupLearnedCategory } from '../keyword.service';
 import { answerHelpTopic } from '../help.service';
 import { createPending } from '../pending.service';
 import { simulatePurchase } from '../simulate.service';
@@ -402,7 +403,7 @@ async function runToolCall(
 
 // resolveCategoryName / FALLBACK_EXPENSE_CATEGORY ย้ายไปอยู่ category.service แล้ว
 // เพราะรายการประจำต้องใช้กฎเดียวกัน — export ต่อจากที่นี่ให้ผู้เรียกเดิม (textHandler, imageHandler)
-export { FALLBACK_EXPENSE_CATEGORY, resolveCategoryName };
+export { FALLBACK_EXPENSE_CATEGORY, resolveCategory, resolveCategoryName };
 
 /**
  * เติมชื่อหมวดจริงลงใน entry ก่อนเก็บเป็น payload ของ pending
@@ -415,7 +416,10 @@ async function resolveEntryCategory(
   userId: string,
   entry: ValidatedEntry
 ): Promise<Record<string, unknown>> {
-  const matched = await resolveCategoryName(userId, entry.categoryHint, entry.type);
+  // พจนานุกรมส่วนตัว (L3) ใช้ "ชื่อรายการที่ผู้ใช้พิมพ์" ไม่ใช่หมวดที่ AI เดา —
+  // ผู้ใช้เคยสอนว่า "ร้านป้าแดง" = อาหาร ก็ต้องได้อาหาร ไม่ว่า AI จะเดาหมวดอะไรมา
+  const learned = await lookupLearnedCategory(userId, entry.item, entry.type);
+  const matched = learned ?? (await resolveCategoryName(userId, entry.categoryHint, entry.type));
   const categoryName =
     matched ?? (entry.type === 'expense' ? FALLBACK_EXPENSE_CATEGORY : null);
 
