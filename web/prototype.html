@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css?v=20261115b" />
+    <link rel="stylesheet" href="css/style.css?v=20261115c" />
   </head>
   <body data-page="prototype">
     <div class="app-shell proto-index">
@@ -194,22 +194,26 @@
           <div class="an-head">
             <h3>ทางที่ผิด (empty / error state)</h3>
           </div>
-          <p class="proto-lead">เกณฑ์ขอให้มีทางที่ผิดด้วย ไม่ใช่แค่ happy path — ทุกสถานะด้านล่างมีอยู่จริงในโค้ด</p>
+          <p class="proto-lead">
+            เกณฑ์ขอให้มีทางที่ผิดด้วย ไม่ใช่แค่ happy path — <strong>กดแต่ละแถวเพื่อเปิดดูได้จริง</strong>
+            หรือเปิดทุกหน้าแบบ <a href="index.html?preview=1&amp;empty=1"><strong>ผู้ใช้ใหม่ที่ยังไม่มีข้อมูล →</strong></a>
+          </p>
           <div class="proto-coverage">
-            <div class="proto-cov-row"><span class="proto-chip could">ว่าง</span><span>ผู้ใช้ใหม่ยังไม่มีรายการ</span><strong>"ยังไม่มีรายการ" ไม่ใช่ ฿0.00</strong></div>
-            <div class="proto-cov-row"><span class="proto-chip could">ว่าง</span><span>ยังไม่ได้ตั้งงบสักหมวด</span><strong>"ยังไม่ได้ตั้งงบ" ไม่ใช่ 0%</strong></div>
-            <div class="proto-cov-row"><span class="proto-chip could">ว่าง</span><span>ยังไม่มีแผนออม</span><strong>ชวนกด "สร้างแผนใหม่"</strong></div>
-            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>ยังไม่ได้ล็อกอิน</span><strong>แถบเหลือง + ปุ่มเข้าสู่ระบบ</strong></div>
-            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>เซสชันหมดอายุ</span><strong>แถบแดง + ให้ล็อกอินใหม่</strong></div>
-            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>แชท: พิมพ์ไม่มียอด / ยอดเป็น 0</span><strong>การ์ด "อ่านข้อความไม่ออก" + ตัวอย่าง</strong></div>
-            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>กรอกยอดเป็น 0</span><strong>ปฏิเสธ + บอกให้ใส่มากกว่า 0</strong></div>
-            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>ลบหมวดที่ยังมีรายการอยู่</span><strong>ปฏิเสธ + บอกจำนวนรายการ</strong></div>
+            <a class="proto-cov-row link" href="index.html?preview=1&amp;empty=1"><span class="proto-chip could">ว่าง</span><span>ผู้ใช้ใหม่ยังไม่มีรายการ (ภาพรวม)</span><strong>"ยังไม่มีข้อมูล" + ชวนพิมพ์รายการแรก ไม่ใช่ ฿0</strong></a>
+            <a class="proto-cov-row link" href="transactions.html?preview=1&amp;empty=1"><span class="proto-chip could">ว่าง</span><span>ผู้ใช้ใหม่ยังไม่มีรายการ (รายการ)</span><strong>"ยังไม่มีรายการ — พิมพ์ในแชท LINE เช่น กาแฟ 80"</strong></a>
+            <a class="proto-cov-row link" href="categories.html?preview=1&amp;empty=1"><span class="proto-chip could">ว่าง</span><span>ยังไม่ได้ตั้งงบสักหมวด</span><strong>"ยังไม่ตั้งงบ" ไม่ใช่ 0%</strong></a>
+            <a class="proto-cov-row link" href="index.html?preview=1&amp;empty=1"><span class="proto-chip could">ว่าง</span><span>ยังไม่มีแผนออม</span><strong>ปุ่ม "+ สร้างแผนเก็บเงินแรก"</strong></a>
+            <a class="proto-cov-row link" href="analyze.html?preview=1&amp;empty=1"><span class="proto-chip could">ว่าง</span><span>ข้อมูลน้อยกว่า 7 วัน</span><strong>"ข้อมูลยังไม่เพียงพอ" ไม่เดาตัวเลขลอย ๆ</strong></a>
+            <a class="proto-cov-row link" href="chat.html"><span class="proto-chip could">ผิด</span><span>แชท: พิมพ์ไม่มียอด / ยอดเป็น 0</span><strong>การ์ด "อ่านข้อความไม่ออก" + ตัวอย่าง</strong></a>
+            <a class="proto-cov-row link" href="transactions.html?preview=1"><span class="proto-chip could">ผิด</span><span>กรอกยอดเป็น 0 ในฟอร์มเพิ่ม/แก้รายการ</span><strong>ไม่บันทึก + "กรุณาใส่จำนวนเงินมากกว่า 0"</strong></a>
+            <a class="proto-cov-row link" href="categories.html?preview=1"><span class="proto-chip could">ผิด</span><span>ลบหมวดที่ยังมีรายการอยู่</span><strong>ปฏิเสธ + บอกจำนวนรายการ</strong></a>
+            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>ยังไม่ได้ล็อกอิน / เซสชันหมดอายุ (เว็บจริง)</span><strong>หน้า "เข้าสู่ระบบด้วย LINE" + ปุ่มดูตัวอย่าง</strong></div>
           </div>
         </section>
       </main>
     </div>
 
     <!-- แถบชี้ requirement สำหรับตรวจ M3 — ไม่ใช่ส่วนหนึ่งของผลิตภัณฑ์ -->
-    <script src="js/prototype-bar.js?v=20261115b"></script>
+    <script src="js/prototype-bar.js?v=20261115c"></script>
   </body>
 </html>

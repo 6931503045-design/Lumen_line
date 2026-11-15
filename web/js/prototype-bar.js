@@ -106,7 +106,12 @@
 
   /** ลิงก์ระหว่างหน้าในโหมดดูตัวอย่างต้องพา ?preview=1 ไปด้วย ไม่งั้นคนตรวจเจอกำแพงล็อกอินทุกหน้า */
   function screenHref(href) {
-    return urlFlag('preview') && href !== 'prototype.html' ? `${href}?preview=1` : href;
+    if (href === 'prototype.html' || href === 'chat.html') return href;
+    // โหมด "ผู้ใช้ใหม่" (?empty=1) ต้องติดไปทุกหน้าด้วย ไม่งั้นกดเปลี่ยนหน้าแล้วข้อมูลเต็มกลับมา
+    const params = [];
+    if (urlFlag('preview') || urlFlag('empty')) params.push('preview=1');
+    if (urlFlag('empty')) params.push('empty=1');
+    return params.length ? `${href}?${params.join('&')}` : href;
   }
 
   let built = false;
