@@ -33,6 +33,7 @@ import {
 } from './transaction.service';
 import { formatBaht } from '../utils/money';
 import { isoDateToBangkokNoon } from '../utils/thaiDateText';
+import { formatThaiDate, formatThaiDateTime } from '../utils/thaiDate';
 import type { SavedEntryView } from '../line/recordedView';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -433,7 +434,7 @@ export function describePending(action: PendingActionKind, payload: unknown): st
       const data = payload as z.infer<typeof payloadSchemas.delete_transaction>;
       return [
         `จะลบรายการ "${data.before.item ?? 'ไม่มีชื่อ'}" ${formatBaht(data.before.amountSatang)}`,
-        `วันที่ ${data.before.occurredAtIso.slice(0, 10)}`,
+        `วันที่ ${formatPayloadDate(data.before.occurredAtIso)}`,
         '',
         'กดยืนยันเพื่อลบนะครับ (ลบแล้วเอากลับคืนได้)',
       ].join('\n');
@@ -478,14 +479,13 @@ function describeEntry(entry: EntryPayload): string {
  * ที่ผู้ใช้เพิ่งเห็นมา จึงต้องแปลงกลับเป็นเวลาไทยก่อนแสดง
  */
 function formatPayloadDate(iso: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  // แบบที่คนอ่าน "14 พ.ย. 2569" / "6 ต.ค. 2569 14:32" — เดิมโชว์ "2026-11-14" ซึ่งเป็นรูปแบบของ DB
+  // ผู้ใช้ต้องแปลงปี ค.ศ. เป็น พ.ศ. ในหัวเองตอนตรวจก่อนกดยืนยัน (เจอจากแชทจริง)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return formatThaiDate(new Date(`${iso}T12:00:00+07:00`));
 
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return iso;
-
-  // แปลงเป็นเวลาไทยแล้วตัดเอา "YYYY-MM-DD HH:MM"
-  const bangkok = new Date(parsed.getTime() + 7 * 60 * 60 * 1000);
-  return `${bangkok.toISOString().slice(0, 10)} ${bangkok.toISOString().slice(11, 16)}`;
+  return formatThaiDateTime(parsed);
 }
 
 const WEEKDAY_NAMES = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];

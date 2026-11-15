@@ -991,3 +991,41 @@ describe('🔴 ด่าน G1: ทิ้งการหารบิลที่
     expect(payload()).toMatchObject({ amountSatang: 10000, splitCount: 3 });
   });
 });
+
+describe('🔴 รายการจาก AI หาหมวดจากชื่อรายการก่อน แล้วค่อยใช้หมวดที่ AI เดา', () => {
+  // เจอจากแชทจริง: "เมื่อวานซื้อไส้กรอกอีสาน 50 บาท กับข้าวเย็น 46" → อื่นๆ ทั้งสองรายการ
+  // เพราะเดิมเส้นทาง AI ไม่เอาชื่อรายการไปเทียบตารางคำกลาง และ AI ไม่ส่ง category_hint มา
+  it('batch ที่ AI ไม่ส่ง hint → ใช้ตารางคำกลางกับชื่อรายการ', async () => {
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'create_transaction_batch',
+      args: {
+        items: [
+          { type: 'expense', amount: 50, item: 'ไส้กรอกอีสาน', date_text: 'เมื่อวาน' },
+          { type: 'expense', amount: 46, item: 'ข้าวเย็น', date_text: 'เมื่อวาน' },
+        ],
+      },
+    });
+
+    await ask('เมื่อวานซื้อไส้กรอกอีสาน 50 บาท กับข้าวเย็น 46');
+
+    const entries = (vi.mocked(createPending).mock.calls.at(-1)![0].payload as {
+      entries: Array<{ categoryName: string }>;
+    }).entries;
+    expect(entries.map((e) => e.categoryName)).toEqual(['อาหาร', 'อาหาร']);
+  });
+
+  it('ชื่อรายการไม่รู้จัก → ใช้หมวดที่ AI เดา (ถ้าเป็นหมวดที่ผู้ใช้มีจริง)', async () => {
+    vi.mocked(understandText).mockResolvedValue({
+      kind: 'tool',
+      name: 'create_transaction',
+      args: { type: 'expense', amount: 120, item: 'ร้านลุงหมี', category_hint: 'เดินทาง' },
+    });
+
+    await ask('จ่ายร้านลุงหมีไป 120');
+
+    expect(createPending).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ categoryName: 'เดินทาง' }) })
+    );
+  });
+});

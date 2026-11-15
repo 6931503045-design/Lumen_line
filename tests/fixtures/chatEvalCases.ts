@@ -85,6 +85,9 @@ export const CHAT_EVAL_CASES: ChatEvalCase[] = [
   { text: 'toeic 1800', expect: { route: 'save', type: 'expense', amountSatang: 180000, category: 'การศึกษา' } },
   { text: 'แว่นตา 1500', expect: { route: 'save', type: 'expense', amountSatang: 150000, category: 'สุขภาพ' } },
   { text: 'ค่าวิน 20', expect: { route: 'save', type: 'expense', amountSatang: 2000, category: 'เดินทาง' } },
+  { text: 'ไส้กรอกอีสาน 50', expect: { route: 'save', type: 'expense', amountSatang: 5000, category: 'อาหาร' }, real: true },
+  { text: 'ข้าวเย็น 46', expect: { route: 'save', type: 'expense', amountSatang: 4600, category: 'อาหาร' }, real: true },
+  { text: 'กะเพราหมูกรอบ 60', expect: { route: 'save', type: 'expense', amountSatang: 6000, category: 'อาหาร' } },
   // "ค่าขนม" ฝั่งรายจ่าย = ของกิน (คำว่า "ขนม" ในตาราง) ไม่ใช่เงินที่พ่อแม่ให้
   { text: 'ค่าขนม 20', expect: { route: 'save', type: 'expense', amountSatang: 2000, category: 'อาหาร' } },
   // คำที่ไม่มีใครรู้จัก (ยังไม่ได้สอน) → "อื่นๆ" ถูกต้องตามกติกา ผู้ใช้กดเปลี่ยนหมวดแล้วระบบจะจำ
@@ -115,6 +118,7 @@ export const CHAT_EVAL_CASES: ChatEvalCase[] = [
   { text: 'อยากเก็บเงินซื้อโน้ตบุ๊ก 25000 ภายใน 10 เดือน', expect: { route: 'ai', tool: 'plan_goal', args: { target: 25000, months: 10 } } },
   // "กับเพื่อน" ไม่ใช่การหาร — split_count ต้องไม่มี (วัดผลจริงเคยได้ split_count=2 → บันทึกแค่ครึ่ง)
   { text: 'เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย', expect: { route: 'ai', tool: 'create_transaction', args: { amount: 300, split_count: undefined } } },
+  { text: 'เมื่อวานซื้อไส้กรอกอีสาน 50 บาท กับข้าวเย็น 46', expect: { route: 'ai', tool: 'create_transaction_batch' }, real: true },
   { text: 'ค่าข้าว 300 หาร 3 คน', expect: { route: 'ai', tool: 'create_transaction', args: { amount: 300, split_count: 3 } } },
   { text: 'ซื้อหูฟัง 1500 ได้ไหม', expect: { route: 'ai', tool: 'simulate_purchase', args: { price: 1500 } } },
   { text: 'แก้รายการล่าสุดเป็น 90', expect: { route: 'ai', tool: 'update_transaction' } },

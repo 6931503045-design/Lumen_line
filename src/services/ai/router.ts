@@ -27,7 +27,6 @@ import { PlanError, previewSavingPlan, type PlanPreview } from '../plan.service'
 import type { PlanConfidence } from '../../line/flex/planCard';
 import type { CommandName } from '../command.service';
 import { FALLBACK_EXPENSE_CATEGORY, resolveCategory, resolveCategoryName } from '../category.service';
-import { lookupLearnedCategory } from '../keyword.service';
 import { answerHelpTopic } from '../help.service';
 import { createPending } from '../pending.service';
 import { simulatePurchase } from '../simulate.service';
@@ -468,10 +467,14 @@ async function resolveEntryCategory(
   userId: string,
   entry: ValidatedEntry
 ): Promise<Record<string, unknown>> {
-  // พจนานุกรมส่วนตัว (L3) ใช้ "ชื่อรายการที่ผู้ใช้พิมพ์" ไม่ใช่หมวดที่ AI เดา —
+  // ลำดับเดียวกับทางด่วน แล้วค่อยพึ่งหมวดที่ AI เดา:
+  //   1. ชื่อรายการที่ผู้ใช้พิมพ์ → พจนานุกรมส่วนตัว (L3) → ชื่อหมวดของผู้ใช้ → ตารางคำกลาง (L2)
+  //   2. หมวดที่ AI เดา (category_hint)
+  // 🔴 เดิมข้อ 1 ดูแค่ L3 — "ข้าวเย็น" อยู่ในตารางคำกลางแล้วแต่ลง "อื่นๆ" เพราะ AI ไม่ส่ง hint มา
+  //    (เจอจากแชทจริง: "เมื่อวานซื้อไส้กรอกอีสาน 50 บาท กับข้าวเย็น 46" → อื่นๆ ทั้งสองรายการ)
   // ผู้ใช้เคยสอนว่า "ร้านป้าแดง" = อาหาร ก็ต้องได้อาหาร ไม่ว่า AI จะเดาหมวดอะไรมา
-  const learned = await lookupLearnedCategory(userId, entry.item, entry.type);
-  const matched = learned ?? (await resolveCategoryName(userId, entry.categoryHint, entry.type));
+  const fromItem = await resolveCategory(userId, entry.item, entry.type);
+  const matched = fromItem?.name ?? (await resolveCategoryName(userId, entry.categoryHint, entry.type));
   const categoryName =
     matched ?? (entry.type === 'expense' ? FALLBACK_EXPENSE_CATEGORY : null);
 
