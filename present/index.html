@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JOD tang · Final Demo — ทีม Lumen</title>
+  <link rel="icon" href="assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/deck.css" />
+  <link rel="stylesheet" href="css/slides.css" />
+</head>
+<body>
+  <div id="backdrop"></div>
+  <canvas id="waves"></canvas>
+  <div class="orb o1" data-depth="40"></div>
+  <div class="orb o2" data-depth="-25"></div>
+  <div class="orb o3" data-depth="18"></div>
+  <div id="grain"></div>
+
+  <!-- ไอคอนที่ใช้ซ้ำ -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></symbol>
+      <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2z"/><circle cx="16" cy="14.5" r="1.2"/></symbol>
+      <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+      <symbol id="i-grad" viewBox="0 0 24 24"><path d="M22 9 12 4 2 9l10 5 10-5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></symbol>
+      <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+      <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+      <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></symbol>
+      <symbol id="i-git" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M18 11.5c0 3-3 3.5-6 4.5l-3.6 1.2"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-hand" viewBox="0 0 24 24"><path d="M9 11V5a1.5 1.5 0 0 1 3 0v6M12 10V4a1.5 1.5 0 0 1 3 0v7M15 10V6a1.5 1.5 0 0 1 3 0v8a7 7 0 0 1-7 7h-.5a6 6 0 0 1-4.8-2.4L3.3 15a1.5 1.5 0 0 1 2.3-1.9L9 16V8a1.5 1.5 0 0 1 3 0"/></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+    </defs>
+  </svg>
+
+  <main id="stage">
+    <header id="topbar">
+      <div class="brand">
+        <div class="brand-mark"><img src="assets/logo.png" alt="" /></div>
+        <div>JOD tang<small>ทีม Lumen · Final Demo</small></div>
+      </div>
+      <nav id="sections">
+        <span data-sec="1">01 ปัญหา</span>
+        <span data-sec="2">02 Demo แชท</span>
+        <span data-sec="3">03 Demo เว็บ</span>
+        <span data-sec="4">04 Money Engine</span>
+        <span data-sec="5">05 พิสูจน์</span>
+      </nav>
+      <button id="langBtn" type="button" title="L"><span data-l="th">TH</span><span data-l="en">EN</span></button>
+    </header>
+
+    <!-- ═══════════ 01 ปก ═══════════ -->
+    <section class="slide s-cover" data-sec="1" data-title="ปก — JOD tang">
+      <div class="copy">
+        <span class="eyebrow rv" style="--d:0"><b>LUMEN</b> Final Demo · CSI101</span>
+        <h1 class="rv" style="--d:1">จดเงินใน LINE<br />ด้วยข้อความ<span class="hl">เดียว</span></h1>
+        <p class="lead rv" style="--d:2">JOD tang — บอทจดรายรับรายจ่ายบน LINE สำหรับนักศึกษา<br />ที่บอกได้ว่า <b style="color:var(--ink)">วันนี้ใช้ได้อีกเท่าไหร่</b></p>
+        <div class="stats">
+          <div class="stat card glass rv" style="--d:3" data-tilt><b class="num">1</b><span>ข้อความ ต่อ 1 รายการ</span></div>
+          <div class="stat card lime rv" style="--d:4" data-tilt><b class="num" data-count="1299">1,299</b><span>เทสต์อัตโนมัติ ผ่านทั้งหมด</span></div>
+          <div class="stat card glass rv" style="--d:5" data-tilt><b class="num"><span data-count="11">11</span>%</b><span>ของข้อความที่ต้องใช้ AI</span></div>
+        </div>
+      </div>
+
+      <div class="phone-wrap phone-3d rv right" style="--d:2">
+        <div class="phone" data-follow>
+          <div class="screen">
+            <div class="notch"></div>
+            <div class="chat-head"><img src="assets/logo.png" alt="" />JOD tang</div>
+            <div class="chat-body" data-chat="cover"></div>
+          </div>
+        </div>
+        <div class="phone-shadow"></div>
+      </div>
+
+      <div class="card lime float-a rv pop" style="--d:6" data-tilt data-depth="-14">
+        <h3>ถาม "เหลือ" ได้คำตอบทันที</h3>
+        <svg class="squiggle" viewBox="0 0 300 14" preserveAspectRatio="none"><path d="M0 7 Q 7.5 0 15 7 T 30 7 T 45 7 T 60 7 T 75 7 T 90 7 T 105 7 T 120 7 T 135 7 T 150 7 T 165 7 T 180 7 T 195 7 T 210 7 T 225 7 T 240 7 T 255 7 T 270 7 T 285 7 T 300 7" fill="none" stroke="#0f130b" stroke-width="1.6"/></svg>
+        <div class="row"><span class="pill dark">FR-05</span><span class="pill dark">ไม่ใช้ AI</span><span class="pill dark">&lt; 1 วินาที</span></div>
+      </div>
+      <div class="card paper float-b rv pop" style="--d:7" data-tilt data-depth="20">
+        <h3 style="color:#0f130b">AI ไม่แตะเงิน</h3>
+        <div class="row"><span class="pill dark">G1 ห้ามคำนวณ</span><span class="pill dark">G2 ต้องยืนยัน</span><span class="pill dark">G3 สตางค์</span></div>
+      </div>
+      <img class="mascot floaty rv pop" style="--d:8" src="assets/mascot.png" alt="มาสคอตมะนาว JOD tang" data-depth="30" />
+    </section>
+
+    <!-- ═══════════ 02 ปัญหา ═══════════ -->
+    <section class="slide light s-problem" data-sec="1" data-title="ปัญหา — ทำไมคนเลิกจด">
+      <span class="eyebrow rv" style="--d:0"><b>01</b> ปัญหา</span>
+      <h2 class="rv" style="--d:1">ทำไมคน<span class="hl">เลิกจด</span>เงิน</h2>
+      <div class="bento">
+        <div class="card lime c-weeks rv" style="--d:2" data-tilt>
+          <span class="plus">+</span>
+          <div>
+            <p class="small muted" style="font-weight:600">ปัญหาที่ 1 · แรงเสียดทาน</p>
+            <div class="steps">
+              <span>เปิดแอป</span><span>เลือกหมวด</span><span>พิมพ์ยอด</span><span>เลือกวัน</span><span>กดบันทึก</span>
+            </div>
+          </div>
+          <div>
+            <div class="bignum">2–3</div>
+            <p style="font-size:26px;font-weight:600">สัปดาห์ แล้วคนส่วนใหญ่ก็เลิกจด<br /><span class="muted" style="font-weight:500">เพราะทุกรายการต้องทำหลายขั้น</span></p>
+          </div>
+        </div>
+        <div class="card dark c-back rv" style="--d:3" data-tilt>
+          <span class="plus">+</span>
+          <p class="small muted" style="font-weight:600">ปัญหาที่ 2 · มองย้อนหลัง</p>
+          <div class="ghost-chart"><i style="--h:40%"></i><i style="--h:72%"></i><i style="--h:55%"></i><i style="--h:90%"></i><i style="--h:64%"></i></div>
+          <div>
+            <h3 style="font-size:40px">จดครบก็รู้แค่<br />"เงินหายไปไหน"</h3>
+            <p class="small muted" style="margin-top:10px">แต่ไม่ตอบสิ่งที่อยากรู้จริง</p>
+          </div>
+        </div>
+        <div class="qs">
+          <div class="qlabel rv" style="--d:4">2 คำถามที่นักศึกษาอยากรู้จริง</div>
+          <div class="card paper q rv" style="--d:5" data-tilt>
+            <p>"วันนี้ใช้ได้<br />อีกเท่าไหร่?"</p>
+            <div class="row"><span class="small muted">คำถามที่ 1</span><span class="fr dark">→ FR-05</span></div>
+          </div>
+          <div class="card mist q rv" style="--d:6" data-tilt>
+            <p>"อยากได้ของชิ้นนี้<br />ต้องเก็บยังไง?"</p>
+            <div class="row"><span class="small muted">คำถามที่ 2</span><span class="fr dark">→ FR-07</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ 03 ผู้ใช้ ═══════════ -->
+    <section class="slide s-users" data-sec="1" data-title="ผู้ใช้ — นักศึกษาที่อยู่ใน LINE ทั้งวัน">
+      <div class="copy">
+        <span class="eyebrow rv" style="--d:0"><b>01</b> ผู้ใช้</span>
+        <h2 class="rv" style="--d:1">ผู้ใช้ของเรา<br />คือ<span class="hl">นักศึกษา</span></h2>
+        <p class="lead rv" style="--d:2">เราเลยทำบน LINE — ไม่ต้องโหลดแอปใหม่<br />จดได้ในข้อความเดียว</p>
+      </div>
+      <div class="bento">
+        <div class="card glass rv" style="--d:2" data-tilt>
+          <span class="plus">+</span>
+          <div class="age num">18–24</div>
+          <div><h3>ปี · นักศึกษา</h3><p class="muted">ช่วงแรกที่ต้องจัดการเงินเอง</p></div>
+        </div>
+        <div class="card lime rv" style="--d:3" data-tilt>
+          <span class="icon-wrap"><svg class="icon"><use href="#i-chat"/></svg></span>
+          <div><h3>เปิด LINE<br />อยู่แล้วทั้งวัน</h3><p class="muted">จดในที่ที่อยู่แล้ว ไม่ต้องสลับแอป</p></div>
+        </div>
+        <div class="card dark rv" style="--d:4" data-tilt>
+          <span class="icon-wrap"><svg class="icon"><use href="#i-calendar"/></svg></span>
+          <div><h3>ได้เงิน<br />เป็นก้อนต่อเดือน</h3><p class="muted">ต้องเกลี่ยให้พอถึงสิ้นเดือน</p></div>
+        </div>
+        <div class="card glass rv" style="--d:5" data-tilt>
+          <div class="bubble-orb"></div>
+          <span class="icon-wrap"><svg class="icon"><use href="#i-phone"/></svg></span>
+          <div><h3>จ่ายผ่าน<br />แอปธนาคาร</h3><p class="muted">เช่น K PLUS ที่ส่งอีเมลแจ้งทุกครั้ง</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ 04 Demo แชท ═══════════ -->
+    <section class="slide s-chat" data-sec="2" data-title="Demo แชท LINE">
+      <div class="copy">
+        <span class="eyebrow rv" style="--d:0"><b>02</b> Demo แชท LINE</span>
+        <h2 class="rv" style="--d:1">พิมพ์ครั้งเดียว<br /><span class="hl">จดเสร็จ</span></h2>
+        <div class="steps">
+          <div class="step glass card rv" style="--d:2" data-step="0">
+            <span class="dot">1</span>
+            <div><b><code>กาแฟ 80</code></b><span>บันทึกทันที พร้อมหมวดและแถบงบ</span></div>
+            <span class="fr">FR-01</span>
+          </div>
+          <div class="step glass card rv" style="--d:3" data-step="1">
+            <span class="dot">2</span>
+            <div><b><code>ร้านป้าแดง 50</code></b><span>คำที่ไม่รู้จัก → เลือกหมวด → ระบบจำได้</span></div>
+            <span class="fr">FR-03</span>
+          </div>
+          <div class="step glass card rv" style="--d:4" data-step="2">
+            <span class="dot">3</span>
+            <div><b><code>เหลือ</code></b><span>วันนี้ใช้ได้อีกเท่าไหร่ — ตอบทันที</span></div>
+            <span class="fr">FR-05</span>
+          </div>
+        </div>
+        <div class="sos rv" style="--d:5"><span class="pill ghost">🆘 บอทไม่ตอบใน 10 วิ</span> เซิร์ฟเวอร์ฟรีกำลังตื่น → ใช้แชทจำลองข้างนี้แทน</div>
+      </div>
+      <div class="phone-wrap phone-3d rv right" style="--d:2">
+        <div class="phone" data-follow>
+          <div class="screen">
+            <div class="notch"></div>
+            <div class="chat-head"><img src="assets/logo.png" alt="" />JOD tang</div>
+            <div class="chat-body" data-chat="demo"></div>
+          </div>
+        </div>
+        <div class="phone-shadow"></div>
+      </div>
+      <button class="pill lime replay rv" style="--d:6;pointer-events:auto;cursor:pointer;border:0;font-family:inherit" data-replay="demo">↻ เล่นใหม่</button>
+    </section>
+
+    <!-- ═══════════ 05 Demo เว็บ ═══════════ -->
+    <section class="slide light s-web" data-sec="3" data-title="Demo เว็บ">
+      <div class="head">
+        <div>
+          <span class="eyebrow rv" style="--d:0"><b>03</b> Demo เว็บ</span>
+          <h2 class="rv" style="--d:1">เปิดเว็บจาก LINE<br />ล็อกอินด้วย<span class="hl">บัญชี LINE</span></h2>
+        </div>
+        <p class="lead rv" style="--d:2">ไม่ต้องสมัครสมาชิก ตัวเลขบนเว็บกับในแชทมาจากที่เดียวกัน — กดที่หน้าจอเพื่อดูใกล้ ๆ</p>
+      </div>
+      <div class="fan">
+        <div class="fan-item rv" style="--d:3">
+          <div class="phone"><div class="screen"><div class="shot"><img src="assets/web-index.png" alt="หน้าภาพรวม" /></div></div></div>
+          <div class="caption"><b>ภาพรวม</b><div class="row"><span class="fr dark">FR-04</span><span class="fr">FR-05</span></div></div>
+        </div>
+        <div class="fan-item rv" style="--d:4">
+          <div class="phone"><div class="screen"><div class="shot"><img src="assets/web-transactions.png" alt="หน้ารายการ" /></div></div></div>
+          <span class="email-tag">✉ ป้าย "อีเมล" — K PLUS เข้าเองใน 5 นาที</span>
+          <div class="caption"><b>รายการ</b><div class="row"><span class="fr dark">FR-02</span><span class="fr dark">FR-03</span></div></div>
+        </div>
+        <div class="fan-item rv" style="--d:5">
+          <div class="phone"><div class="screen"><div class="shot"><img src="assets/web-categories.png" alt="หน้าหมวดหมู่" /></div></div></div>
+          <div class="caption"><b>หมวดหมู่ · งบ</b><div class="row"><span class="fr dark">FR-06</span><span class="pill" style="font-size:15px;padding:4px 12px">เตือน 80% / 100%</span></div></div>
+        </div>
+        <div class="fan-item rv" style="--d:6">
+          <div class="phone"><div class="screen"><div class="shot"><img src="assets/web-analyze.png" alt="หน้าวิเคราะห์" /></div></div></div>
+          <div class="caption"><b>แผนออม 3 ทาง</b><div class="row"><span class="fr">FR-07</span><span class="fr dark">FR-08</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ 06 สถาปัตยกรรม ═══════════ -->
+    <section class="slide s-arch" data-sec="3" data-title="✂️ เบื้องหลัง — สถาปัตยกรรม">
+      <span class="eyebrow rv" style="--d:0"><b>03</b> เบื้องหลัง <span style="color:var(--amber)">✂️ ตัดได้</span></span>
+      <h2 class="rv" style="--d:1">ทุกช่องทาง ไหลเข้า<span class="hl">เซิร์ฟเวอร์เดียว</span></h2>
+      <div class="map">
+        <svg class="wires" viewBox="0 0 1700 620" preserveAspectRatio="none">
+          <path class="wire" d="M380 60 C 470 60, 470 200, 560 220" />
+          <path class="wire" d="M380 280 C 470 280, 470 300, 560 300" />
+          <path class="wire" d="M380 500 C 470 500, 470 400, 560 380" />
+          <path class="wire" d="M1140 220 C 1230 220, 1230 190, 1320 190" />
+          <path class="wire soft" d="M1140 400 C 1230 400, 1230 430, 1320 430" />
+          <path class="wire" d="M850 530 L 850 470" />
+          <circle r="7" fill="#c6f432"><animateMotion dur="2.4s" repeatCount="indefinite" path="M380 60 C 470 60, 470 200, 560 220" /></circle>
+          <circle r="7" fill="#c6f432"><animateMotion dur="2.4s" begin="-0.8s" repeatCount="indefinite" path="M380 280 C 470 280, 470 300, 560 300" /></circle>
+          <circle r="7" fill="#c6f432"><animateMotion dur="2.4s" begin="-1.6s" repeatCount="indefinite" path="M380 500 C 470 500, 470 400, 560 380" /></circle>
+          <circle r="7" fill="#c6f432"><animateMotion dur="2s" begin="-0.4s" repeatCount="indefinite" path="M1140 220 C 1230 220, 1230 190, 1320 190" /></circle>
+          <circle r="7" fill="#7fb4ec"><animateMotion dur="2.6s" begin="-1s" repeatCount="indefinite" path="M1140 400 C 1230 400, 1230 430, 1320 430" /></circle>
+        </svg>
+        <div class="node in in1 card glass rv left" style="--d:2" data-tilt><h3><span class="icon-wrap"><svg class="icon"><use href="#i-chat"/></svg></span>แชท LINE</h3><p class="muted">พิมพ์ · ถาม · ส่งรูปสลิป</p></div>
+        <div class="node in in2 card glass rv left" style="--d:3" data-tilt><h3><span class="icon-wrap"><svg class="icon"><use href="#i-globe"/></svg></span>หน้าเว็บ</h3><p class="muted">ล็อกอินด้วย LINE · ภาพรวม งบ แผน</p></div>
+        <div class="node in in3 card glass rv left" style="--d:4" data-tilt><h3><span class="icon-wrap"><svg class="icon"><use href="#i-mail"/></svg></span>อีเมลธนาคาร</h3><p class="muted">K PLUS forward · ตรวจ DKIM</p></div>
+        <div class="node core card lime rv pop" style="--d:5" data-tilt>
+          <span class="plus">+</span>
+          <h3 style="font-size:34px">Node.js บน Render</h3>
+          <p class="muted">TypeScript · Express</p>
+          <div class="layers">
+            <div class="layer">Router 4 ชั้น <span>แยกว่าข้อความคืออะไร</span></div>
+            <div class="layer">Money Engine <span>🚫 ห้ามมี AI</span></div>
+            <div class="layer">ตอบการ์ด · push · งานตามเวลา <span>5 jobs</span></div>
+          </div>
+        </div>
+        <div class="node db card glass rv right" style="--d:6" data-tilt><h3><span class="icon-wrap"><svg class="icon"><use href="#i-db"/></svg></span>Supabase</h3><p class="muted">PostgreSQL · 12 ตาราง · กรอง user_id ทุก query</p></div>
+        <div class="node ai card glass rv right" style="--d:7" data-tilt><h3><span class="icon-wrap" style="background:rgba(127,180,236,.15);color:#9fc2ff"><svg class="icon"><use href="#i-spark"/></svg></span>Gemini</h3><p class="muted">เลือก tool อย่างเดียว · ไม่คิดเงิน</p></div>
+        <div class="node ci card dark rv" style="--d:8"><span class="icon-wrap" style="width:44px;height:44px;border-radius:12px"><svg class="icon" style="width:24px;height:24px"><use href="#i-git"/></svg></span><span style="font-size:19px;font-weight:600">GitHub Actions · ทุก push เทสต์ต้องผ่านก่อน deploy</span></div>
+      </div>
+    </section>
+
+    <!-- ═══════════ 07 Money Engine ═══════════ -->
+    <section class="slide light s-money" data-sec="4" data-title="Money Engine — AI เป็นแค่ล่าม">
+      <div class="copy">
+        <span class="eyebrow rv" style="--d:0"><b>04</b> Money Engine</span>
+        <h2 class="rv" style="--d:1">AI เป็นแค่<span class="hl">ล่าม</span><br />ไม่ใช่นักบัญชี</h2>
+        <p class="lead rv" style="--d:2">แอปเงิน ตัวเลขผิดครั้งเดียว ผู้ใช้ก็เลิกเชื่อ<br />เงินทุกบาทจึงคิดด้วยโค้ดที่เทสต์ได้</p>
+      </div>
+      <div class="bento">
+        <div class="card lime rv" style="--d:2" data-tilt>
+          <span class="gid">G1</span>
+          <div><h3>AI ห้าม<br />คำนวณเงิน</h3><p class="muted">AI แค่บอกว่าผู้ใช้อยากทำอะไร ยอดทั้งหมดมาจาก Money Engine</p></div>
+        </div>
+        <div class="card dark rv" style="--d:3" data-tilt>
+          <span class="gid">G3</span>
+          <div>
+            <p class="calc">80 บาท = <span style="color:var(--lime)">8,000</span> สตางค์</p>
+            <p class="calc" style="font-size:26px;margin-top:6px"><s>0.1 + 0.2 = 0.30000000000000004</s></p>
+          </div>
+          <div><h3>เก็บเป็นสตางค์<br />จำนวนเต็ม</h3><p class="muted">ทศนิยมไม่เพี้ยน และเงินติดลบไม่ได้</p></div>
+        </div>
+        <div class="card paper rv" style="--d:4" data-tilt>
+          <span class="gid">G2</span>
+          <div class="confirm-demo"><span class="go">✓ ยืนยัน</span><span>ยกเลิก</span></div>
+          <div><h3>AI จะบันทึก<br />ต้องกดยืนยันก่อน</h3><p class="muted">ผู้ใช้เห็นตัวเลขก่อนเข้าระบบทุกครั้ง</p></div>
+        </div>
+        <div class="card mist rv" style="--d:5" data-tilt>
+          <span class="gid">G4</span>
+          <div class="switch"></div>
+          <div><h3>ปิด AI<br />แอปก็ยังใช้ได้</h3><p class="muted">AI เป็นของเสริม ไม่ใช่ของที่ขาดไม่ได้</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ 08 Router ═══════════ -->
+    <section class="slide s-router" data-sec="4" data-title="Router 4 ชั้น — AI แค่ 11%">
+      <div class="copy">
+        <span class="eyebrow rv" style="--d:0"><b>04</b> Router 4 ชั้น</span>
+        <h2 class="rv" style="--d:1">ข้อความส่วนใหญ่<br /><span class="hl">โค้ดอ่านเอง</span></h2>
+        <p class="lead rv" style="--d:2">ชั้นบนจับได้ ก็ไม่ต้องลงไปถึง AI — เร็วกว่า ไม่เปลืองโควตา และใช้ได้แม้ AI ล่ม</p>
+        <div class="card glass ring-card rv" style="--d:3" data-tilt>
+          <div class="ring">
+            <svg viewBox="0 0 190 190"><circle class="track" cx="95" cy="95" r="85" /><circle class="val" cx="95" cy="95" r="85" /></svg>
+            <b class="num"><span data-count="11">11</span>%</b>
+          </div>
+          <div><h3>ใช้ AI แค่ 9 จาก 84 ประโยค</h3><p class="muted">ทดสอบกับประโยคแชทจริง 84 ประโยค บอทเข้าใจถูกทั้ง 84</p></div>
+        </div>
+      </div>
+      <div class="tower">
+        <div class="plates">
+          <div class="plate p4"><span>4 AI</span></div>
+          <div class="plate p3"><span>3</span></div>
+          <div class="plate p2"><span>2</span></div>
+          <div class="plate p1"><span>1</span></div>
+        </div>
+        <div class="labels">
+          <div class="lab card glass rv right" style="--d:4"><b>1 · คำสั่งตายตัว</b><span>ตรงทั้งข้อความ</span><br /><span class="pill dark">เหลือ</span> <span class="pill dark">สรุป</span></div>
+          <div class="lab card glass rv right" style="--d:5"><b>2 · รูปแบบข้อความ</b><span>ชื่อ + ยอด, หลายรายการ, คำอ่านไทย</span><br /><span class="pill dark">กาแฟ 80</span> <span class="pill dark">ข้าว 50 กาแฟ 40</span></div>
+          <div class="lab card glass rv right" style="--d:6"><b>3 · พจนานุกรมหมวด</b><span>คำกลาง + คำที่ผู้ใช้สอน</span><br /><span class="pill dark">ร้านป้าแดง → อาหาร</span></div>
+          <div class="lab ai card glass rv right" style="--d:7"><b>4 · AI (Gemini)</b><span>เฉพาะที่ 3 ชั้นแรกอ่านไม่ออก แล้วต้องกดยืนยัน</span><br /><span class="pill" style="border-color:rgba(127,180,236,.4)">เมื่อวานกินข้าวกับเพื่อน…</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ 09 ทางที่ผิด ═══════════ -->
+    <section class="slide light s-wrong" data-sec="4" data-title="ทางที่ผิด — ไม่เดามั่ว">
+      <div class="copy">
+        <span class="eyebrow rv" style="--d:0"><b>04</b> ทางที่ผิด</span>
+        <h2 class="rv" style="--d:1">ลองดู<br /><span class="hl">ทางที่ผิด</span></h2>
+        <p class="lead rv" style="--d:2">ระบบไม่เดามั่ว และ AI ไม่มีสิทธิ์แตะเงินเอง</p>
+        <div class="verdicts">
+          <div class="row rv" style="--d:3"><span class="icon-wrap"><svg class="icon"><use href="#i-x"/></svg></span>พิมพ์ไม่ครบ → บอกวิธีพิมพ์ ไม่บันทึกอะไร</div>
+          <div class="row rv" style="--d:4"><span class="icon-wrap"><svg class="icon"><use href="#i-hand"/></svg></span>ประโยคยาว → AI อ่าน แต่ต้องกดยืนยัน</div>
+          <div class="row rv" style="--d:5"><span class="icon-wrap"><svg class="icon"><use href="#i-check"/></svg></span>กดแล้วถึงบันทึก · ตามกฎ G2</div>
+        </div>
+      </div>
+      <div class="panels">
+        <div class="panel-chat rv left" style="--d:3">
+          <div class="chat-head"><img src="assets/logo.png" alt="" />พิมพ์ไม่ครบ</div>
+          <div class="chat-body" data-chat="missing"></div>
+          <div class="tagline" data-tag="missing">ไม่บันทึกอะไรเลย</div>
+        </div>
+        <div class="panel-chat rv right" style="--d:4">
+          <div class="chat-head"><img src="assets/logo.png" alt="" />ประโยคยาว</div>
+          <div class="chat-body" data-chat="long"></div>
+          <div class="tagline warn" data-tag="long">AI อ่านได้ · คนเป็นคนกดยืนยัน</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ 10 Golden Thread ═══════════ -->
+    <section class="slide s-thread" data-sec="5" data-title="Golden Thread">
+      <div class="head">
+        <div>
+          <span class="eyebrow rv" style="--d:0"><b>05</b> Golden Thread</span>
+          <h2 class="rv" style="--d:1">ทุกฟีเจอร์เริ่มจาก<span class="hl">ปัญหา</span> จบที่<span class="hl">เทสต์</span></h2>
+        </div>
+        <p class="lead rv" style="--d:2">อ่านซ้ายไปขวา — แถวสีเขียวคือคำสั่ง <b style="color:var(--lime)">เหลือ</b> ที่เพิ่งเห็นในเดโม</p>
+      </div>
+      <div class="table">
+        <div class="tr th rv" style="--d:2"><div>ปัญหา</div><div>Requirement</div><div>Design</div><div>Feature</div><div>Test</div></div>
+        <div class="tr td rv" style="--d:3"><div>จดแล้วเลิก เพราะหลายขั้นตอน</div><div><b>FR-01</b> จดจากข้อความเดียว</div><div>S4 Text Parser</div><div>พิมพ์ <b>กาแฟ 80</b></div><div><code>regexParser.test.ts</code><span class="ok">✓</span></div></div>
+        <div class="tr td rv" style="--d:4"><div>เงินออกแล้วลืมจด</div><div><b>FR-02</b> อีเมลธนาคารเข้าเอง</div><div>S8 Email · DKIM</div><div>K PLUS ขึ้นเองใน 5 นาที</div><div><code>kbankParser.test.ts</code><span class="ok">✓</span></div></div>
+        <div class="tr td star rv" style="--d:5"><div><b>"วันนี้ใช้ได้อีกเท่าไหร่?"</b></div><div><b>FR-05</b> safe-to-spend</div><div>Money Engine S5.2 · ห้าม AI</div><div>คำสั่ง <b>เหลือ</b></div><div><code>safeToSpend.test.ts</code><span class="ok">✓</span></div></div>
+        <div class="tr td rv" style="--d:6"><div>ใช้เกินงบ สิ้นเดือนถึงรู้</div><div><b>FR-06</b> เตือน 80% / 100%</div><div>S5.8 + ธงใน budgets</div><div>แถบงบ + เตือนในแชท</div><div><code>budget.service.test.ts</code><span class="ok">✓</span></div></div>
+        <div class="tr td rv" style="--d:7"><div><b>"อยากได้ของ ต้องเก็บยังไง?"</b></div><div><b>FR-07</b> แผนออม 3 ทาง</div><div>S5.3–S5.5</div><div>เร็ว · สมดุล · สบาย</div><div><code>plan.service.test.ts</code><span class="ok">✓</span></div></div>
+      </div>
+      <div class="flow card glass rv" style="--d:8" data-zoom="assets/sequence-fr1.png" title="กดเพื่อดู sequence diagram เต็ม">
+        <div class="row fhead"><span><b>Sequence diagram · FR-01</b>เส้นทางของ "กาแฟ 80" ตั้งแต่พิมพ์จนได้การ์ด</span><span>กดเพื่อขยาย ⤢</span></div>
+        <div class="nodes">
+          <div class="fn" data-en="<b>User</b>types &quot;coffee 80&quot;"><b>ผู้ใช้</b>พิมพ์ "กาแฟ 80"</div>
+          <div class="fn"><b>LINE</b>webhook</div>
+          <div class="fn"><b>S1 Gateway</b>ลายเซ็น · กันซ้ำ</div>
+          <div class="fn"><b>S4 Parser</b>8,000 สตางค์ · อาหาร</div>
+          <div class="fn"><b>S5 Money</b>บันทึก · เช็คงบ</div>
+          <div class="fn"><b>S6 DB</b>กรอง user_id</div>
+          <div class="fn"><b>การ์ด</b>"บันทึกแล้ว"</div>
+          <span class="packet"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ 11 พิสูจน์ ═══════════ -->
+    <section class="slide light s-proof" data-sec="5" data-title="พิสูจน์ — เทสต์ 1,299 ข้อ">
+      <span class="eyebrow rv" style="--d:0"><b>05</b> พิสูจน์</span>
+      <h2 class="rv" style="--d:1">ตัวเลขพวกนี้<span class="hl">เชื่อได้</span>ยังไง</h2>
+      <div class="bento">
+        <div class="card mist c-tests rv" style="--d:2" data-tilt>
+          <div class="folds"><i></i><i></i><i></i><i></i><i></i></div>
+          <span class="plus" style="top:40px;right:40px">+</span>
+          <div><div class="bignum num" data-count="1299">1,299</div><p>เทสต์อัตโนมัติ ผ่านทั้งหมด<br /><span class="muted">ครอบทั้งตอนเปิดและปิด AI</span></p></div>
+        </div>
+        <div class="card lime c-chat rv" style="--d:3" data-tilt>
+          <div class="avatars"><span>กาแฟ</span><span>เหลือ</span><span>ข้าว</span><span>สรุป</span></div>
+          <div><div class="bignum num" style="font-size:110px"><span data-count="84">84</span>/84</div><p>ประโยคแชทจริง บอทเข้าใจถูกทุกประโยค</p></div>
+        </div>
+        <div class="card mist c-push rv" style="--d:4" data-tilt>
+          <div class="orb-in"></div>
+          <div class="pipe"><span>push</span>→<span>เทสต์</span>→<span class="ok">deploy</span></div>
+          <div><h3 style="font-size:44px">ทุก push</h3><p>เทสต์ต้องผ่านก่อนถึงขึ้นเว็บจริง</p></div>
+        </div>
+        <div class="card dark c-bug rv" style="--d:5" data-tilt>
+          <div class="row"><span class="cut">✂️ เรื่องจริงที่เกือบหลุด</span><span class="pill lime">เทสต์จับได้ก่อนถึงผู้ใช้</span></div>
+          <div class="bugline"><span class="a num">79.99966%</span><span class="arrow">→ ปัด →</span><span class="b num">80%</span></div>
+          <p class="muted">โค้ดเตือนงบที่ AI เขียน ดูถูกทุกอย่าง แต่ปัดเลขก่อนเทียบ เลยเตือน "ใช้ไป 80%" ทั้งที่ยังไม่ถึง</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ 12 บทเรียน ═══════════ -->
+    <section class="slide s-lesson" data-sec="5" data-theme="lime" data-title="บทเรียน — การใช้ AI">
+      <div class="copy">
+        <span class="eyebrow rv" style="--d:0"><b>05</b> บทเรียน</span>
+        <h2 class="rv" style="--d:1">AI เร่ง<span class="hl">การเขียน</span>ได้<br />แต่ไม่ได้เร่ง<br /><span class="hl">การรู้ว่าถูก</span></h2>
+        <p class="lead rv" style="--d:2">เราใช้ AI ช่วยเขียนโค้ดภายใต้กติกาที่ทีมเขียนไว้ — และให้เทสต์เป็นคนตัดสิน</p>
+      </div>
+      <div class="tall t1 card dark rv" style="--d:3" data-tilt>
+        <div class="glow"></div><span class="plus">+</span>
+        <p>ใช้ <b>Claude Code</b> ช่วยเขียนโค้ดและเรียบเรียงเอกสาร</p>
+      </div>
+      <div class="tall t2 card rv" style="--d:4" data-tilt>
+        <div class="glow"></div><span class="plus">+</span>
+        <p>กำกับด้วย <b>AIDO.md</b> และ <b>กฎเหล็ก 7 ข้อ</b> — PR ที่ผิดกฎ ไม่ merge</p>
+      </div>
+      <div class="tall t3 card lime rv" style="--d:5" data-tilt>
+        <img class="amp floaty" src="assets/mascot.png" alt="" />
+        <b>JOD tang ↗</b>
+        <p data-en="<b>1,299 tests</b> decide what is right — not the AI’s confidence">เทสต์ <b>1,299 ข้อ</b> คือสิ่งที่บอกว่าถูก ไม่ใช่ความมั่นใจของ AI</p>
+      </div>
+    </section>
+
+    <!-- ═══════════ 13 ขอบคุณ ═══════════ -->
+    <section class="slide s-thanks" data-sec="5" data-title="ขอบคุณ · Q&amp;A">
+      <div class="copy">
+        <span class="eyebrow rv" style="--d:0"><b>LUMEN</b> Q&amp;A</span>
+        <h1 class="rv" style="--d:1"><span class="hl">ขอบคุณ</span></h1>
+        <p class="lead rv" style="--d:2">มีคำถามไหมครับ/ค่ะ</p>
+        <div class="links rv" style="--d:3">
+          <span class="pill lime">lumen-line.onrender.com</span>
+          <span class="pill">github.com/6931503045-design/Lumen_line</span>
+        </div>
+      </div>
+      <div class="team">
+        <div class="member card glass rv right" style="--d:3" data-tilt><span class="av">TP</span><div><b>Thapanapat Pumulna</b><span>Project Manager · ปัญหาและผู้ใช้</span></div><span class="n">01</span></div>
+        <div class="member card glass rv right" style="--d:4" data-tilt><span class="av">TR</span><div><b>Teerapat Palee</b><span>Frontend · Flex card · Rich Menu · โลโก้</span></div><span class="n">02</span></div>
+        <div class="member card glass rv right" style="--d:5" data-tilt><span class="av">AK</span><div><b>Aitthiphat Kanyathuean</b><span>Full-stack · เว็บ · API</span></div><span class="n">03</span></div>
+        <div class="member card glass rv right" style="--d:6" data-tilt><span class="av">TW</span><div><b>Teerat Wongpanti</b><span>Backend · Money Engine · ฐานข้อมูล</span></div><span class="n">04</span></div>
+        <div class="member card glass rv right" style="--d:7" data-tilt><span class="av">SC</span><div><b>Sorrawis Chumpheng</b><span>Technical Writer · การทดสอบ</span></div><span class="n">05</span></div>
+      </div>
+      <img class="mascot floaty rv pop" style="--d:8" src="assets/mascot.png" alt="" data-depth="24" />
+    </section>
+
+    <footer id="bottombar">
+      <span id="speaker"></span>
+      <div id="progress"></div>
+      <span id="counter" class="num"></span>
+    </footer>
+  </main>
+
+  <div id="hint">กด <b>?</b> ดูปุ่มลัด</div>
+
+  <div id="notesDrawer" aria-live="polite"></div>
+
+  <div class="panel" id="help">
+    <div class="panel-box">
+      <h4>ปุ่มลัด</h4>
+      <div class="keys">
+        <span><kbd>→</kbd> <kbd>Space</kbd> <kbd>PgDn</kbd></span><span>สไลด์ถัดไป (รีโมตพรีเซนต์ใช้ได้)</span>
+        <span><kbd>←</kbd> <kbd>PgUp</kbd></span><span>สไลด์ก่อนหน้า</span>
+        <span><kbd>Home</kbd> <kbd>End</kbd></span><span>สไลด์แรก / สุดท้าย</span>
+        <span><kbd>1</kbd>–<kbd>5</kbd></span><span>กระโดดไปต้นส่วนของผู้พูดคนที่ 1–5</span>
+        <span><kbd>N</kbd></span><span>เปิด/ปิดบทพูดด้านล่างจอ</span>
+        <span><kbd>S</kbd></span><span>เปิดหน้าต่างผู้พูด (บทพูด + สไลด์ถัดไป + นาฬิกา) — ลากไปจอโน้ตบุ๊ก</span>
+        <span><kbd>T</kbd></span><span>เริ่มนาฬิกาใหม่จาก 0:00</span>
+        <span><kbd>O</kbd></span><span>ภาพรวมทุกสไลด์</span>
+        <span><kbd>L</kbd></span><span>สลับภาษาไทย / อังกฤษ</span>
+        <span><kbd>F</kbd></span><span>เต็มจอ</span>
+        <span><kbd>B</kbd></span><span>จอดำ (ตอนสลับไปเดโมจริง)</span>
+        <span><kbd>R</kbd></span><span>เล่นแชทจำลองในสไลด์นี้ใหม่</span>
+        <span><kbd>Esc</kbd></span><span>ปิดหน้าต่างนี้</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="overview"><div class="panel-box"><h4>ภาพรวมสไลด์</h4><div class="grid"></div></div></div>
+  <div id="lightbox"><img alt="" /></div>
+  <div id="blackout"></div>
+
+  <script src="js/notes.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/deck.js"></script>
+</body>
+</html>

@@ -1,0 +1,790 @@
+// JOD tang — ตัวควบคุมสไลด์
+// ไม่มี library ภายนอก: เปิดไฟล์ index.html ตรง ๆ ได้ (file://) ไม่ต้องมีเซิร์ฟเวอร์ ไม่ต้องมีเน็ต
+(() => {
+  'use strict';
+
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+  const isEn = () => document.documentElement.lang === 'en';
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const stage = $('#stage');
+  const slides = $$('.slide');
+  const SPEAKERS = window.DECK_SPEAKERS || [];
+  const NOTES = window.DECK_NOTES || [];
+  let current = -1;
+
+  // ─────────────────────── ย่อ/ขยายเวทีให้พอดีจอ ───────────────────────
+  function fit() {
+    const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    document.documentElement.style.setProperty('--s', s.toFixed(4));
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  // ─────────────────────── แถบความคืบหน้า แยกตามผู้พูด ───────────────────────
+  const progress = $('#progress');
+  const segs = SPEAKERS.map((sp) => {
+    const count = slides.filter((s) => Number(s.dataset.sec) === sp.sec).length;
+    const seg = document.createElement('div');
+    seg.className = 'seg';
+    seg.style.flex = String(count);
+    seg.title = `${sp.sec} · ${sp.name} — ${sp.topic}`;
+    seg.innerHTML = '<i></i>';
+    progress.appendChild(seg);
+    return { sp, count, el: seg.firstChild };
+  });
+
+  function updateChrome() {
+    const slide = slides[current];
+    const sec = Number(slide.dataset.sec);
+    const sp = SPEAKERS.find((x) => x.sec === sec);
+
+    const theme = slide.dataset.theme || (slide.classList.contains('light') ? 'light' : 'dark');
+    document.documentElement.dataset.theme = theme;
+
+    $$('#sections span').forEach((el) => el.classList.toggle('on', Number(el.dataset.sec) === sec));
+    $('#speaker').textContent = sp ? `${sp.sec} · ${sp.name} — ${isEn() ? sp.topicEn : sp.topic}` : '';
+    $('#counter').textContent = `${String(current + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
+
+    segs.forEach(({ sp: s, count, el }) => {
+      const inSec = slides.map((x, i) => [x, i]).filter(([x]) => Number(x.dataset.sec) === s.sec);
+      const done = inSec.filter(([, i]) => i <= current).length;
+      el.style.width = `${(done / count) * 100}%`;
+    });
+  }
+
+  // ─────────────────────── เปลี่ยนสไลด์ ───────────────────────
+  function go(index, { fromHash = false } = {}) {
+    const next = Math.max(0, Math.min(slides.length - 1, index));
+    if (next === current) return;
+    const prev = current;
+    current = next;
+
+    slides.forEach((s, i) => {
+      s.classList.toggle('active', i === current);
+      s.classList.toggle('past', i < current);
+    });
+
+    if (prev >= 0) leaveSlide(slides[prev]);
+    enterSlide(slides[current]);
+    updateChrome();
+    renderNotes();
+    if (prev === 0 && current > 0) startTimerIfIdle();
+
+    if (!fromHash) history.replaceState(null, '', `#${current + 1}`);
+  }
+  const nextSlide = () => go(current + 1);
+  const prevSlide = () => go(current - 1);
+
+  function enterSlide(slide) {
+    $$('[data-count]', slide).forEach(countUp);
+    $$('[data-chat]', slide).forEach((body) => playChat(body.dataset.chat));
+    $('.tower', slide)?.classList.add('go');
+    if (slide.classList.contains('s-thread')) startPacket(slide);
+  }
+
+  function leaveSlide(slide) {
+    $$('[data-chat]', slide).forEach((body) => stopChat(body.dataset.chat));
+    $('.tower', slide)?.classList.remove('go');
+    $$('.fan-item.focus', slide).forEach((el) => el.classList.remove('focus'));
+    $('.fan', slide)?.classList.remove('has-focus');
+    if (slide.classList.contains('s-thread')) stopPacket();
+  }
+
+  // ─────────────────────── ตัวเลขวิ่ง ───────────────────────
+  function countUp(el) {
+    const target = Number(el.dataset.count);
+    if (reduceMotion || !Number.isFinite(target)) {
+      el.textContent = target.toLocaleString('en-US');
+      return;
+    }
+    const start = performance.now();
+    const dur = 1500;
+    const delay = 450;
+    el.textContent = '0';
+    const tick = (now) => {
+      const t = Math.min(1, Math.max(0, (now - start - delay) / dur));
+      const eased = 1 - Math.pow(1 - t, 4);
+      el.textContent = Math.round(target * eased).toLocaleString('en-US');
+      if (t < 1 && slides[current].contains(el)) requestAnimationFrame(tick);
+      else el.textContent = target.toLocaleString('en-US');
+    };
+    requestAnimationFrame(tick);
+  }
+
+  // ─────────────────────── แชทจำลอง ───────────────────────
+  const MASCOT = '<img src="assets/mascot.png" alt="">';
+  const recorded = (item, amount, cat, pct) => ({
+    card: true,
+    html: `<div class="lc-head">บันทึกแล้ว ${MASCOT}</div>
+      <div class="lc-body">
+        <div class="lc-row"><span class="lc-tag">รายจ่าย · ${cat}</span></div>
+        <div class="lc-row"><span>${item}</span><b>฿${amount}</b></div>
+        <div class="lc-row" style="font-size:15px;color:#6b7a5e"><span>งบ${cat}เดือนนี้</span><span>${pct}%</span></div>
+        <div class="lc-bar"><i style="--w:${pct}%"></i></div>
+      </div>`,
+  });
+  const remaining = {
+    card: true,
+    html: `<div class="lc-head">วันนี้ใช้ได้อีก ${MASCOT}</div>
+      <div class="lc-body">
+        <div style="font-family:var(--font-display);font-size:44px;font-weight:700;line-height:1.1">฿245</div>
+        <div style="font-size:15px;color:#6b7a5e">คิดมาจาก เงินเหลือทั้งเดือน ÷ วันที่เหลือ<br>ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</div>
+      </div>`,
+  };
+
+  // แต่ละแชทแบ่งเป็นช่วง (segment) — ช่วงเดียวกับขั้นที่ผู้พูดพาเดโม
+  const SCRIPTS = {
+    cover: [[
+      [900, { me: 'กาแฟ 80' }],
+      [1500, { typing: true }],
+      [2300, recorded('กาแฟ', 80, 'อาหาร', 62)],
+      [3800, { me: 'เหลือ' }],
+      [4300, { typing: true }],
+      [5000, remaining],
+    ]],
+    demo: [
+      [
+        [0, { step: 0 }],
+        [400, { me: 'กาแฟ 80' }],
+        [1000, { typing: true }],
+        [1800, recorded('กาแฟ', 80, 'อาหาร', 62)],
+      ],
+      [
+        [0, { step: 1 }],
+        [400, { me: 'ร้านป้าแดง 50' }],
+        [1000, { typing: true }],
+        [1800, {
+          html: '🤔 ยังไม่รู้จัก <b>ร้านป้าแดง</b><br>ลงหมวด <b>อื่นๆ</b> ไว้ก่อน เลือกหมวดให้หน่อย<div class="chips" style="margin-top:10px"><span>อาหาร</span><span>เดินทาง</span><span>ช้อปปิ้ง</span><span>หมวดอื่น</span></div>',
+        }],
+        [3300, { press: 'อาหาร' }],
+        [3700, { typing: true }],
+        [4400, { html: '✅ ย้าย <b>ร้านป้าแดง</b> ไปหมวด <b>อาหาร</b> แล้ว<br><span style="color:#6b7a5e;font-size:16px">จำไว้แล้ว ครั้งหน้าลงหมวดนี้เอง</span>' }],
+      ],
+      [
+        [0, { step: 2 }],
+        [400, { me: 'เหลือ' }],
+        [1000, { typing: true }],
+        [1700, remaining],
+      ],
+    ],
+    missing: [[
+      [700, { me: 'กาแฟ' }],
+      [1300, { typing: true }],
+      [2100, {
+        card: true,
+        html: '<div class="lc-head err">อ่านไม่ออก 🙏</div><div class="lc-body"><div>ไม่เจอจำนวนเงินในข้อความ</div><div style="color:#6b7a5e;font-size:16px">ลองพิมพ์ <b style="color:#111">ชื่อ + จำนวน</b> เช่น <b style="color:#111">กาแฟ 80</b></div></div>',
+      }],
+      [2900, { tag: true }],
+    ]],
+    long: [[
+      [900, { me: 'เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย' }],
+      [1600, { typing: true }],
+      [2800, {
+        card: true,
+        html: `<div class="lc-head warn">⏳ ยังไม่ได้บันทึก</div>
+          <div class="lc-body">
+            <div class="lc-row"><span class="lc-tag">รายจ่าย · อาหาร</span><span style="font-size:14px;color:#6b7a5e">AI ช่วยอ่าน</span></div>
+            <div class="lc-row"><span>ข้าวกับเพื่อน · เมื่อวาน</span><b>฿300</b></div>
+            <div class="lc-btns"><span class="go">ยืนยัน</span><span>ยกเลิก</span></div>
+          </div>`,
+      }],
+      [4400, { pressBtn: 'ยืนยัน' }],
+      [4900, { typing: true }],
+      [5600, recorded('ข้าวกับเพื่อน', 300, 'อาหาร', 74)],
+      [6000, { tag: true }],
+    ]],
+  };
+
+  // แชทเวอร์ชันอังกฤษ — ใช้ข้อความที่บอทรองรับจริง ("coffee 80", "left")
+  const recordedEn = (item, amount, cat, pct) => ({
+    card: true,
+    html: `<div class="lc-head">Recorded ${MASCOT}</div>
+      <div class="lc-body">
+        <div class="lc-row"><span class="lc-tag">Expense · ${cat}</span></div>
+        <div class="lc-row"><span>${item}</span><b>฿${amount}</b></div>
+        <div class="lc-row" style="font-size:15px;color:#6b7a5e"><span>${cat} budget this month</span><span>${pct}%</span></div>
+        <div class="lc-bar"><i style="--w:${pct}%"></i></div>
+      </div>`,
+  });
+  const remainingEn = {
+    card: true,
+    html: `<div class="lc-head">Left to spend today ${MASCOT}</div>
+      <div class="lc-body">
+        <div style="font-family:var(--font-display);font-size:44px;font-weight:700;line-height:1.1">฿245</div>
+        <div style="font-size:15px;color:#6b7a5e">From: money left this month ÷ days left<br>Analysis only, not financial advice</div>
+      </div>`,
+  };
+  const SCRIPTS_EN = {
+    cover: [[
+      [900, { me: 'coffee 80' }],
+      [1500, { typing: true }],
+      [2300, recordedEn('coffee', 80, 'Food', 62)],
+      [3800, { me: 'left' }],
+      [4300, { typing: true }],
+      [5000, remainingEn],
+    ]],
+    demo: [
+      [
+        [0, { step: 0 }],
+        [400, { me: 'coffee 80' }],
+        [1000, { typing: true }],
+        [1800, recordedEn('coffee', 80, 'Food', 62)],
+      ],
+      [
+        [0, { step: 1 }],
+        [400, { me: 'Auntie Daeng 50' }],
+        [1000, { typing: true }],
+        [1800, {
+          html: '🤔 I don’t know <b>Auntie Daeng</b> yet<br>Saved under <b>Other</b> for now — pick a category?<div class="chips" style="margin-top:10px"><span>Food</span><span>Travel</span><span>Shopping</span><span>Other</span></div>',
+        }],
+        [3300, { press: 'Food' }],
+        [3700, { typing: true }],
+        [4400, { html: '✅ Moved <b>Auntie Daeng</b> to <b>Food</b><br><span style="color:#6b7a5e;font-size:16px">Remembered — next time it goes there automatically</span>' }],
+      ],
+      [
+        [0, { step: 2 }],
+        [400, { me: 'left' }],
+        [1000, { typing: true }],
+        [1700, remainingEn],
+      ],
+    ],
+    missing: [[
+      [700, { me: 'coffee' }],
+      [1300, { typing: true }],
+      [2100, {
+        card: true,
+        html: '<div class="lc-head err">Couldn’t read that 🙏</div><div class="lc-body"><div>No amount found in the message</div><div style="color:#6b7a5e;font-size:16px">Try <b style="color:#111">name + amount</b>, e.g. <b style="color:#111">coffee 80</b></div></div>',
+      }],
+      [2900, { tag: true }],
+    ]],
+    long: [[
+      [900, { me: 'yesterday dinner with friends cost me three hundred' }],
+      [1600, { typing: true }],
+      [2800, {
+        card: true,
+        html: `<div class="lc-head warn">⏳ Not saved yet</div>
+          <div class="lc-body">
+            <div class="lc-row"><span class="lc-tag">Expense · Food</span><span style="font-size:14px;color:#6b7a5e">read by AI</span></div>
+            <div class="lc-row"><span>Dinner with friends · yesterday</span><b>฿300</b></div>
+            <div class="lc-btns"><span class="go">Confirm</span><span>Cancel</span></div>
+          </div>`,
+      }],
+      [4400, { pressBtn: 'Confirm' }],
+      [4900, { typing: true }],
+      [5600, recordedEn('Dinner with friends', 300, 'Food', 74)],
+      [6000, { tag: true }],
+    ]],
+  };
+
+  const chatTimers = {};
+
+  function chatBody(name) {
+    return $(`[data-chat="${name}"]`);
+  }
+
+  function stopChat(name) {
+    (chatTimers[name] || []).forEach(clearTimeout);
+    chatTimers[name] = [];
+  }
+
+  function runEvent(name, body, ev, instant) {
+    const slide = body.closest('.slide');
+    if (ev.step !== undefined) {
+      $$('.step', slide).forEach((el, i) => el.classList.toggle('on', i === ev.step));
+      return;
+    }
+    if (ev.tag) {
+      $(`[data-tag="${name}"]`)?.classList.add('show');
+      return;
+    }
+    if (ev.press) {
+      const chip = $$('.chips span', body).reverse().find((el) => el.textContent === ev.press);
+      chip?.classList.add('pressed');
+      return;
+    }
+    if (ev.pressBtn) {
+      const btn = $$('.lc-btns span', body).reverse().find((el) => el.textContent === ev.pressBtn);
+      btn?.classList.add('pressed');
+      return;
+    }
+
+    $$('.typing-msg', body).forEach((el) => el.remove());
+    if (ev.typing && instant) return;
+
+    const msg = document.createElement('div');
+    if (ev.typing) {
+      msg.className = 'msg bot typing-msg';
+      msg.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+    } else if (ev.me) {
+      msg.className = 'msg me';
+      msg.textContent = ev.me;
+    } else {
+      msg.className = `msg bot${ev.card ? ' card-msg' : ''}`;
+      msg.innerHTML = ev.html;
+    }
+    body.appendChild(msg);
+    if (instant) {
+      msg.classList.add('show');
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(() => msg.classList.add('show')));
+    }
+    body.scrollTop = body.scrollHeight;
+  }
+
+  /** เล่นแชทตั้งแต่ช่วงที่ fromSeg — ช่วงก่อนหน้าวาดทันทีไม่มีแอนิเมชัน */
+  function playChat(name, fromSeg = 0) {
+    const body = chatBody(name);
+    const script = (isEn() ? SCRIPTS_EN : SCRIPTS)[name];
+    if (!body || !script) return;
+    stopChat(name);
+    body.innerHTML = '';
+    $(`[data-tag="${name}"]`)?.classList.remove('show');
+
+    script.slice(0, fromSeg).forEach((seg) => seg.forEach(([, ev]) => runEvent(name, body, ev, true)));
+
+    let offset = 600;
+    const timers = [];
+    script.slice(fromSeg).forEach((seg) => {
+      seg.forEach(([delay, ev]) => {
+        timers.push(setTimeout(() => runEvent(name, body, ev, reduceMotion), reduceMotion ? 0 : offset + delay));
+      });
+      offset += seg[seg.length - 1][0] + 1600;
+    });
+    chatTimers[name] = timers;
+  }
+
+  // คลิกขั้นเดโมเพื่อเล่นช่วงนั้นใหม่
+  $$('.s-chat .step').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      playChat('demo', Number(el.dataset.step));
+    });
+  });
+  $$('[data-replay]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      playChat(btn.dataset.replay);
+    });
+  });
+  $$('.phone[data-follow], .panel-chat').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      const body = $('[data-chat]', el);
+      if (!body) return;
+      e.stopPropagation();
+      playChat(body.dataset.chat);
+    });
+  });
+  function replayCurrent() {
+    $$('[data-chat]', slides[current]).forEach((body) => playChat(body.dataset.chat));
+  }
+
+  // ─────────────────────── หน้าจอเว็บแบบพัด ───────────────────────
+  $$('.fan-item').forEach((item) => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const fan = item.parentElement;
+      const was = item.classList.contains('focus');
+      $$('.fan-item', fan).forEach((x) => x.classList.remove('focus'));
+      if (!was) item.classList.add('focus');
+      fan.classList.toggle('has-focus', !was);
+    });
+  });
+
+  // ─────────────────────── ภาพขยาย ───────────────────────
+  const lightbox = $('#lightbox');
+  $$('[data-zoom]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      $('img', lightbox).src = el.dataset.zoom;
+      lightbox.classList.add('open');
+    });
+  });
+  lightbox.addEventListener('click', () => lightbox.classList.remove('open'));
+
+  // ─────────────────────── Golden Thread: จุดวิ่งตามเส้นทาง FR-01 ───────────────────────
+  let packetRaf = 0;
+  function startPacket(slide) {
+    const nodesWrap = $('.nodes', slide);
+    const packet = $('.packet', slide);
+    const nodes = $$('.fn', slide);
+    if (!nodesWrap || !packet || reduceMotion) return;
+    const t0 = performance.now();
+    const loop = (now) => {
+      const w = nodesWrap.clientWidth;
+      const p = ((now - t0) % 5200) / 4600;
+      const x = Math.min(1, p) * (w - 18);
+      packet.style.left = `${x}px`;
+      packet.style.opacity = p > 1 ? '0' : '1';
+      const center = x + 9;
+      nodes.forEach((n) => {
+        const left = n.offsetLeft;
+        n.classList.toggle('lit', p <= 1 && center >= left && center <= left + n.offsetWidth);
+      });
+      packetRaf = requestAnimationFrame(loop);
+    };
+    packetRaf = requestAnimationFrame(loop);
+  }
+  function stopPacket() {
+    cancelAnimationFrame(packetRaf);
+  }
+
+  // ─────────────────────── การ์ดเอียงตามเมาส์ + พารัลแลกซ์ ───────────────────────
+  $$('[data-tilt]').forEach((card) => {
+    card.addEventListener('pointermove', (e) => {
+      const r = card.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width;
+      const y = (e.clientY - r.top) / r.height;
+      card.style.setProperty('--ry', `${(x - 0.5) * 10}deg`);
+      card.style.setProperty('--rx', `${(0.5 - y) * 8}deg`);
+      card.style.setProperty('--mx', `${x * 100}%`);
+      card.style.setProperty('--my', `${y * 100}%`);
+    });
+    card.addEventListener('pointerleave', () => {
+      card.style.setProperty('--ry', '0deg');
+      card.style.setProperty('--rx', '0deg');
+    });
+  });
+
+  let mouse = { x: 0, y: 0 };
+  window.addEventListener('pointermove', (e) => {
+    mouse = { x: e.clientX / window.innerWidth - 0.5, y: e.clientY / window.innerHeight - 0.5 };
+    if (reduceMotion) return;
+    $$('[data-depth]').forEach((el) => {
+      if (!el.classList.contains('orb') && !slides[current]?.contains(el)) return;
+      const d = Number(el.dataset.depth);
+      el.style.translate = `${(-mouse.x * d).toFixed(1)}px ${(-mouse.y * d).toFixed(1)}px`;
+    });
+    $$('.phone[data-follow]', slides[current]).forEach((p) => {
+      p.style.setProperty('--py', `${(-16 + mouse.x * 14).toFixed(2)}deg`);
+      p.style.setProperty('--px', `${(8 - mouse.y * 10).toFixed(2)}deg`);
+    });
+    wakeCursor();
+  });
+
+  // ─────────────────────── นาฬิกา ───────────────────────
+  let timerStart = 0;
+  function startTimerIfIdle() {
+    if (!timerStart) timerStart = Date.now();
+  }
+  function resetTimer() {
+    timerStart = Date.now();
+    renderNotes();
+  }
+  const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+  function timerText() {
+    const slide = slides[current];
+    const sp = SPEAKERS.find((x) => x.sec === Number(slide.dataset.sec));
+    const elapsed = timerStart ? (Date.now() - timerStart) / 1000 : 0;
+    const over = sp && elapsed > sp.endSec;
+    return {
+      elapsed: fmt(elapsed),
+      target: sp ? `${sp.name} ควรจบที่ ${sp.end}` : '',
+      over,
+      running: Boolean(timerStart),
+    };
+  }
+
+  // ─────────────────────── บทพูด (ล่างจอ) ───────────────────────
+  const drawer = $('#notesDrawer');
+  function renderNotes() {
+    const slide = slides[current];
+    const sp = SPEAKERS.find((x) => x.sec === Number(slide.dataset.sec));
+    const t = timerText();
+    const nextTitle = slides[current + 1]?.dataset.title || '— จบ —';
+    drawer.innerHTML = `
+      <div class="nd-head">${current + 1}. ${slide.dataset.title}
+        <span>${sp ? `ผู้พูด ${sp.sec} · ${sp.name} (${sp.start}–${sp.end})` : ''}</span>
+        <span style="margin-left:auto;color:${t.over ? 'var(--amber)' : 'var(--lime)'}">⏱ ${t.running ? t.elapsed : 'กด T เริ่มจับเวลา'}</span>
+        <span>ถัดไป: ${nextTitle}</span>
+      </div>
+      ${NOTES[current] || ''}`;
+    renderPopup();
+  }
+  setInterval(() => {
+    if (drawer.classList.contains('open') || (popup && !popup.closed)) renderNotes();
+  }, 1000);
+
+  // ─────────────────────── หน้าต่างผู้พูด (ลากไปไว้จอโน้ตบุ๊ก) ───────────────────────
+  let popup = null;
+  function openPopup() {
+    if (popup && !popup.closed) {
+      popup.focus();
+      return;
+    }
+    popup = window.open('', 'jodtang-presenter', 'width=980,height=720');
+    if (!popup) return;
+    popup.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>บทพูด · JOD tang</title>
+      <style>
+        body{margin:0;padding:28px 34px;background:#0b0e09;color:#eef3e4;font-family:'Noto Sans Thai','Leelawadee UI',Tahoma,sans-serif;font-size:21px;line-height:1.7}
+        .top{display:flex;align-items:center;gap:24px;margin-bottom:18px}
+        .clock{font-size:64px;font-weight:700;font-variant-numeric:tabular-nums;color:#c6f432;line-height:1}
+        .clock.over{color:#f5a524}
+        .meta{color:#a3ad99;font-size:18px}
+        .title{font-size:28px;font-weight:700;margin:6px 0 10px}
+        .next{margin-top:22px;padding:14px 18px;border-radius:14px;background:#161a12;color:#a3ad99;font-size:18px}
+        .btns{margin-left:auto;display:flex;gap:10px}
+        button{font:inherit;font-size:18px;padding:10px 18px;border-radius:12px;border:1px solid #2f3727;background:#1a1f15;color:#eef3e4;cursor:pointer}
+        button.go{background:#c6f432;color:#0f130b;border-color:transparent;font-weight:700}
+        .note-do{color:#9fb5ff;font-style:italic}.note-cut{color:#f5a524}.note-sos{color:#ff6b6b}
+        b{color:#fff}
+      </style></head><body>
+      <div class="top"><div class="clock" id="clock">0:00</div><div class="meta" id="meta"></div>
+      <div class="btns"><button id="p">← ก่อนหน้า</button><button id="t">จับเวลาใหม่</button><button class="go" id="n">ถัดไป →</button></div></div>
+      <div class="title" id="title"></div><div id="notes"></div><div class="next" id="next"></div>
+      </body></html>`);
+    popup.document.close();
+    const d = popup.document;
+    d.getElementById('n').onclick = nextSlide;
+    d.getElementById('p').onclick = prevSlide;
+    d.getElementById('t').onclick = resetTimer;
+    popup.addEventListener('keydown', (e) => onKey(e, true));
+    renderPopup();
+  }
+  function renderPopup() {
+    if (!popup || popup.closed) return;
+    const d = popup.document;
+    const slide = slides[current];
+    const sp = SPEAKERS.find((x) => x.sec === Number(slide.dataset.sec));
+    const t = timerText();
+    const clock = d.getElementById('clock');
+    if (!clock) return;
+    clock.textContent = t.running ? t.elapsed : '0:00';
+    clock.classList.toggle('over', t.over);
+    d.getElementById('meta').innerHTML = `สไลด์ ${current + 1}/${slides.length}<br>${sp ? `ผู้พูด ${sp.sec} · <b>${sp.name}</b> — ${t.target}` : ''}`;
+    d.getElementById('title').textContent = slide.dataset.title;
+    d.getElementById('notes').innerHTML = NOTES[current] || '';
+    d.getElementById('next').textContent = `ถัดไป: ${slides[current + 1]?.dataset.title || '— จบ —'}`;
+  }
+
+  // ─────────────────────── ภาพรวม ───────────────────────
+  const overview = $('#overview');
+  const grid = $('.grid', overview);
+  slides.forEach((s, i) => {
+    const b = document.createElement('button');
+    const sp = SPEAKERS.find((x) => x.sec === Number(s.dataset.sec));
+    b.innerHTML = `<small>${String(i + 1).padStart(2, '0')} · ${sp ? sp.name : ''}</small><b></b>`;
+    b.addEventListener('click', () => {
+      go(i);
+      overview.classList.remove('open');
+    });
+    grid.appendChild(b);
+  });
+  function toggleOverview() {
+    $$('button', grid).forEach((b, i) => {
+      b.classList.toggle('on', i === current);
+      const title = slides[i].dataset.title;
+      $('b', b).textContent = isEn() ? (window.DECK_TITLES_EN || {})[title] || title : title;
+    });
+    overview.classList.toggle('open');
+  }
+
+  // ─────────────────────── คีย์บอร์ด เมาส์ สัมผัส ───────────────────────
+  function closePanels() {
+    const anyOpen = $$('.panel.open, #lightbox.open').length > 0;
+    $$('.panel.open, #lightbox.open').forEach((p) => p.classList.remove('open'));
+    return anyOpen;
+  }
+
+  function onKey(e, fromPopup = false) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (k === 'Escape') {
+      closePanels();
+      $('#blackout').classList.remove('on');
+      return;
+    }
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(k)) {
+      e.preventDefault();
+      if (!closePanels()) nextSlide();
+    } else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(k)) {
+      e.preventDefault();
+      if (!closePanels()) prevSlide();
+    } else if (k === 'Home') go(0);
+    else if (k === 'End') go(slides.length - 1);
+    else if (/^[1-5]$/.test(k)) {
+      const i = slides.findIndex((s) => s.dataset.sec === k);
+      if (i >= 0) go(i);
+    } else if (k === 'n' || k === 'N') {
+      drawer.classList.toggle('open');
+      renderNotes();
+    } else if (k === 's' || k === 'S') {
+      if (!fromPopup) openPopup();
+    } else if (k === 't' || k === 'T') resetTimer();
+    else if (k === 'o' || k === 'O') toggleOverview();
+    else if (k === 'r' || k === 'R') replayCurrent();
+    else if (k === 'b' || k === 'B' || k === '.') $('#blackout').classList.toggle('on');
+    else if (k === 'f' || k === 'F') toggleFullscreen();
+    else if (k === 'l' || k === 'L') setLang(isEn() ? 'th' : 'en');
+    else if (k === '?' || k === '/') $('#help').classList.toggle('open');
+  }
+  document.addEventListener('keydown', (e) => onKey(e));
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.();
+  }
+
+  // คลิกพื้นที่ว่าง: ครึ่งขวา = ถัดไป ครึ่งซ้าย = ย้อนกลับ (ของที่กดได้ไม่นับ)
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-tilt], .step, .fan-item, button, [data-zoom], .phone, .panel-chat, .panel, #lightbox, #notesDrawer')) return;
+    if ($('#blackout').classList.contains('on')) {
+      $('#blackout').classList.remove('on');
+      return;
+    }
+    if (e.clientX > window.innerWidth / 2) nextSlide();
+    else prevSlide();
+  });
+
+  let touchX = null;
+  document.addEventListener('touchstart', (e) => { touchX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (touchX === null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 60) (dx < 0 ? nextSlide : prevSlide)();
+    touchX = null;
+  });
+
+  window.addEventListener('hashchange', () => {
+    const n = parseInt(location.hash.slice(1), 10);
+    if (n) go(n - 1, { fromHash: true });
+  });
+
+  // ซ่อนเคอร์เซอร์เมื่อไม่ขยับเมาส์ (ไม่บังสไลด์ตอนพรีเซนต์)
+  let idleTimer = 0;
+  function wakeCursor() {
+    document.body.classList.remove('idle');
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => document.body.classList.add('idle'), 2500);
+    $('#hint').style.opacity = '1';
+  }
+  setTimeout(() => { $('#hint').style.opacity = '0'; }, 5000);
+
+  // ─────────────────────── ฉากหลัง: คลื่นเส้นแบบ 3D ───────────────────────
+  const canvas = $('#waves');
+  const ctx = canvas.getContext('2d');
+  let W = 0;
+  let H = 0;
+  let DPR = 1;
+  function resizeCanvas() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  const LINES = 42;
+  function drawWaves(time) {
+    const theme = document.documentElement.dataset.theme;
+    const rgb = theme === 'light' ? '17,21,13' : '198,244,50';
+    const strength = theme === 'light' ? 0.09 : theme === 'lime' ? 0.32 : 0.2;
+    ctx.clearRect(0, 0, W, H);
+    const t = time * 0.00025;
+    const mx = mouse.x * 0.8;
+    for (let j = 0; j < LINES; j++) {
+      const p = j / (LINES - 1); // 0 = ไกล, 1 = ใกล้
+      const depth = p * p;
+      const baseY = H * 0.5 + depth * H * 0.62;
+      const amp = 8 + depth * 70;
+      const freq = 0.0042 - depth * 0.0022;
+      ctx.beginPath();
+      for (let x = -20; x <= W + 20; x += 14) {
+        const y = baseY
+          + Math.sin(x * freq + t * 3 + j * 0.22 + mx) * amp
+          + Math.sin(x * freq * 0.37 - t * 2 + j * 0.11) * amp * 0.6;
+        if (x === -20) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = `rgba(${rgb},${(0.02 + depth * strength).toFixed(3)})`;
+      ctx.lineWidth = 0.6 + depth * 1.4;
+      ctx.stroke();
+    }
+  }
+  function frame(time) {
+    if (!document.hidden) drawWaves(time);
+    if (!reduceMotion) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ─────────────────────── ภาษาไทย / อังกฤษ ───────────────────────
+  // ข้อความไทยอยู่ใน HTML ตามเดิม ตอนเป็น EN ไล่แทนทีละข้อความด้วยตารางใน i18n.js
+  // แล้วจำค่าไทยเดิมไว้ใน Map เพื่อสลับกลับได้ไม่ผิดเพี้ยน
+  const EN = window.DECK_EN || {};
+  const ALT_EN = window.DECK_ALT_EN || {};
+  const originalText = new Map();
+  const I18N_ROOTS = ['#stage', '#help', '#overview h4', '#hint'];
+
+  function translatableTextNodes() {
+    const nodes = [];
+    I18N_ROOTS.forEach((sel) => {
+      const root = $(sel);
+      if (!root) return;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode: (n) =>
+          n.parentElement.closest('[data-chat], [data-en], script, style, svg')
+            ? NodeFilter.FILTER_REJECT
+            : NodeFilter.FILTER_ACCEPT,
+      });
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+    });
+    return nodes;
+  }
+
+  function setLang(lang) {
+    const en = lang === 'en';
+    document.documentElement.lang = en ? 'en' : 'th';
+
+    translatableTextNodes().forEach((node) => {
+      if (!originalText.has(node)) originalText.set(node, node.nodeValue);
+      const original = originalText.get(node);
+      const key = original.replace(/\s+/g, ' ').trim();
+      if (!en || !key || !(key in EN)) {
+        node.nodeValue = original;
+        return;
+      }
+      const lead = original.match(/^\s*/)[0];
+      const trail = original.match(/\s*$/)[0];
+      node.nodeValue = `${lead}${EN[key]}${trail}`;
+    });
+
+    $$('[data-en]').forEach((el) => {
+      if (el.dataset.th === undefined) el.dataset.th = el.innerHTML;
+      el.innerHTML = en ? el.dataset.en : el.dataset.th;
+    });
+
+    $$('[alt], [title]').forEach((el) => {
+      ['alt', 'title'].forEach((attr) => {
+        const value = el.getAttribute(attr);
+        if (value === null) return;
+        const store = `${attr}Th`;
+        if (el.dataset[store] === undefined) el.dataset[store] = value;
+        const th = el.dataset[store];
+        el.setAttribute(attr, en && ALT_EN[th] ? ALT_EN[th] : th);
+      });
+    });
+
+    try { localStorage.setItem('jodtang-deck-lang', en ? 'en' : 'th'); } catch { /* file:// บางเครื่องปิด storage */ }
+    if (current >= 0) {
+      updateChrome();
+      replayCurrent();
+    }
+  }
+  $('#langBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    setLang(isEn() ? 'th' : 'en');
+  });
+
+  // ─────────────────────── เริ่ม ───────────────────────
+  let startLang = new URLSearchParams(location.search).get('lang');
+  if (!startLang) {
+    try { startLang = localStorage.getItem('jodtang-deck-lang'); } catch { startLang = null; }
+  }
+  setLang(startLang === 'en' ? 'en' : 'th');
+  const fromHash = parseInt(location.hash.slice(1), 10);
+  go(fromHash ? fromHash - 1 : 0, { fromHash: true });
+})();
