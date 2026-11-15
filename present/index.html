@@ -51,6 +51,7 @@
         <span data-sec="4">04 Money Engine</span>
         <span data-sec="5">05 พิสูจน์</span>
       </nav>
+      <button id="liveBtn" type="button" title="M"><span class="live-off">📱 แชร์จอมือถือ</span><span class="live-on"><i class="live-dot"></i>LIVE · <span>หยุดแชร์จอ</span></span></button>
       <button id="langBtn" type="button" title="L"><span data-l="th">TH</span><span data-l="en">EN</span></button>
     </header>
 
@@ -161,7 +162,7 @@
     </section>
 
     <!-- ═══════════ 04 Demo แชท ═══════════ -->
-    <section class="slide s-chat" data-sec="2" data-title="Demo แชท LINE">
+    <section class="slide s-chat" data-sec="2" data-live data-title="Demo แชท LINE">
       <div class="copy">
         <span class="eyebrow rv" style="--d:0"><b>02</b> Demo แชท LINE</span>
         <h2 class="rv" style="--d:1">พิมพ์ครั้งเดียว<br /><span class="hl">จดเสร็จ</span></h2>
@@ -190,6 +191,7 @@
             <div class="notch"></div>
             <div class="chat-head"><img src="assets/logo.png" alt="" />JOD tang</div>
             <div class="chat-body" data-chat="demo"></div>
+            <video class="live-video" autoplay muted playsinline></video>
           </div>
         </div>
         <div class="phone-shadow"></div>
@@ -198,7 +200,7 @@
     </section>
 
     <!-- ═══════════ 05 Demo เว็บ ═══════════ -->
-    <section class="slide light s-web" data-sec="3" data-title="Demo เว็บ">
+    <section class="slide light s-web" data-sec="3" data-live data-title="Demo เว็บ">
       <div class="head">
         <div>
           <span class="eyebrow rv" style="--d:0"><b>03</b> Demo เว็บ</span>
@@ -224,6 +226,9 @@
           <div class="phone"><div class="screen"><div class="shot"><img src="assets/web-analyze.png" alt="หน้าวิเคราะห์" /></div></div></div>
           <div class="caption"><b>แผนออม 3 ทาง</b><div class="row"><span class="fr">FR-07</span><span class="fr dark">FR-08</span></div></div>
         </div>
+      </div>
+      <div class="live-phone">
+        <div class="phone"><div class="screen"><video class="live-video" autoplay muted playsinline></video></div></div>
       </div>
     </section>
 
@@ -328,7 +333,7 @@
     </section>
 
     <!-- ═══════════ 09 ทางที่ผิด ═══════════ -->
-    <section class="slide light s-wrong" data-sec="4" data-title="ทางที่ผิด — ไม่เดามั่ว">
+    <section class="slide light s-wrong" data-sec="4" data-live data-title="ทางที่ผิด — ไม่เดามั่ว">
       <div class="copy">
         <span class="eyebrow rv" style="--d:0"><b>04</b> ทางที่ผิด</span>
         <h2 class="rv" style="--d:1">ลองดู<br /><span class="hl">ทางที่ผิด</span></h2>
@@ -350,6 +355,9 @@
           <div class="chat-body" data-chat="long"></div>
           <div class="tagline warn" data-tag="long">AI อ่านได้ · คนเป็นคนกดยืนยัน</div>
         </div>
+      </div>
+      <div class="live-phone">
+        <div class="phone"><div class="screen"><video class="live-video" autoplay muted playsinline></video></div></div>
       </div>
     </section>
 
@@ -482,6 +490,7 @@
         <span><kbd>F</kbd></span><span>เต็มจอ</span>
         <span><kbd>B</kbd></span><span>จอดำ (ตอนสลับไปเดโมจริง)</span>
         <span><kbd>R</kbd></span><span>เล่นแชทจำลองในสไลด์นี้ใหม่</span>
+        <span><kbd>M</kbd></span><span>เริ่ม/หยุดแชร์จอมือถือ (สไลด์เดโม 4, 5, 9)</span>
         <span><kbd>Esc</kbd></span><span>ปิดหน้าต่างนี้</span>
       </div>
     </div>
@@ -490,6 +499,7 @@
   <div class="panel" id="overview"><div class="panel-box"><h4>ภาพรวมสไลด์</h4><div class="grid"></div></div></div>
   <div id="lightbox"><img alt="" /></div>
   <div id="blackout"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/notes.js"></script>
   <script src="js/i18n.js"></script>

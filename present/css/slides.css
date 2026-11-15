@@ -277,3 +277,18 @@ html[lang='en'] .s-wrong h2 { font-size: 72px; }
 html[lang='en'] .s-lesson h2 { font-size: 76px; }
 html[lang='en'] .s-thread h2 { font-size: 64px; }
 html[lang='en'] .s-money .calc + .calc { font-size: 20px !important; }
+
+/* ── จอมือถือสด: วางกรอบโทรศัพท์แทนของเดิมในแต่ละสไลด์เดโม ── */
+/* 04 แชท: ใช้โทรศัพท์เดิม แค่ตั้งตรงให้อ่านง่าย และซ่อนปุ่มเล่นแชทจำลองใหม่ */
+html.live .s-chat .phone { transform: none; }
+html.live .s-chat .replay { visibility: hidden; }
+/* 05 เว็บ: ซ่อนภาพหน้าจอ 4 ภาพ แล้วโชว์โทรศัพท์ใหญ่ตรงกลาง */
+html.live .s-web .fan { visibility: hidden; }
+.s-web .live-phone { left: 810px; top: 380px; }
+.s-web .live-phone .phone { width: 300px; height: 620px; border-radius: 48px; padding: 12px; transform: none; }
+.s-web .live-phone .screen { border-radius: 38px; clip-path: inset(0 round 38px); }
+/* 09 ทางที่ผิด: ซ่อนแชทจำลองสองช่อง แล้วโชว์โทรศัพท์แทน */
+html.live .s-wrong .panels { visibility: hidden; }
+.s-wrong .live-phone { left: 1110px; top: 150px; }
+.s-wrong .live-phone .phone { width: 400px; height: 820px; transform: none; }
+.s-web .live-phone .phone::before, .s-wrong .live-phone .phone::before { display: none; }

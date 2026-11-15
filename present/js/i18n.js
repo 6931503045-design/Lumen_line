@@ -272,6 +272,11 @@ window.DECK_EN = {
   'ปิดหน้าต่างนี้': 'Close this panel',
   'ภาพรวมสไลด์': 'Slide overview',
   'สลับภาษาไทย / อังกฤษ': 'Switch Thai / English',
+  'เริ่ม/หยุดแชร์จอมือถือ (สไลด์เดโม 4, 5, 9)': 'Start / stop phone screen share (demo slides 4, 5, 9)',
+
+  // ── ปุ่มแชร์จอมือถือ ──
+  '📱 แชร์จอมือถือ': '📱 Share phone screen',
+  'หยุดแชร์จอ': 'Stop',
 };
 
 // ชื่อสไลด์ (ใช้ในภาพรวมสไลด์) — คีย์คือค่า data-title
