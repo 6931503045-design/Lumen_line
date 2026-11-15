@@ -410,7 +410,8 @@ describe('คำขอที่มาจากสลิป (FR-15, SPEC §S9)', 
     const text = describePending('create_transaction', SLIP_ENTRY);
 
     // 07:32 UTC = 14:32 เวลาไทย ซึ่งเป็นเวลาที่ผู้ใช้เห็นบนสลิป
-    expect(text).toContain('2026-10-06 14:32');
+    // แสดงแบบไทย พ.ศ. เหมือนการ์ดอื่น ไม่ใช่ YYYY-MM-DD ของ DB
+    expect(text).toContain('6 ต.ค. 2569 14:32');
     expect(text).not.toContain('T07:32');
     expect(text).toContain('เลขอ้างอิง 0123456789');
   });
