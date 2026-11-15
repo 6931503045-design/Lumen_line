@@ -779,3 +779,66 @@ html[lang='th'] #langBtn [data-l='th'],
 html[lang='en'] #langBtn [data-l='en'] { background: var(--lime); color: #0f130b; opacity: 1; }
 html[data-theme='light'] #langBtn { border-color: rgba(0, 0, 0, 0.12); background: rgba(0, 0, 0, 0.04); }
 #topbar nav + #langBtn { flex: none; }
+
+/* ───────────────────────── จอมือถือสด (กด M) ─────────────────────────
+ * ใช้ getDisplayMedia ดึงหน้าต่างที่มิเรอร์จอมือถือมาแสดงในกรอบโทรศัพท์ของสไลด์เดโม
+ * ตอนไม่ได้แชร์ ทุกอย่างยังเป็นแชทจำลอง/ภาพหน้าจอเหมือนเดิม — เป็นแผนสำรองในตัว */
+#liveBtn {
+  display: none;
+  pointer-events: auto;
+  cursor: pointer;
+  margin-left: 28px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  font: 700 14px/1 var(--font-body);
+  letter-spacing: 0.04em;
+  color: inherit;
+  white-space: nowrap;
+  flex: none;
+}
+#liveBtn.show { display: inline-flex; }
+html[data-theme='light'] #liveBtn { border-color: rgba(0, 0, 0, 0.12); background: rgba(0, 0, 0, 0.04); }
+#liveBtn .live-on { display: none; align-items: center; gap: 8px; }
+html.live #liveBtn { background: #e5484d; border-color: transparent; color: #fff; }
+html.live #liveBtn .live-off { display: none; }
+html.live #liveBtn .live-on { display: inline-flex; }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; animation: livePulse 1.2s ease-in-out infinite; }
+@keyframes livePulse { 50% { opacity: 0.25; } }
+
+.live-video {
+  display: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* ไม่ตัดขอบจอมือถือ ถ้าสัดส่วนไม่ตรงจะมีแถบดำแทน */
+  background: #000;
+  z-index: 6;
+}
+html.live .live-video { display: block; }
+
+.live-phone { display: none; position: absolute; }
+html.live .live-phone { display: block; }
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 70px;
+  z-index: 250;
+  max-width: min(720px, 90vw);
+  padding: 14px 22px;
+  border-radius: 16px;
+  background: #12160f;
+  border: 1px solid rgba(198, 244, 50, 0.3);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.5;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: translate(-50%, 16px);
+  transition: opacity 0.35s, transform 0.45s var(--ease-out);
+  pointer-events: none;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }

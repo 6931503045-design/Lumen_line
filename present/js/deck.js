@@ -45,6 +45,7 @@
 
     $$('#sections span').forEach((el) => el.classList.toggle('on', Number(el.dataset.sec) === sec));
     $('#speaker').textContent = sp ? `${sp.sec} · ${sp.name} — ${isEn() ? sp.topicEn : sp.topic}` : '';
+    $('#liveBtn').classList.toggle('show', slide.dataset.live !== undefined);
     $('#counter').textContent = `${String(current + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
 
     segs.forEach(({ sp: s, count, el }) => {
@@ -373,6 +374,7 @@
       const body = $('[data-chat]', el);
       if (!body) return;
       e.stopPropagation();
+      if (liveStream) return; // ตอนแชร์จอสด คลิกที่โทรศัพท์ไม่ต้องเล่นแชทจำลอง
       playChat(body.dataset.chat);
     });
   });
@@ -614,6 +616,11 @@
     } else if (k === 't' || k === 'T') resetTimer();
     else if (k === 'o' || k === 'O') toggleOverview();
     else if (k === 'r' || k === 'R') replayCurrent();
+    else if (k === 'm' || k === 'M') {
+      // getDisplayMedia ต้องเรียกจากการกดในหน้าต่างนี้เท่านั้น — กดจากหน้าต่างผู้พูดเบราว์เซอร์จะไม่ยอม
+      if (fromPopup) showToast(isEn() ? 'Press M on the slide window to share the phone screen' : 'กด M ที่หน้าต่างสไลด์เพื่อแชร์จอมือถือ');
+      else toggleLive();
+    }
     else if (k === 'b' || k === 'B' || k === '.') $('#blackout').classList.toggle('on');
     else if (k === 'f' || k === 'F') toggleFullscreen();
     else if (k === 'l' || k === 'L') setLang(isEn() ? 'th' : 'en');
@@ -660,6 +667,62 @@
     $('#hint').style.opacity = '1';
   }
   setTimeout(() => { $('#hint').style.opacity = '0'; }, 5000);
+
+  // ─────────────────────── จอมือถือสด (กด M) ───────────────────────
+  // มิเรอร์จอ iPhone ขึ้นโน้ตบุ๊กก่อน (เช่น LetsView) แล้วให้เบราว์เซอร์ดึงหน้าต่างนั้นมาแสดงในกรอบโทรศัพท์
+  // ใช้ stream เดียวกันกับทุก <video> ในสไลด์เดโม 4, 5, 9 — ไม่ต้องเลือกหน้าต่างใหม่ทุกสไลด์
+  let liveStream = null;
+  const liveVideos = $$('.live-video');
+
+  let toastTimer = 0;
+  function showToast(msg) {
+    const el = $('#toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 6000);
+  }
+
+  async function startLive() {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      showToast(isEn()
+        ? 'Screen sharing is not available here — open present/index.html in Chrome or Edge instead'
+        : 'ที่นี่แชร์จอไม่ได้ — เปิดไฟล์ present/index.html ด้วย Chrome หรือ Edge แทน');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: false });
+      liveStream = stream;
+      liveVideos.forEach((v) => {
+        v.srcObject = stream;
+        v.play().catch(() => {});
+      });
+      // กด "หยุดแชร์" ที่แถบของ Chrome ก็กลับเป็นแชทจำลองเองเหมือนกัน
+      stream.getVideoTracks()[0]?.addEventListener('ended', stopLive);
+      document.documentElement.classList.add('live');
+    } catch (err) {
+      // ผู้ใช้กดยกเลิก หรือหน้านี้ไม่ได้รับสิทธิ์แชร์จอ (เช่นเปิดผ่านลิงก์ที่ฝังอยู่ในหน้าอื่น)
+      showToast(isEn()
+        ? 'Screen share did not start. If no picker appeared, open present/index.html in Chrome or Edge instead'
+        : 'ยังไม่ได้แชร์จอ — ถ้าไม่มีหน้าต่างให้เลือกขึ้นมาเลย ให้เปิดไฟล์ present/index.html ด้วย Chrome หรือ Edge แทน');
+      console.warn('getDisplayMedia failed:', err);
+    }
+  }
+
+  function stopLive() {
+    if (!liveStream) return;
+    liveStream.getTracks().forEach((t) => t.stop());
+    liveStream = null;
+    liveVideos.forEach((v) => { v.srcObject = null; });
+    document.documentElement.classList.remove('live');
+    replayCurrent();
+  }
+
+  const toggleLive = () => (liveStream ? stopLive() : startLive());
+  $('#liveBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleLive();
+  });
 
   // ─────────────────────── ฉากหลัง: คลื่นเส้นแบบ 3D ───────────────────────
   const canvas = $('#waves');
