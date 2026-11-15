@@ -285,7 +285,7 @@
       .filter((plan) => plan.status !== 'draft') // draft = ทางเลือกที่ยังไม่ได้เลือก ไม่ใช่แผนจริง
       .map((plan) => ({
         id: plan.planId,
-        name: plan.title,
+        name: stripLeadingEmoji(plan.title),
         target: plan.targetSatang,
         saved: plan.savedSatang,
         progress: plan.percentComplete,
@@ -531,6 +531,8 @@
     const logout = document.getElementById('logoutBtn');
     if (logout) {
       logout.hidden = false;
+      const logoutPanel = document.getElementById('logoutPanel');
+      if (logoutPanel) logoutPanel.hidden = false;
       logout.addEventListener('click', () => {
         openModal(`
           <div class="modal-card small an-detail">
@@ -617,7 +619,7 @@
 
   /**
    * ให้ผู้ใช้เลือก 1 ใน 3 ทางเลือกที่ backend คำนวณมา แล้วยืนยัน (S5.3) — เป็นการเลือกครั้งเดียวของฟอร์มสร้างแผน
-   * ชื่อจาก backend ขึ้นต้นด้วยอีโมจิ ("⚡ เร็ว — ...") ซึ่งซ้ำกับไอคอนวงกลมด้านซ้าย จึงตัดตัวหน้าออกตอนแสดง
+   * ชื่อจาก backend ขึ้นต้นด้วยอีโมจิ ("⚡ เร็ว — ...") สำหรับแชท — หน้าเว็บตัดออกแล้วใช้ไอคอน SVG ตามแบบของแผนแทน
    */
   function showPlanOptions(result) {
     const options = result.options || [];
@@ -635,12 +637,12 @@
         <div class="an-action-list">
           ${options.map((opt) => `
             <button type="button" class="an-action" data-confirm-plan="${opt.planId}">
-              <span class="an-action-icon">${escapeHtml(opt.emoji || '💰')}</span>
+              <span class="an-action-icon">${renderIcon(getPlanStrategyMeta(opt.kind).icon)}</span>
               <span class="an-action-text">
-                <strong>${escapeHtml(String(opt.title || '').replace(/^\S+\s+/u, ''))}</strong>
+                <strong>${escapeHtml(stripLeadingEmoji(opt.title))}</strong>
                 <small>เดือนละ ${formatMoney(opt.monthlySaveSatang)} · ${opt.months} เดือน · ครบ ${bangkok(opt.targetDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small>
               </span>
-              ${renderConfidenceBadge(opt.confidence)}
+              ${renderConfidenceHint(opt.confidence)}
             </button>
           `).join('')}
         </div>

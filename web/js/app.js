@@ -180,13 +180,16 @@ function safeNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// ยอดเต็มบาทไม่ต้องมี .00 (฿1,350 อ่านง่ายกว่า ฿1,350.00) — มีเศษสตางค์จริงค่อยโชว์ 2 ตำแหน่ง
 function formatMoney(value) {
-  const numericValue = Number(value || 0) / 100;
+  const satang = Math.round(Number(value || 0));
+  const fractionDigits = satang % 100 === 0 ? 0 : 2;
   return new Intl.NumberFormat('th-TH', {
     style: 'currency',
     currency: 'THB',
-    minimumFractionDigits: 2,
-  }).format(numericValue);
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(satang / 100);
 }
 
 function clamp(value) {
@@ -209,11 +212,20 @@ function getPlanStrategyMeta(mode) {
   return map[mode] || map.balanced;
 }
 
+/**
+ * ตัดอีโมจิตัวหน้าออกจากข้อความที่ backend ส่งมา (เช่นชื่อแผน "⚡ เร็ว — CPU")
+ * อีโมจิพวกนั้นตั้งใจไว้สำหรับข้อความในแชท LINE — หน้าเว็บใช้ไอคอน SVG ชุดเดียวกันทั้งเว็บแทน
+ * เพราะอีโมจิหน้าตาเปลี่ยนตามยี่ห้อมือถือ และไม่เข้ากับธีม
+ */
+function stripLeadingEmoji(text) {
+  return String(text || '').replace(/^(?:\p{Extended_Pictographic}|️|‍)+\s*/u, '');
+}
+
 function getConfidenceMeta(level) {
   const map = {
-    low: { label: 'ประเมินเบื้องต้น', className: 'low' },
-    medium: { label: 'ความมั่นใจปานกลาง', className: 'medium' },
-    high: { label: 'ความมั่นใจสูง', className: 'high' },
+    low: { label: 'ข้อมูลยังน้อย', className: 'low' },
+    medium: { label: 'พอใช้อ้างอิงได้', className: 'medium' },
+    high: { label: 'แม่นแล้ว', className: 'high' },
   };
   return map[level] || map.high;
 }
@@ -221,6 +233,12 @@ function getConfidenceMeta(level) {
 function renderConfidenceBadge(level) {
   const meta = getConfidenceMeta(level);
   return `<span class="confidence-badge ${meta.className}"><span class="confidence-dot"></span>${meta.label}</span>`;
+}
+
+// บนการ์ดโชว์ป้ายเฉพาะตอน "ข้อมูลยังน้อย" — ตอนนั้นผู้ใช้ต้องรู้ว่าตัวเลขยังหยาบ
+// ระดับกลาง/สูงไม่มีอะไรให้ทำต่อ ป้ายแปะทุกการ์ดเลยกลายเป็นสิ่งรกที่ไม่มีใครอ่าน
+function renderConfidenceHint(level) {
+  return level === 'low' ? renderConfidenceBadge(level) : '';
 }
 
 function createChart(canvasId, config) {
@@ -720,24 +738,24 @@ function renderHeroPeriod() {
     safeLine.hidden = false;
     if (info.ceiling > safe) {
       safeLine.className = 'hero-safe-line warn';
-      safeLine.innerHTML = `เพดานที่ตั้งไว้สูงกว่าที่ระบบคำนวณว่าปลอดภัย — วันนี้ควรใช้ไม่เกิน <strong>${formatMoney(safe)}</strong>`;
+      safeLine.innerHTML = `เพดานที่ตั้งไว้สูงกว่าที่เงินเหลือรองรับ — วันนี้ควรใช้ไม่เกิน <strong>${formatMoney(safe)}</strong>`;
     } else {
       safeLine.className = 'hero-safe-line';
-      safeLine.innerHTML = `ระบบคำนวณว่าวันนี้ใช้ได้อย่างปลอดภัย <strong>${formatMoney(safe)}</strong>`;
+      safeLine.innerHTML = `ระบบคิดให้ว่าวันนี้ใช้ได้ <strong>${formatMoney(safe)}</strong>`;
     }
   }
 
   if (!info.enabled) {
     if (period === 'daily') {
       if (noData) {
-        figureLabel.textContent = 'ใช้ได้อย่างปลอดภัยวันนี้';
+        figureLabel.textContent = 'วันนี้ใช้ได้อีก';
         figure.textContent = 'ยังไม่มีข้อมูล';
       } else if (overspent > 0) {
         // สัญญาข้อ safeToSpend: เกินแล้วต้องบอกว่าเกินเท่าไหร่ ห้ามโชว์ ฿0 เฉยๆ
         figureLabel.textContent = 'เดือนนี้ใช้เกินงบไปแล้ว';
         figure.textContent = formatMoney(overspent);
       } else {
-        figureLabel.textContent = 'ใช้ได้อย่างปลอดภัยวันนี้';
+        figureLabel.textContent = 'วันนี้ใช้ได้อีก';
         figure.textContent = formatMoney(mock.summary.safeToSpend);
       }
     } else if (period === 'monthly') {
@@ -820,6 +838,12 @@ function renderSpendingLimitSettings() {
   if (!container) return;
 
   // ปุ่มเลือกรูปแบบของโหมด "ให้ระบบคำนวณ" — อยู่นอก #spendingLimitList จึงผูก/วาดแยกที่นี่
+  // ตัวเลือก "ประหยัด/ปานกลาง" มีผลเฉพาะเพดานที่ให้ระบบคิด — ไม่มีเพดานแบบนั้นเปิดอยู่ก็ไม่ต้องโชว์ให้งง
+  const profileWrap = document.getElementById('limitProfilePicker');
+  if (profileWrap) {
+    const limits = readSpendingLimits();
+    profileWrap.hidden = !SPENDING_LIMIT_PERIODS.some((period) => limits[period].enabled && limits[period].mode === 'system');
+  }
   const profilePicker = document.getElementById('spendingLimitProfile');
   if (profilePicker) {
     const activeProfile = readSpendingProfile();
@@ -844,7 +868,7 @@ function renderSpendingLimitSettings() {
     let summary = 'ปิดอยู่';
     if (setting.enabled) {
       summary = !info.available ? 'เปิดอยู่ · คำนวณไม่ได้ในสัปดาห์นี้'
-        : `เพดานตอนนี้ ${formatMoney(info.ceiling)} · ${setting.mode === 'manual' ? 'ตั้งเอง' : `ระบบคำนวณ · ${SPENDING_PROFILE_META[readSpendingProfile()].label}`}`;
+        : `เพดานตอนนี้ ${formatMoney(info.ceiling)} · ${setting.mode === 'manual' ? 'ตั้งเอง' : `ระบบคิดให้ · ${SPENDING_PROFILE_META[readSpendingProfile()].label}`}`;
     }
     return `
       <div class="limit-row" data-limit-period="${period}">
@@ -859,7 +883,7 @@ function renderSpendingLimitSettings() {
         ${setting.enabled ? `
           <div class="limit-row-body">
             <div class="segmented-control">
-              <button type="button" class="segmented ${setting.mode === 'system' ? 'active' : ''}" data-limit-mode="${period}:system">ให้ระบบคำนวณ</button>
+              <button type="button" class="segmented ${setting.mode === 'system' ? 'active' : ''}" data-limit-mode="${period}:system">ระบบคิดให้</button>
               <button type="button" class="segmented ${setting.mode === 'manual' ? 'active' : ''}" data-limit-mode="${period}:manual">ตั้งเอง</button>
             </div>
             ${setting.mode === 'manual' ? `
@@ -923,7 +947,7 @@ function renderDashboard() {
   renderDashboardPlans();
 
   if (heroConfidenceBadge) {
-    heroConfidenceBadge.innerHTML = renderConfidenceBadge(summary.safeToSpendConfidence || 'high');
+    heroConfidenceBadge.innerHTML = renderConfidenceHint(summary.safeToSpendConfidence || 'high');
   }
 
   renderHeroPeriod();
@@ -1889,7 +1913,7 @@ function renderPlanCards() {
           <div class="progress-bar"><span style="width: ${clamp(plan.progress || 0)}%"></span></div>
           <div class="card-row">
             <span>${plan.dueMonth}</span>
-            ${renderConfidenceBadge(plan.confidence || 'high')}
+            ${renderConfidenceHint(plan.confidence || 'high')}
           </div>
           <div class="plan-actions-row">
             ${statusBadge}
@@ -2038,13 +2062,13 @@ function renderAnalyzeTiles() {
 
   const { rate, forecast, emergencyPlan } = getAnalyzeInsights();
   const tiles = [
-    { key: 'rate', icon: 'wallet', value: `${rate}%`, label: 'อัตราการใช้จ่าย' },
+    { key: 'rate', icon: 'wallet', value: `${rate}%`, label: 'ใช้ไปของงบ' },
     {
       key: 'forecast',
       icon: 'trending-up',
       // backend ยังไม่มีสูตรนี้ ถ้าโชว์ ฿0 ผู้ใช้จะอ่านว่า "คาดว่าจะไม่เหลือเลย" ซึ่งไม่จริง
       value: forecast === null ? 'ยังไม่มีข้อมูล' : `${forecast >= 0 ? '+' : '-'}${formatMoneyShort(Math.abs(forecast))}`,
-      label: 'การคาดการณ์',
+      label: 'สิ้นเดือนน่าจะเหลือ',
     },
     { key: 'emergency', icon: 'leaf', value: emergencyPlan ? `${Math.round(emergencyPlan.progress || 0)}%` : 'ยังไม่มี', label: 'กองทุนฉุกเฉิน', prompt: !emergencyPlan },
   ].filter((tile) => !(tile.key === 'emergency' && !emergencyPlan && isEmergencyTileHidden()));
@@ -2107,7 +2131,7 @@ function openInsightDetail(key) {
     ].map((step) => `<div class="an-scale-step ${step.active ? 'active' : ''}"><strong>${step.label}</strong><small>${step.hint}</small></div>`).join('');
 
     openInsightModal({
-      title: 'อัตราการใช้จ่าย',
+      title: 'ใช้ไปของงบ',
       value: `${rate}%`,
       pill: `<span class="pill ${tone}">${toneLabel}</span>`,
       progress: rate,
@@ -2138,20 +2162,20 @@ function openInsightDetail(key) {
     const meta = getConfidenceMeta(mock.summary.safeToSpendConfidence || 'high');
     if (forecast === null) {
       openInsightModal({
-        title: 'การคาดการณ์สิ้นเดือน',
+        title: 'สิ้นเดือนน่าจะเหลือเท่าไหร่',
         value: 'ยังไม่มีข้อมูล',
         lead: 'ตัวเลขนี้ต้องให้ระบบคำนวณจากพฤติกรรมการใช้จ่ายของคุณ ตอนนี้ยังไม่มีสูตรคำนวณในระบบ จึงยังแสดงให้ไม่ได้',
         rows: [
           ['คงเหลือจากงบตอนนี้', formatMoney(Math.max(0, limit - used))],
           ['วันที่เหลือในเดือนนี้', `${ref.daysLeft} วัน`],
         ],
-        tip: 'ระหว่างนี้ดู "อัตราการใช้จ่าย" กับ "ใช้ได้เฉลี่ยต่อวัน" แทนได้',
+        tip: 'ระหว่างนี้ดู "ใช้ไปของงบ" กับ "ใช้ได้เฉลี่ยต่อวัน" แทนได้',
       });
       return;
     }
     const positive = forecast >= 0;
     openInsightModal({
-      title: 'การคาดการณ์สิ้นเดือน',
+      title: 'สิ้นเดือนน่าจะเหลือเท่าไหร่',
       value: `${positive ? '+' : '-'}${formatMoney(Math.abs(forecast))}`,
       pill: `<span class="pill ${positive ? 'success' : 'danger'}">${positive ? 'คาดว่าเหลือจากงบ' : 'คาดว่าเกินงบ'}</span>`,
       lead: `ประมาณการว่าเมื่อสิ้นเดือนจะเหลือเงินจากงบประมาณเท่าไร ถ้ายังใช้จ่ายในจังหวะเดิม (${positive ? 'เครื่องหมาย + คือเหลือ' : 'เครื่องหมาย − คือเกินงบ'}) ตัวเลขนี้เป็นค่าประมาณ ไม่ใช่ยอดจริง`,
@@ -2162,9 +2186,9 @@ function openInsightDetail(key) {
         ['ความแม่นยำของการประเมิน', meta.label],
       ],
       tip: safeNumber(mock.summary.daysOfData) < 30
-        ? 'ยิ่งบันทึกรายการต่อเนื่องนานขึ้น การคาดการณ์จะยิ่งแม่นยำ ลองบันทึกรายจ่ายให้ครบทุกวัน'
-        : 'มีข้อมูลต่อเนื่องเพียงพอแล้ว การคาดการณ์นี้ค่อนข้างเชื่อถือได้',
-      action: { label: 'ดูความหมายของความมั่นใจ', run: () => { closeModal(); openConfidenceModal(); } },
+        ? 'ยิ่งบันทึกรายการต่อเนื่องนานขึ้น ตัวเลขนี้จะยิ่งแม่น ลองบันทึกรายจ่ายให้ครบทุกวัน'
+        : 'มีข้อมูลต่อเนื่องเพียงพอแล้ว ตัวเลขนี้ค่อนข้างเชื่อถือได้',
+      action: { label: 'ตัวเลขนี้แม่นแค่ไหน', run: () => { closeModal(); openConfidenceModal(); } },
     });
     return;
   }
@@ -2329,11 +2353,11 @@ function openPlanDetail(plan) {
       ['กำหนดเป้าหมาย', plan.dueMonth || '—'],
       ['ออมต่อเดือน', plan.monthly_save ? formatMoney(plan.monthly_save) : '—'],
       ['ถ้าออมตามนี้จะครบ', plan.status === 'completed' ? 'ครบแล้ว' : monthsToGo === null ? '—' : `ราว ${monthsToGo} เดือน (${finish})`],
-      ['ความมั่นใจของแผน', meta.label],
+      ['ความแม่นของแผน', meta.label],
     ],
     tip: plan.status === 'completed'
       ? 'ยินดีด้วย! ถ้าไม่ต้องใช้แผนนี้แล้ว สามารถลบออกได้'
-      : 'โอนเงินเข้าแผนเป็นประจำ ระดับความมั่นใจของแผนจะดีขึ้นตามความคืบหน้า',
+      : 'โอนเงินเข้าแผนเป็นประจำ ตัวเลขของแผนจะแม่นขึ้นตามความคืบหน้า',
     footer: `
       <div class="an-detail-actions">
         <button class="primary-btn" type="button" data-plan-transfer="${plan.id}">โอนเข้าแผนนี้</button>
@@ -2728,7 +2752,7 @@ function openPurchaseResult() {
   // ถ้าปล่อยผ่าน toneMap[''] เป็น undefined แล้ว tone.pill โยน TypeError กด "จำลอง" แล้วเงียบ
   if (!sim.hasBudget) {
     openInsightModal({
-      title: 'จำลองผลกระทบก่อนซื้อ',
+      title: 'ลองคิดก่อนซื้อ',
       value: formatMoney(sim.price),
       lead: 'ระบบยังไม่รู้งบรายเดือนของคุณ จึงบอกไม่ได้ว่าการซื้อนี้กระทบแค่ไหน',
       rows: [],
@@ -2827,10 +2851,10 @@ function openConfidenceModal() {
   openModal(`
     <div class="modal-card small an-detail">
       <div class="modal-head">
-        <h3>ความมั่นใจของการประเมิน</h3>
+        <h3>ตัวเลขนี้แม่นแค่ไหน</h3>
         <button class="close-btn" type="button" data-close-modal="true">${renderIcon('x')}</button>
       </div>
-      <p class="an-detail-lead">บอกว่าตัวเลข "ใช้อย่างปลอดภัยได้" และการคาดการณ์น่าเชื่อถือแค่ไหน ขึ้นอยู่กับปริมาณข้อมูลที่บันทึกไว้ (ตอนนี้ ${safeNumber(mock.summary.daysOfData)} วัน)</p>
+      <p class="an-detail-lead">ตัวเลข "วันนี้ใช้ได้อีก" และ "สิ้นเดือนน่าจะเหลือ" แม่นแค่ไหน ขึ้นอยู่กับปริมาณข้อมูลที่บันทึกไว้ (ตอนนี้ ${safeNumber(mock.summary.daysOfData)} วัน)</p>
       <div class="an-confidence-list">
         ${levels.map((level) => `
           <div class="an-confidence-item ${level.key === current ? 'active' : ''}">
@@ -2839,7 +2863,7 @@ function openConfidenceModal() {
           </div>
         `).join('')}
       </div>
-      <p class="an-detail-tip">${renderIcon('sparkles')}<span>บันทึกรายรับรายจ่ายต่อเนื่องทุกวัน ระดับความมั่นใจจะสูงขึ้นเอง</span></p>
+      <p class="an-detail-tip">${renderIcon('sparkles')}<span>บันทึกรายรับรายจ่ายต่อเนื่องทุกวัน ตัวเลขจะแม่นขึ้นเอง</span></p>
     </div>
   `);
 }
@@ -3100,7 +3124,7 @@ function renderPlanningDisclaimer() {
   note.id = 'planningDisclaimer';
   note.className = 'ai-disclaimer';
   note.style.textAlign = 'center';
-  note.textContent = 'ℹ️ ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน';
+  note.innerHTML = `${renderIcon('info', 'inline-icon')}<span>ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</span>`;
   main.append(note);
 }
 
@@ -3115,7 +3139,10 @@ function renderAnalyzePage() {
 
   const badgeWrap = document.getElementById('safeToSpendBadgeWrap');
   if (badgeWrap) {
-    badgeWrap.innerHTML = `<button type="button" class="an-badge-btn" aria-label="ดูความหมายของความมั่นใจ">${renderConfidenceBadge(mock.summary.safeToSpendConfidence || 'high')}${renderIcon('info')}</button>`;
+    const level = mock.summary.safeToSpendConfidence || 'high';
+    badgeWrap.innerHTML = level === 'low'
+      ? `<button type="button" class="an-badge-btn" aria-label="ตัวเลขนี้แม่นแค่ไหน">${renderConfidenceBadge(level)}${renderIcon('info')}</button>`
+      : '';
   }
 
   renderPlanCards();
@@ -4675,7 +4702,7 @@ function bindSettingsActions() {
       const token = Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
       const emailEl = document.getElementById('ingestEmail');
       if (emailEl) emailEl.textContent = `user+${token}@gmail.com`;
-      showSuccessModal('token ใหม่ถูกสร้างเรียบร้อยแล้ว');
+      showSuccessModal('เปลี่ยนที่อยู่อีเมลใหม่แล้ว');
     });
   }
 }

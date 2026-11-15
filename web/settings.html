@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="css/style.css?v=20261114b" />
+    <link rel="stylesheet" href="css/style.css?v=20261115b" />
   </head>
   <body data-page="settings" data-covers="FR-02, FR-09, FR-13">
     <div class="app-shell">
@@ -59,10 +59,9 @@
 
         <section class="section-panel an-settings" id="spendingLimits">
           <div class="an-head"><h3>เพดานการใช้จ่าย</h3></div>
-          <p class="an-limit-intro">ตั้งเพดานว่าวัน สัปดาห์ หรือเดือนหนึ่งควรใช้ไม่เกินเท่าไร เตือนอย่างเดียว ยังบันทึกรายการได้ตามปกติ</p>
-          <p class="an-limit-intro limit-storage-note">⚠️ ตอนนี้ค่าที่ตั้งไว้เก็บอยู่ในเครื่องนี้เท่านั้น ถ้าเปิดจากเครื่องอื่นหรือล้างข้อมูลเบราว์เซอร์จะต้องตั้งใหม่</p>
-          <div class="limit-profile-picker">
-            <span>รูปแบบของโหมด "ให้ระบบคำนวณ" — มีผลกับทุกระดับที่เปิดโหมดนี้ไว้</span>
+          <p class="an-limit-intro">เตือนเมื่อใช้เกินที่ตั้งไว้ — ยังจดได้ตามปกติ · ค่าที่ตั้งเก็บในเครื่องนี้เท่านั้น</p>
+          <div class="limit-profile-picker" id="limitProfilePicker" hidden>
+            <span>เพดานที่ระบบคิดให้ ตั้งแบบ</span>
             <div class="segmented-control" id="spendingLimitProfile">
               <button type="button" class="segmented" data-limit-profile="frugal">ประหยัด</button>
               <button type="button" class="segmented" data-limit-profile="moderate">ปานกลาง</button>
@@ -80,17 +79,21 @@
           <p class="ai-disclaimer">เงินเดือน ค่าหอ ค่าเน็ต — ระบบจะบันทึกให้เองทุกรอบ เวลา 06:00 น.</p>
         </section>
 
-        <section class="section-panel an-settings">
-          <div class="an-head"><h3>อีเมลสำหรับ forward</h3></div>
+        <details class="section-panel an-settings an-advanced">
+          <summary class="an-head"><h3>ขั้นสูง</h3></summary>
+          <div class="an-advanced-item">
+          <strong>จดอัตโนมัติจากอีเมลธนาคาร</strong>
+          <p class="an-limit-intro">ส่งต่ออีเมลแจ้งเตือนจากธนาคารมาที่อยู่นี้ ระบบจะจดรายการให้เอง</p>
           <div class="an-email-box">
             <span class="an-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg></span>
             <p class="email-address" id="ingestEmail">user+ab12cd34@gmail.com</p>
           </div>
-          <button id="rotateTokenBtn" class="chip-button an-rotate-btn" type="button">สร้าง token ใหม่</button>
-          <p class="ai-disclaimer">การสร้าง token ใหม่จะทำให้ที่อยู่เดิมใช้ไม่ได้ทันที</p>
-        </section>
+          <button id="rotateTokenBtn" class="chip-button an-rotate-btn" type="button">เปลี่ยนที่อยู่ใหม่</button>
+          <p class="ai-disclaimer">กดแล้วที่อยู่เดิมจะใช้ไม่ได้ทันที — ใช้เมื่อคิดว่ามีคนอื่นรู้ที่อยู่นี้</p>
+          </div>
+        </details>
 
-        <section class="section-panel an-settings">
+        <section class="section-panel an-settings" id="logoutPanel" hidden>
           <button id="logoutBtn" class="settings-row danger" type="button" hidden>
             <span>ออกจากระบบ</span>
             <strong>›</strong>
@@ -123,10 +126,10 @@
     </div>
 
     <!-- แถบชี้ requirement สำหรับตรวจ M3 — ไม่ใช่ส่วนหนึ่งของผลิตภัณฑ์ -->
-    <script src="js/prototype-bar.js?v=20261114b"></script>
-    <script src="js/mock-data.js?v=20261114b"></script>
-    <script src="js/api.js?v=20261114b"></script>
-    <script src="js/app.js?v=20261114b"></script>
-    <script src="js/boot.js?v=20261114b"></script>
+    <script src="js/prototype-bar.js?v=20261115b"></script>
+    <script src="js/mock-data.js?v=20261115b"></script>
+    <script src="js/api.js?v=20261115b"></script>
+    <script src="js/app.js?v=20261115b"></script>
+    <script src="js/boot.js?v=20261115b"></script>
   </body>
 </html>
