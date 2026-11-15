@@ -45,7 +45,7 @@
 
     $$('#sections span').forEach((el) => el.classList.toggle('on', Number(el.dataset.sec) === sec));
     $('#speaker').textContent = sp ? `${sp.sec} · ${sp.name} — ${isEn() ? sp.topicEn : sp.topic}` : '';
-    $('#liveBtn').classList.toggle('show', slide.dataset.live !== undefined);
+    updateLiveBtn();
     $('#counter').textContent = `${String(current + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
 
     segs.forEach(({ sp: s, count, el }) => {
@@ -594,6 +594,16 @@
   let liveStream = null;
   const liveVideos = $$('.live-video');
 
+  // ปุ่มโผล่ในสไลด์เดโม 4, 5, 9 และสไลด์แรก (กดแชร์ไว้ก่อนเริ่มพูด จะได้ไม่ต้องรอหน้าต่างเลือกจอตอนเดโม)
+  // ระหว่างแชร์ สไลด์อื่นจะเหลือแค่จุดแดงเล็ก ๆ บอกว่ายังแชร์อยู่
+  function updateLiveBtn() {
+    const slide = slides[current];
+    const main = current === 0 || slide.dataset.live !== undefined;
+    const btn = $('#liveBtn');
+    btn.classList.toggle('show', main || Boolean(liveStream));
+    btn.classList.toggle('mini', !main && Boolean(liveStream));
+  }
+
   let toastTimer = 0;
   function showToast(msg) {
     const el = $('#toast');
@@ -620,6 +630,7 @@
       // กด "หยุดแชร์" ที่แถบของ Chrome ก็กลับเป็นแชทจำลองเองเหมือนกัน
       stream.getVideoTracks()[0]?.addEventListener('ended', stopLive);
       document.documentElement.classList.add('live');
+      updateLiveBtn();
     } catch (err) {
       // ผู้ใช้กดยกเลิก หรือหน้านี้ไม่ได้รับสิทธิ์แชร์จอ (เช่นเปิดผ่านลิงก์ที่ฝังอยู่ในหน้าอื่น)
       showToast(isEn()
@@ -635,6 +646,7 @@
     liveStream = null;
     liveVideos.forEach((v) => { v.srcObject = null; });
     document.documentElement.classList.remove('live');
+    updateLiveBtn();
     replayCurrent();
   }
 

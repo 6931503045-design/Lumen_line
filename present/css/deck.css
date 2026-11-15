@@ -806,6 +806,9 @@ html.live #liveBtn .live-off { display: none; }
 html.live #liveBtn .live-on { display: inline-flex; }
 .live-dot { width: 9px; height: 9px; border-radius: 50%; background: #fff; animation: livePulse 1.2s ease-in-out infinite; }
 @keyframes livePulse { 50% { opacity: 0.25; } }
+/* สไลด์ที่ไม่ใช่เดโม: ย่อเหลือจุดแดงเล็ก ๆ ให้คนพูดรู้ว่ายังแชร์อยู่ โดยไม่ดึงสายตาคนดู */
+#liveBtn.mini { padding: 9px; opacity: 0.75; }
+#liveBtn.mini .live-label { display: none; }
 
 .live-video {
   display: none;
