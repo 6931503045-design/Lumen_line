@@ -58,6 +58,7 @@
 
   const SCREENS = [
     { href: 'prototype.html', label: 'Index' },
+    { href: 'chat.html', label: 'แชท LINE' },
     { href: 'index.html', label: 'ภาพรวม' },
     { href: 'transactions.html', label: 'รายการ' },
     { href: 'categories.html', label: 'หมวดหมู่' },

@@ -24,7 +24,7 @@
       <main class="page-content">
         <section class="section-panel">
           <p class="proto-lead">
-            หน้าจอทั้งหมด <strong>5 หน้า</strong> ครอบ <strong>Must FR ครบทั้ง 8 ข้อ</strong>
+            หน้าจอทั้งหมด <strong>6 หน้า</strong> (แชทจำลอง + เว็บ 5 หน้า) ครอบ <strong>Must FR ครบทั้ง 8 ข้อ</strong>
             (FR-01 … FR-08 ตาม <code>docs/SRS.md</code> §4) จัดกลุ่มตาม
             <strong>เส้นทางการใช้งานจริงของผู้ใช้</strong> ไม่ใช่หน้าจอลอย ๆ
           </p>
@@ -47,17 +47,21 @@
             <span class="pill">ใน LINE / อีเมล</span>
           </div>
           <p class="proto-lead">
-            สองข้อนี้<strong>ไม่ใช่หน้าจอเว็บ</strong> — เกิดในแชท LINE และในอีเมล
-            สาธิตสดตอน demo ส่วนผลลัพธ์จะไปโผล่ที่ <a href="transactions.html">หน้ารายการ</a>
+            ของจริงเกิดในแชท LINE และในอีเมล — แชทมี<strong>หน้าจำลองให้คลิกได้</strong> (และสาธิตของจริงตอน demo)
+            ส่วนอีเมลเป็นงานเบื้องหลัง ผลลัพธ์จะไปโผล่ที่ <a href="transactions.html">หน้ารายการ</a>
           </p>
           <div class="proto-screens">
-            <article class="proto-screen">
+            <a class="proto-screen link" href="chat.html">
               <div class="proto-screen-head">
-                <strong>แชท LINE</strong>
-                <span class="proto-chip must">FR-01<small>จดจากข้อความแชท</small></span>
+                <strong>0. แชท LINE (จำลอง)</strong>
+                <span class="proto-screen-go">เปิด →</span>
               </div>
-              <p>พิมพ์ <code>กาแฟ 80</code> แล้วระบบบันทึกพร้อมหมวดให้ทันที มีปุ่ม ↩️ ยกเลิก / ✏️ แก้หมวด</p>
-            </article>
+              <p>พิมพ์ <code>กาแฟ 80</code> แล้วระบบบันทึกพร้อมหมวดให้ทันที · ปุ่มลบ / เปลี่ยนหมวด · ประโยคภาษาคนต้องกดยืนยันก่อน · ทางที่ผิด: ไม่มียอด / ยอดเป็น 0</p>
+              <div class="proto-chips">
+                <span class="proto-chip must">FR-01<small>จดจากข้อความแชท</small></span>
+                <span class="proto-chip must">FR-03<small>ลบ / เปลี่ยนหมวด</small></span>
+              </div>
+            </a>
             <article class="proto-screen">
               <div class="proto-screen-head">
                 <strong>อีเมลธนาคาร (K PLUS)</strong>
@@ -173,9 +177,9 @@
             <h3>ตรวจความครอบคลุม — Must FR ทั้ง 8 ข้อ</h3>
           </div>
           <div class="proto-coverage">
-            <div class="proto-cov-row"><span class="proto-chip must">FR-01</span><span>จดจากข้อความแชท</span><strong>แชท LINE</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip must">FR-01</span><span>จดจากข้อความแชท</span><strong>แชท LINE (จำลอง)</strong></div>
             <div class="proto-cov-row"><span class="proto-chip must">FR-02</span><span>จดจากอีเมลธนาคาร</span><strong>อีเมล → รายการ · ตั้งค่า</strong></div>
-            <div class="proto-cov-row"><span class="proto-chip must">FR-03</span><span>เพิ่ม / แก้ / ลบ รายการ</span><strong>ภาพรวม · รายการ</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip must">FR-03</span><span>เพิ่ม / แก้ / ลบ รายการ</span><strong>แชท · ภาพรวม · รายการ</strong></div>
             <div class="proto-cov-row"><span class="proto-chip must">FR-04</span><span>ดูสรุปยอดและกราฟ</span><strong>ภาพรวม · รายการ</strong></div>
             <div class="proto-cov-row"><span class="proto-chip must">FR-05</span><span>ใช้ได้วันละเท่าไหร่</span><strong>ภาพรวม · วิเคราะห์</strong></div>
             <div class="proto-cov-row"><span class="proto-chip must">FR-06</span><span>งบรายหมวด + เตือน 80/100%</span><strong>หมวดหมู่</strong></div>
@@ -197,6 +201,7 @@
             <div class="proto-cov-row"><span class="proto-chip could">ว่าง</span><span>ยังไม่มีแผนออม</span><strong>ชวนกด "สร้างแผนใหม่"</strong></div>
             <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>ยังไม่ได้ล็อกอิน</span><strong>แถบเหลือง + ปุ่มเข้าสู่ระบบ</strong></div>
             <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>เซสชันหมดอายุ</span><strong>แถบแดง + ให้ล็อกอินใหม่</strong></div>
+            <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>แชท: พิมพ์ไม่มียอด / ยอดเป็น 0</span><strong>การ์ด "อ่านข้อความไม่ออก" + ตัวอย่าง</strong></div>
             <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>กรอกยอดเป็น 0</span><strong>ปฏิเสธ + บอกให้ใส่มากกว่า 0</strong></div>
             <div class="proto-cov-row"><span class="proto-chip could">ผิด</span><span>ลบหมวดที่ยังมีรายการอยู่</span><strong>ปฏิเสธ + บอกจำนวนรายการ</strong></div>
           </div>

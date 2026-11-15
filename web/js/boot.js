@@ -1021,6 +1021,15 @@
       return;
     }
 
+    // เปิดไฟล์ตรงจากเครื่อง (ดับเบิลคลิก web/*.html → file://) = ไม่มี backend แน่นอน
+    // fetch('/api/me') บน file:// ล้มแบบไม่มี status ซึ่งปกติแปลว่า "เน็ตหลุด" → showOffline()
+    // แต่กรณีนี้ไม่มีข้อมูลจริงของใครให้โชว์ผิดเลย จึงเข้าโหมดตัวอย่างได้อย่างปลอดภัย
+    // (เกณฑ์ M3: prototype ต้อง "เปิดดูได้ในเบราว์เซอร์ ไม่ต้องมี server/DB")
+    if (window.location.protocol === 'file:') {
+      enterPreviewMode();
+      return;
+    }
+
     let me;
     try {
       me = await api.fetchMe();
@@ -1081,7 +1090,8 @@
     window.renderMonthlyBudgetSummary = function wrapped() {
       // dashboardState ประกาศด้วย const ใน app.js จึงไม่อยู่บน window แต่อยู่ใน global scope
       const key = typeof dashboardState !== 'undefined' ? dashboardState.activeMonthKey : null;
-      if (key && !loadedMonths.has(key)) {
+      // โหมดตัวอย่างไม่มี backend — ใช้งบจาก mock-data.js ตรงๆ ไม่ต้องยิง API ให้ล้มเปล่าๆ
+      if (key && !previewMode && !loadedMonths.has(key)) {
         loadMonthBudgets(key).then(() => originalRender()).catch(() => originalRender());
         return;
       }
