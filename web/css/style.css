@@ -3765,6 +3765,23 @@ button.an-legend-row:hover { background: var(--surface-soft); }
 /* modal แจ้งว่าทำไม่ได้ — ไอคอนต้องไม่ใช่สีเขียวแบบ "สำเร็จ" */
 .alert-modal .success-icon { background: var(--surface-soft); color: var(--muted); }
 
+/* หน้าตั้งค่า: ของที่ไม่ค่อยได้ใช้ (อีเมลธนาคาร) พับไว้ใต้ "ขั้นสูง" */
+.an-advanced > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+}
+.an-advanced > summary::-webkit-details-marker { display: none; }
+.an-advanced > summary::after { content: '›'; font-size: 1.3rem; color: var(--muted); transition: transform 0.2s; }
+.an-advanced[open] > summary::after { transform: rotate(90deg); }
+.an-advanced[open] > summary { margin-bottom: var(--space-3); }
+.an-advanced-item { display: grid; gap: var(--space-2); }
+.an-advanced-item > strong { color: var(--text-strong); }
+.an-advanced-item .an-limit-intro { margin: 0; }
+
 .limit-storage-note {
   padding: 10px 12px;
   border-radius: var(--radius-md);

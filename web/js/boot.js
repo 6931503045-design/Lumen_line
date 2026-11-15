@@ -531,6 +531,8 @@
     const logout = document.getElementById('logoutBtn');
     if (logout) {
       logout.hidden = false;
+      const logoutPanel = document.getElementById('logoutPanel');
+      if (logoutPanel) logoutPanel.hidden = false;
       logout.addEventListener('click', () => {
         openModal(`
           <div class="modal-card small an-detail">
@@ -640,7 +642,7 @@
                 <strong>${escapeHtml(String(opt.title || '').replace(/^\S+\s+/u, ''))}</strong>
                 <small>เดือนละ ${formatMoney(opt.monthlySaveSatang)} · ${opt.months} เดือน · ครบ ${bangkok(opt.targetDate, { day: 'numeric', month: 'short', year: 'numeric' })}</small>
               </span>
-              ${renderConfidenceBadge(opt.confidence)}
+              ${renderConfidenceHint(opt.confidence)}
             </button>
           `).join('')}
         </div>
