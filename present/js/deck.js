@@ -115,32 +115,59 @@
   }
 
   // ─────────────────────── แชทจำลอง ───────────────────────
+  // การ์ดทุกใบลอกโครงจากการ์ด Flex จริงของบอท (src/line/flex/) — หัวข้อ ป้าย แถว ปุ่ม ข้อความ ตรงกันทุกตัว
+  // ถ้าแก้การ์ดในบอท ให้แก้ที่นี่ด้วย ไม่งั้นภาพในสไลด์จะไม่ตรงกับจอมือถือตอนเดโมสด
   const MASCOT = '<img src="assets/mascot.png" alt="">';
-  const recorded = (item, amount, cat, pct) => ({
-    card: true,
-    html: `<div class="lc-head">บันทึกแล้ว ${MASCOT}</div>
-      <div class="lc-body">
-        <div class="lc-row"><span class="lc-tag">รายจ่าย · ${cat}</span></div>
-        <div class="lc-row"><span>${item}</span><b>฿${amount}</b></div>
-        <div class="lc-row" style="font-size:15px;color:#6b7a5e"><span>งบ${cat}เดือนนี้</span><span>${pct}%</span></div>
-        <div class="lc-bar"><i style="--w:${pct}%"></i></div>
-      </div>`,
+  const NOW_LABEL = '16 พ.ย. 2569 12:30';
+
+  /** โครงการ์ด: หัว (dark / warn / danger) + ตัวการ์ด + ปุ่มท้าย — ตรงกับ theme.ts */
+  function fxCard({ title, subtitle, tone = '', mascot = true, body, buttons = [] }) {
+    const foot = buttons.length
+      ? `<div class="fx-foot">${buttons.map(([label, primary]) => `<span class="fx-btn${primary ? ' primary' : ''}">${label}</span>`).join('')}</div>`
+      : '';
+    return {
+      fx: true,
+      html: `<div class="fx-head ${tone}"><div><b>${title}</b>${subtitle ? `<small>${subtitle}</small>` : ''}</div>${mascot && !tone ? MASCOT : ''}</div>
+        <div class="fx-body">${body}</div>${foot}`,
+    };
+  }
+
+  /** การ์ด "บันทึกแล้ว" (recordedCard.ts) — budget = { pct, spent, limit } หรือ null ถ้าหมวดนี้ไม่ได้ตั้งงบ */
+  const recorded = (item, amount, cat, budget) =>
+    fxCard({
+      title: 'บันทึกแล้ว',
+      subtitle: 'อย่าลืมตรวจรายการที่บันทึกไว้นะ',
+      body: `<span class="fx-tag">รายจ่าย · ${cat}</span>
+        <div class="fx-time">${NOW_LABEL}</div>
+        <div class="fx-item"><span>${item}</span><b>฿${amount}</b><img src="assets/icon-pencil.png" alt=""><img src="assets/icon-trash.png" alt=""></div>
+        ${budget ? `<div class="fx-line"></div>
+        <div class="fx-row"><span>งบ${cat}เดือนนี้</span><b>${budget.pct}%</b></div>
+        <div class="fx-bar"><i style="--w:${budget.pct}%"></i></div>
+        <div class="fx-sub">${budget.spent} / ${budget.limit}</div>
+        <div class="fx-note end">รอบงบ: รายเดือน (เริ่มวันที่ 1)</div>` : ''}`,
+      buttons: [['เปลี่ยนหมวด']],
+    });
+
+  /** การ์ด "วันนี้ใช้ได้อีก" (allowanceCard.ts) แบบที่ไม่ได้ตั้งเพดานรายวัน */
+  const remaining = fxCard({
+    title: 'วันนี้ใช้ได้อีก',
+    body: `<div class="fx-big">฿245.00</div>
+      <div class="fx-line"></div>
+      <div class="fx-title">คิดมาจาก</div>
+      <div class="fx-row val"><span>เงินเหลือทั้งเดือน</span><b>฿4,165.00</b></div>
+      <div class="fx-row val"><span>หารวันที่เหลือ</span><b>17 วัน</b></div>
+      <div class="fx-note">ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</div>`,
   });
-  const remaining = {
-    card: true,
-    html: `<div class="lc-head">วันนี้ใช้ได้อีก ${MASCOT}</div>
-      <div class="lc-body">
-        <div style="font-family:var(--font-display);font-size:44px;font-weight:700;line-height:1.1">฿245</div>
-        <div style="font-size:15px;color:#6b7a5e">คิดมาจาก เงินเหลือทั้งเดือน ÷ วันที่เหลือ<br>ข้อมูลเชิงวิเคราะห์ ไม่ใช่คำแนะนำทางการเงิน</div>
-      </div>`,
-  };
+
+  /** quick reply หมวดที่ใช้บ่อย (textHandler.ts topCategoryButtons) */
+  const quickReply = (labels) => ({ qr: labels });
 
   // แต่ละแชทแบ่งเป็นช่วง (segment) — ช่วงเดียวกับขั้นที่ผู้พูดพาเดโม
   const SCRIPTS = {
     cover: [[
       [900, { me: 'กาแฟ 80' }],
       [1500, { typing: true }],
-      [2300, recorded('กาแฟ', 80, 'อาหาร', 62)],
+      [2300, recorded('กาแฟ', 80, 'อาหาร', { pct: 62, spent: '฿1,240', limit: '฿2,000' })],
       [3800, { me: 'เหลือ' }],
       [4300, { typing: true }],
       [5000, remaining],
@@ -150,18 +177,21 @@
         [0, { step: 0 }],
         [400, { me: 'กาแฟ 80' }],
         [1000, { typing: true }],
-        [1800, recorded('กาแฟ', 80, 'อาหาร', 62)],
+        [1800, recorded('กาแฟ', 80, 'อาหาร', { pct: 62, spent: '฿1,240', limit: '฿2,000' })],
       ],
       [
         [0, { step: 1 }],
         [400, { me: 'ร้านป้าแดง 50' }],
         [1000, { typing: true }],
-        [1800, {
-          html: '🤔 ยังไม่รู้จัก <b>ร้านป้าแดง</b><br>ลงหมวด <b>อื่นๆ</b> ไว้ก่อน เลือกหมวดให้หน่อย<div class="chips" style="margin-top:10px"><span>อาหาร</span><span>เดินทาง</span><span>ช้อปปิ้ง</span><span>หมวดอื่น</span></div>',
-        }],
-        [3300, { press: 'อาหาร' }],
-        [3700, { typing: true }],
-        [4400, { html: '✅ ย้าย <b>ร้านป้าแดง</b> ไปหมวด <b>อาหาร</b> แล้ว<br><span style="color:#6b7a5e;font-size:16px">จำไว้แล้ว ครั้งหน้าลงหมวดนี้เอง</span>' }],
+        // บอทจริง: การ์ดบันทึกแล้ว (ลงหมวดอื่นๆ) + ข้อความถาม + ปุ่ม quick reply หมวดที่ใช้บ่อย
+        [1800, recorded('ร้านป้าแดง', 50, 'อื่นๆ', null)],
+        [2300, { html: '🤔 ยังไม่รู้จัก "ร้านป้าแดง" เลยลงหมวด อื่นๆ ไว้ก่อน — เลือกหมวดให้หน่อย ครั้งหน้าจะจำได้ครับ' }],
+        [2600, quickReply(['อาหาร', 'เดินทาง', 'ช้อปปิ้ง', 'ที่พัก/บิล', 'หมวดอื่น'])],
+        [4000, { press: 'อาหาร' }],
+        [4400, { dropQr: true }],
+        [4500, { me: 'หมวด อาหาร' }],
+        [5000, { typing: true }],
+        [5700, recorded('ร้านป้าแดง', 50, 'อาหาร', { pct: 65, spent: '฿1,290', limit: '฿2,000' })],
       ],
       [
         [0, { step: 2 }],
@@ -173,28 +203,35 @@
     missing: [[
       [700, { me: 'กาแฟ' }],
       [1300, { typing: true }],
-      [2100, {
-        card: true,
-        html: '<div class="lc-head err">อ่านไม่ออก 🙏</div><div class="lc-body"><div>ไม่เจอจำนวนเงินในข้อความ</div><div style="color:#6b7a5e;font-size:16px">ลองพิมพ์ <b style="color:#111">ชื่อ + จำนวน</b> เช่น <b style="color:#111">กาแฟ 80</b></div></div>',
-      }],
+      // buildUnreadableCard() ใน errorCard.ts
+      [2100, fxCard({
+        title: 'อ่านข้อความไม่ออก',
+        subtitle: 'ยังไม่ได้บันทึกอะไร',
+        tone: 'danger',
+        body: `<div style="margin-top:4px">ยังจับไม่ได้ว่ารายการนี้คืออะไรและกี่บาทครับ ใส่ชื่อรายการกับจำนวนเงินมาด้วยนะครับ</div>
+          <div class="fx-title">ลองพิมพ์แบบนี้</div>
+          <div class="fx-soft"><b>กาแฟ 80</b><b>ข้าว 1.2k</b><b>+เงินเดือน 15000</b></div>`,
+      })],
       [2900, { tag: true }],
     ]],
     long: [[
       [900, { me: 'เมื่อวานกินข้าวกับเพื่อนหมดไปสามร้อย' }],
       [1600, { typing: true }],
-      [2800, {
-        card: true,
-        html: `<div class="lc-head warn">⏳ ยังไม่ได้บันทึก</div>
-          <div class="lc-body">
-            <div class="lc-row"><span class="lc-tag">รายจ่าย · อาหาร</span><span style="font-size:14px;color:#6b7a5e">AI ช่วยอ่าน</span></div>
-            <div class="lc-row"><span>ข้าวกับเพื่อน · เมื่อวาน</span><b>฿300</b></div>
-            <div class="lc-btns"><span class="go">ยืนยัน</span><span>ยกเลิก</span></div>
-          </div>`,
-      }],
+      // buildPendingCard() — สรุปมาจาก describePending() ใน pending.service.ts
+      [2800, fxCard({
+        title: 'เข้าใจแบบนี้ถูกไหมครับ',
+        subtitle: 'ยังไม่ได้บันทึก — กดยืนยันก่อนนะครับ',
+        body: `<div class="fx-soft">รายจ่าย "ข้าวกับเพื่อน" ฿300.00 หมวด อาหาร วันที่ 15 พ.ย. 2569
+
+กดยืนยันเพื่อบันทึกนะครับ</div>`,
+        buttons: [['ไม่ใช่'], ['ยืนยัน', true]],
+      })],
       [4400, { pressBtn: 'ยืนยัน' }],
-      [4900, { typing: true }],
-      [5600, recorded('ข้าวกับเพื่อน', 300, 'อาหาร', 74)],
-      [6000, { tag: true }],
+      [4800, { me: 'ยืนยัน' }],
+      [5300, { typing: true }],
+      // ไม่แสดงแถบงบในช่องนี้ — ช่องแคบกว่าโทรศัพท์ในสไลด์ 4 (บอทจริงก็ไม่แสดงถ้าหมวดนั้นไม่ได้ตั้งงบ)
+      [6000, recorded('ข้าวกับเพื่อน', 300, 'อาหาร', null)],
+      [6400, { tag: true }],
     ]],
   };
 
@@ -220,12 +257,16 @@
       return;
     }
     if (ev.press) {
-      const chip = $$('.chips span', body).reverse().find((el) => el.textContent === ev.press);
+      const chip = $$('.qr span', body).reverse().find((el) => el.textContent === ev.press);
       chip?.classList.add('pressed');
       return;
     }
+    if (ev.dropQr) {
+      $$('.qr', body).forEach((el) => el.remove());
+      return;
+    }
     if (ev.pressBtn) {
-      const btn = $$('.lc-btns span', body).reverse().find((el) => el.textContent === ev.pressBtn);
+      const btn = $$('.fx-btn', body).reverse().find((el) => el.textContent === ev.pressBtn);
       btn?.classList.add('pressed');
       return;
     }
@@ -240,17 +281,29 @@
     } else if (ev.me) {
       msg.className = 'msg me';
       msg.textContent = ev.me;
+    } else if (ev.qr) {
+      msg.className = 'msg qr';
+      msg.innerHTML = ev.qr.map((label) => `<span>${label}</span>`).join('');
     } else {
-      msg.className = `msg bot${ev.card ? ' card-msg' : ''}`;
+      msg.className = `msg bot${ev.fx ? ' fx-msg' : ''}`;
       msg.innerHTML = ev.html;
     }
     body.appendChild(msg);
     if (instant) {
       msg.classList.add('show');
     } else {
-      requestAnimationFrame(() => requestAnimationFrame(() => msg.classList.add('show')));
+      // setTimeout แทน requestAnimationFrame: rAF ถูกพักเมื่อแท็บ/หน้าต่างไม่ได้โฟกัส ข้อความจะค้างโปร่งใส
+      setTimeout(() => msg.classList.add('show'), 30);
     }
-    body.scrollTop = body.scrollHeight;
+    // แชทเริ่มจากด้านบนแล้วไหลลง — พอล้นจอค่อยเลื่อนตามข้อความใหม่ (scroll-behavior: smooth)
+    // เลื่อนซ้ำเมื่อรูปในการ์ด (mascot ไอคอน) โหลดเสร็จ เพราะความสูงการ์ดเพิ่มทีหลัง ไม่งั้นท้ายการ์ดใบล่างสุดโดนตัด
+    const scrollDown = () => { body.scrollTop = body.scrollHeight; };
+    scrollDown();
+    msg.querySelectorAll('img').forEach((img) => {
+      if (!img.complete) img.addEventListener('load', scrollDown, { once: true });
+    });
+    setTimeout(scrollDown, 450);
+    setTimeout(scrollDown, 1300);
   }
 
   /** เล่นแชทตั้งแต่ช่วงที่ fromSeg — ช่วงก่อนหน้าวาดทันทีไม่มีแอนิเมชัน */

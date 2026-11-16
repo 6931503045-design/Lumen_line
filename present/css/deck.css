@@ -828,3 +828,51 @@ html.live .live-phone { display: block; }
   pointer-events: none;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* ───────────── การ์ดในแชทจำลอง — ลอกโครงจากการ์ด Flex จริงของบอท (src/line/flex/) ─────────────
+ * สีและลำดับแถวตรงกับ theme.ts: หัวดำตัวหนังสือมะนาว + mascot, ตัวการ์ดขาว, ป้ายประเภทพื้นอ่อน,
+ * แถบงบ 10px, ปุ่มหลักพื้นดำตัวหนังสือมะนาว · ขนาดตัวอักษรขยายจากของจริงตามสัดส่วนจอในสไลด์ */
+.msg.fx-msg { padding: 0; width: 88%; max-width: 88%; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1); }
+.fx-head { display: flex; align-items: center; gap: 10px; padding: 15px 16px; background: #14170f; }
+.fx-head > div { flex: 1; min-width: 0; }
+.fx-head b { display: block; color: #c6ff3d; font-size: 21px; line-height: 1.25; }
+.fx-head small { display: block; margin-top: 3px; color: #a7b39a; font-size: 13px; line-height: 1.3; }
+.fx-head img { width: 64px; flex: none; }
+.fx-head.warn { background: #fff3d6; }
+.fx-head.warn b, .fx-head.warn small { color: #9a5b00; }
+.fx-head.danger { background: #ffe1e1; }
+.fx-head.danger b, .fx-head.danger small { color: #a12a2a; }
+.fx-body { padding: 12px 16px 16px; color: #1c2416; font-size: 17px; }
+.fx-tag { display: inline-block; padding: 3px 11px; border-radius: 12px; background: #eef3e4; color: #4a5a37; font-size: 13px; font-weight: 700; margin-top: 4px; }
+.fx-tag.in { background: #e4f4e5; color: #2f7a33; }
+.fx-time { margin-top: 10px; color: #6b7a5e; font-size: 12px; }
+.fx-item { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.fx-item span { flex: 1; font-size: 18px; }
+.fx-item b { font-size: 22px; color: #10140b; }
+.fx-item img { width: 18px; height: 18px; margin-left: 6px; opacity: 0.8; }
+.fx-line { height: 1px; background: #dfe9d3; margin: 14px 0 12px; }
+.fx-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; color: #6b7a5e; }
+.fx-row b { color: #6b7a5e; }
+.fx-row.val { font-size: 15px; color: #6b7a5e; margin-top: 7px; }
+.fx-row.val b { color: #1c2416; }
+.fx-bar { height: 10px; border-radius: 5px; background: #e8ece2; overflow: hidden; margin-top: 6px; }
+.fx-bar i { display: block; height: 100%; width: 0; border-radius: 5px; background: #8fbf18; transition: width 1.2s var(--ease-out) 0.3s; }
+.msg.show .fx-bar i { width: var(--w); }
+.fx-sub { text-align: right; color: #6b7a5e; font-size: 12px; margin-top: 5px; }
+.fx-note { color: #6b7a5e; font-size: 12px; margin-top: 12px; }
+.fx-note.end { text-align: right; }
+.fx-big { font-family: var(--font-display); font-size: 40px; font-weight: 700; line-height: 1.1; color: #10140b; margin-top: 2px; }
+.fx-title { font-size: 13px; font-weight: 700; color: #6b7a5e; margin-top: 12px; }
+.fx-soft { background: #f4f8ee; border-radius: 8px; padding: 11px 12px; margin-top: 8px; font-size: 15px; white-space: pre-line; line-height: 1.5; }
+.fx-soft b { display: block; color: #10140b; }
+.fx-foot { display: flex; gap: 8px; padding: 0 14px 14px; }
+.fx-btn { flex: 1; text-align: center; padding: 11px 6px; border-radius: 14px; background: #f4f8ee; color: #10140b; font-weight: 700; font-size: 15px; transition: transform 0.2s, background 0.3s, color 0.3s; }
+.fx-btn.primary { background: #14170f; color: #c6ff3d; }
+.fx-btn.pressed { transform: scale(0.94); background: #c6ff3d; color: #10140b; }
+
+/* quick reply ของ LINE — แถวปุ่มเม็ดมนที่โผล่ใต้ข้อความล่าสุด กดแล้วหายไป */
+.msg.qr { align-self: stretch; max-width: none; display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 0; }
+.qr span { padding: 8px 14px; border-radius: 999px; background: #fff; border: 1.5px solid #c9d3bd; font-weight: 700; font-size: 15px; transition: transform 0.2s, background 0.3s; }
+.qr span.pressed { background: #c6ff3d; border-color: #14170f; transform: scale(0.94); }
+/* สไลด์ทางที่ผิด: เว้นที่ใต้แชทให้แถบสรุป ไม่ให้บังการ์ดใบล่างสุด */
+.s-wrong .panel-chat .chat-body { bottom: 96px; }

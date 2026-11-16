@@ -105,7 +105,6 @@ window.DECK_EN = {
 
   // ── 06 สถาปัตยกรรม ──
   'เบื้องหลัง': 'Behind the scenes',
-  '✂️ ตัดได้': '✂️ optional',
   'ทุกช่องทาง ไหลเข้า': 'Every channel flows into ',
   'เซิร์ฟเวอร์เดียว': 'one server',
   'แชท LINE': 'LINE chat',
