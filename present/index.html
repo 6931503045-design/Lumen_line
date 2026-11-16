@@ -52,6 +52,7 @@
         <span data-sec="5">05 พิสูจน์</span>
       </nav>
       <button id="liveBtn" type="button" title="M"><span class="live-off">📱 แชร์จอมือถือ</span><span class="live-on"><i class="live-dot"></i><span class="live-label">LIVE · <span>หยุดแชร์จอ</span></span></span></button>
+      <button id="liveZoomBtn" type="button" title="Z">⤢ <span>ขยายจอ</span></button>
       <button id="langBtn" type="button" title="L"><span data-l="th">TH</span><span data-l="en">EN</span></button>
     </header>
 
@@ -358,45 +359,59 @@
     </section>
 
     <!-- ═══════════ 10 Golden Thread ═══════════ -->
-    <section class="slide s-thread" data-sec="5" data-title="Golden Thread">
+    <section class="slide s-thread" data-sec="5" data-title="3 สัญญา — Golden Thread">
       <div class="head">
         <div>
           <span class="eyebrow rv" style="--d:0"><b>05</b> Golden Thread</span>
-          <h2 class="rv" style="--d:1">ทุกฟีเจอร์เริ่มจาก<span class="hl">ปัญหา</span> จบที่<span class="hl">เทสต์</span></h2>
+          <h2 class="rv" style="--d:1"><span class="hl">3 สัญญา</span>ที่เราให้ผู้ใช้</h2>
         </div>
-        <p class="lead rv" style="--d:2">อ่านซ้ายไปขวา — แถวสีเขียวคือคำสั่ง <b style="color:var(--lime)">เหลือ</b> ที่เพิ่งเห็นในเดโม</p>
+        <p class="lead rv" style="--d:2">แอปเงินจะมีประโยชน์ก็ต่อเมื่อผู้ใช้เชื่อมัน — ทุกสัญญาเริ่มจากปัญหาจริง และมีการตรวจยืนยัน</p>
       </div>
-      <div class="table">
-        <div class="tr th rv" style="--d:2"><div>ปัญหา</div><div>Requirement</div><div>Design</div><div>Feature</div><div>Test</div></div>
-        <div class="tr td rv" style="--d:3"><div>จดแล้วเลิก เพราะหลายขั้นตอน</div><div><b>FR-01</b> จดจากข้อความเดียว</div><div>S4 Text Parser</div><div>พิมพ์ <b>กาแฟ 80</b></div><div><code>regexParser.test.ts</code><span class="ok">✓</span></div></div>
-        <div class="tr td rv" style="--d:4"><div>เงินออกแล้วลืมจด</div><div><b>FR-02</b> อีเมลธนาคารเข้าเอง</div><div>S8 Email · DKIM</div><div>K PLUS ขึ้นเองใน 5 นาที</div><div><code>kbankParser.test.ts</code><span class="ok">✓</span></div></div>
-        <div class="tr td star rv" style="--d:5"><div><b>"วันนี้ใช้ได้อีกเท่าไหร่?"</b></div><div><b>FR-05</b> safe-to-spend</div><div>Money Engine S5.2 · ห้าม AI</div><div>คำสั่ง <b>เหลือ</b></div><div><code>safeToSpend.test.ts</code><span class="ok">✓</span></div></div>
-        <div class="tr td rv" style="--d:6"><div>ใช้เกินงบ สิ้นเดือนถึงรู้</div><div><b>FR-06</b> เตือน 80% / 100%</div><div>S5.8 + ธงใน budgets</div><div>แถบงบ + เตือนในแชท</div><div><code>budget.service.test.ts</code><span class="ok">✓</span></div></div>
-        <div class="tr td rv" style="--d:7"><div><b>"อยากได้ของ ต้องเก็บยังไง?"</b></div><div><b>FR-07</b> แผนออม 3 ทาง</div><div>S5.3–S5.5</div><div>เร็ว · สมดุล · สบาย</div><div><code>plan.service.test.ts</code><span class="ok">✓</span></div></div>
-      </div>
-      <div class="flow card glass rv" style="--d:8" data-zoom="assets/sequence-fr1.png" title="กดเพื่อดู sequence diagram เต็ม">
-        <div class="row fhead"><span><b>Sequence diagram · FR-01</b>เส้นทางของ "กาแฟ 80" ตั้งแต่พิมพ์จนได้การ์ด</span><span>กดเพื่อขยาย ⤢</span></div>
-        <div class="nodes">
-          <div class="fn" data-en="<b>User</b>types &quot;กาแฟ 80&quot;"><b>ผู้ใช้</b>พิมพ์ "กาแฟ 80"</div>
-          <div class="fn"><b>LINE</b>webhook</div>
-          <div class="fn"><b>S1 Gateway</b>ลายเซ็น · กันซ้ำ</div>
-          <div class="fn"><b>S4 Parser</b>8,000 สตางค์ · อาหาร</div>
-          <div class="fn"><b>S5 Money</b>บันทึก · เช็คงบ</div>
-          <div class="fn"><b>S6 DB</b>กรอง user_id</div>
-          <div class="fn"><b>การ์ด</b>"บันทึกแล้ว"</div>
-          <span class="packet"></span>
+      <div class="promises">
+      <div class="promise card lime star rv" style="--d:3" data-tilt>
+        <div class="pn num">1</div>
+        <h3>ยอดเงินถูกต้องเสมอ</h3>
+        <p>ระบบคิดเลขเอง ไม่ให้ AI คิด</p>
+        <div class="chain">
+            <div><span>ปัญหา</span><b>"วันนี้ใช้ได้อีกเท่าไหร่?"</b></div>
+            <div><span>ข้อกำหนด</span><b>FR-05</b></div>
+            <div><span>ในแอป</span><b>คำสั่ง <q>เหลือ</q></b></div>
+            <div><span>ตรวจแล้ว</span><b class="ok">✓ ผ่าน</b></div>
         </div>
+      </div>
+      <div class="promise card glass rv" style="--d:4" data-tilt>
+        <div class="pn num">2</div>
+        <h3>AI ไม่แก้ข้อมูลของคุณเอง</h3>
+        <p>AI ช่วยอ่าน แต่คุณต้องกดยืนยันก่อนถึงจะบันทึก</p>
+        <div class="chain">
+            <div><span>ปัญหา</span><b>"AI อาจเข้าใจผิด"</b></div>
+            <div><span>ข้อกำหนด</span><b>FR-14</b></div>
+            <div><span>ในแอป</span><b>ปุ่ม <q>ยืนยัน</q></b></div>
+            <div><span>ตรวจแล้ว</span><b class="ok">✓ ผ่าน</b></div>
+        </div>
+      </div>
+      <div class="promise card glass rv" style="--d:5" data-tilt>
+        <div class="pn num">3</div>
+        <h3>AI ล่ม บอทก็ยังใช้ได้</h3>
+        <p>พิมพ์สั้น ๆ ระบบอ่านเองได้ ไม่ต้องพึ่ง AI</p>
+        <div class="chain">
+            <div><span>ปัญหา</span><b>"จดหลายขั้นตอน เลยเลิกจด"</b></div>
+            <div><span>ข้อกำหนด</span><b>FR-01</b></div>
+            <div><span>ในแอป</span><b>พิมพ์ <q>กาแฟ 80</q></b></div>
+            <div><span>ตรวจแล้ว</span><b class="ok">✓ ผ่าน</b></div>
+        </div>
+      </div>
       </div>
     </section>
 
     <!-- ═══════════ 11 พิสูจน์ ═══════════ -->
-    <section class="slide light s-proof" data-sec="5" data-title="พิสูจน์ — เทสต์ 1,299 ข้อ">
+    <section class="slide light s-proof" data-sec="5" data-title="พิสูจน์ — ตรวจ 1,299 ข้อ">
       <span class="eyebrow rv" style="--d:0"><b>05</b> พิสูจน์</span>
-      <h2 class="rv" style="--d:1">ตัวเลขพวกนี้<span class="hl">เชื่อได้</span>ยังไง</h2>
+      <h2 class="rv" style="--d:1" data-en="How do we <span class=&quot;hl&quot;>prove</span> these promises?">สัญญาพวกนี้<span class="hl">พิสูจน์</span>ได้ยังไง</h2>
       <div class="bento">
         <div class="card mist c-tests rv" style="--d:2" data-tilt>
           <div class="folds"><i></i><i></i><i></i><i></i><i></i></div>
-          <div><div class="bignum num" data-count="1299">1,299</div><p>เทสต์อัตโนมัติ ผ่านทั้งหมด<br /><span class="muted">ครอบทั้งตอนเปิดและปิด AI</span></p></div>
+          <div><div class="bignum num" data-count="1299">1,299</div><p>ข้อตรวจอัตโนมัติ ผ่านทั้งหมด<br /><span class="muted">ครอบทั้งตอนเปิดและปิด AI</span></p></div>
         </div>
         <div class="card lime c-chat rv" style="--d:3" data-tilt>
           <div class="avatars"><span>กาแฟ</span><span>เหลือ</span><span>ข้าว</span><span>สรุป</span></div>
@@ -404,13 +419,13 @@
         </div>
         <div class="card mist c-push rv" style="--d:4" data-tilt>
           <div class="orb-in"></div>
-          <div class="pipe"><span>push</span>→<span>เทสต์</span>→<span class="ok">deploy</span></div>
-          <div><h3 style="font-size:44px">ทุก push</h3><p>เทสต์ต้องผ่านก่อนถึงขึ้นเว็บจริง</p></div>
+          <div class="pipe"><span>แก้โค้ด</span>→<span>ตรวจ</span>→<span class="ok">ขึ้นระบบจริง</span></div>
+          <div><h3 style="font-size:44px">ทุกครั้งที่แก้</h3><p>ต้องตรวจผ่านก่อน เหมือนเช็กลิสต์ก่อนขึ้นบิน</p></div>
         </div>
         <div class="card dark c-bug rv" style="--d:5" data-tilt>
-          <div class="row"><span class="cut">✂️ เรื่องจริงที่เกือบหลุด</span><span class="pill lime">เทสต์จับได้ก่อนถึงผู้ใช้</span></div>
-          <div class="bugline"><span class="a num">79.99966%</span><span class="arrow">→ ปัด →</span><span class="b num">80%</span></div>
-          <p class="muted">โค้ดเตือนงบที่ AI เขียน ดูถูกทุกอย่าง แต่ปัดเลขก่อนเทียบ เลยเตือน "ใช้ไป 80%" ทั้งที่ยังไม่ถึง</p>
+          <div class="row"><span class="cut">✂️ เรื่องจริงที่เกือบหลุด</span><span class="pill lime">การตรวจจับได้ก่อนถึงผู้ใช้</span></div>
+          <div class="bugline"><span class="a">ยังใช้ไม่ถึง 80%</span><span class="arrow">→</span><span class="b">"งบใกล้เต็มแล้ว!"</span></div>
+          <p class="muted">โค้ดที่ AI เขียนให้ ดูถูกทุกอย่าง แต่เกือบเตือนผู้ใช้ผิดว่างบใกล้เต็ม ทั้งที่ยังไม่ถึง</p>
         </div>
       </div>
     </section>
@@ -420,7 +435,7 @@
       <div class="copy">
         <span class="eyebrow rv" style="--d:0"><b>05</b> บทเรียน</span>
         <h2 class="rv" style="--d:1">AI เร่ง<span class="hl">การเขียน</span>ได้<br />แต่ไม่ได้เร่ง<br /><span class="hl">การรู้ว่าถูก</span></h2>
-        <p class="lead rv" style="--d:2">เราใช้ AI ช่วยเขียนโค้ดภายใต้กติกาที่ทีมเขียนไว้ — และให้เทสต์เป็นคนตัดสิน</p>
+        <p class="lead rv" style="--d:2">เราใช้ AI ช่วยเขียนโค้ดภายใต้กติกาที่ทีมเขียนไว้ — และให้การตรวจเป็นคนตัดสิน</p>
       </div>
       <div class="tall t1 card dark rv" style="--d:3" data-tilt>
         <div class="glow"></div>
@@ -428,12 +443,12 @@
       </div>
       <div class="tall t2 card rv" style="--d:4" data-tilt>
         <div class="glow"></div>
-        <p>กำกับด้วย <b>AIDO.md</b> และ <b>กฎเหล็ก 7 ข้อ</b> — PR ที่ผิดกฎ ไม่ merge</p>
+        <p>ทีมเขียน<b>กติกา 7 ข้อ</b>ให้ AI ทำตาม — งานที่ผิดกติกา ไม่รับเข้าระบบ</p>
       </div>
       <div class="tall t3 card lime rv" style="--d:5" data-tilt>
         <img class="amp floaty" src="assets/mascot.png" alt="" />
         <b>JOD tang ↗</b>
-        <p data-en="<b>1,299 tests</b> decide what is right — not the AI’s confidence">เทสต์ <b>1,299 ข้อ</b> คือสิ่งที่บอกว่าถูก ไม่ใช่ความมั่นใจของ AI</p>
+        <p data-en="<b>1,299 checks</b> decide what is right — not the AI’s confidence">การตรวจ <b>1,299 ข้อ</b> คือสิ่งที่บอกว่าถูก ไม่ใช่ความมั่นใจของ AI</p>
       </div>
     </section>
 
@@ -486,6 +501,7 @@
         <span><kbd>B</kbd></span><span>จอดำ (ตอนสลับไปเดโมจริง)</span>
         <span><kbd>R</kbd></span><span>เล่นแชทจำลองในสไลด์นี้ใหม่</span>
         <span><kbd>M</kbd></span><span>เริ่ม/หยุดแชร์จอมือถือ (สไลด์เดโม 4, 5, 9)</span>
+        <span><kbd>Z</kbd></span><span>ขยายจอมือถือเต็มหน้าต่าง (ตอนแชร์จออยู่)</span>
         <span><kbd>Esc</kbd></span><span>ปิดหน้าต่างนี้</span>
       </div>
     </div>
@@ -493,6 +509,7 @@
 
   <div class="panel" id="overview"><div class="panel-box"><h4>ภาพรวมสไลด์</h4><div class="grid"></div></div></div>
   <div id="lightbox"><img alt="" /></div>
+  <div id="liveZoom"><video autoplay muted playsinline></video><span class="lz-hint">ลูกกลิ้งเมาส์ หรือ + / − = ซูมตรงจุดที่ชี้ · คลิก, Z หรือ Esc = ย่อกลับ</span></div>
   <div id="blackout"></div>
   <div id="toast" role="status" aria-live="polite"></div>
 

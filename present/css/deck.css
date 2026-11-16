@@ -805,6 +805,59 @@ html.live #liveBtn .live-on { display: inline-flex; }
 }
 html.live .live-video { display: block; }
 
+/* ปุ่ม "ขยายจอ" โผล่เฉพาะตอนแชร์จออยู่ และอยู่ในสไลด์เดโม (ใช้เงื่อนไขเดียวกับปุ่ม LIVE ตัวเต็ม) */
+#liveZoomBtn {
+  display: none;
+  pointer-events: auto;
+  cursor: pointer;
+  margin-left: 10px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--lime);
+  color: #0f130b;
+  font: 700 14px/1 var(--font-body);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex: none;
+}
+#liveZoomBtn.show { display: inline-flex; align-items: center; gap: 6px; }
+
+/* จอมือถือขยายเต็มหน้าต่าง — อยู่นอก #stage จึงไม่โดนย่อตามขนาดสไลด์ ได้ความละเอียดเต็มจอ */
+#liveZoom {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  display: none;
+  background: rgba(5, 7, 4, 0.94);
+  cursor: zoom-out;
+}
+#liveZoom.open { display: block; }
+#liveZoom video {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: contain;
+  transform: scale(var(--lz-scale, 1));
+  transform-origin: var(--lz-x, 50%) var(--lz-y, 50%);
+  transition: transform 0.25s var(--ease-out);
+}
+#liveZoom .lz-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 2.5vh;
+  transform: translateX(-50%);
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  font: 600 14px/1 var(--font-body);
+  white-space: nowrap;
+  animation: lzHint 4s forwards;
+}
+@keyframes lzHint { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
+
 .live-phone { display: none; position: absolute; }
 html.live .live-phone { display: block; }
 

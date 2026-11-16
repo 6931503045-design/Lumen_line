@@ -184,30 +184,24 @@
 .s-thread .head { display: flex; justify-content: space-between; align-items: flex-end; }
 .s-thread h2 { font-size: 68px; margin-top: 18px; }
 .s-thread .head .lead { width: 520px; font-size: 22px; }
-.s-thread .table { margin-top: 34px; display: grid; gap: 10px; }
-.s-thread .tr { position: relative; display: grid; grid-template-columns: 380px 300px 330px 330px 1fr; gap: 0; align-items: center; border-radius: 18px; padding: 0 8px; min-height: 64px; font-size: 20px; overflow: hidden; }
-.s-thread .tr > div { padding: 12px 18px; position: relative; }
-.s-thread .tr > div + div::before { content: '→'; position: absolute; left: -8px; color: var(--dim); }
-.s-thread .th { min-height: 48px; font-size: 16px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-.s-thread .td { background: rgba(255, 255, 255, 0.035); border: 1px solid rgba(255, 255, 255, 0.05); }
-.s-thread .td code { font-family: ui-monospace, Consolas, monospace; font-size: 16px; color: var(--muted); }
-.s-thread .td .ok { color: var(--lime); font-weight: 700; margin-left: 6px; }
-.s-thread .td.star { background: linear-gradient(90deg, var(--lime-2), var(--lime)); color: #0f130b; border-color: transparent; box-shadow: 0 20px 50px rgba(198, 244, 50, 0.25); transform: scale(1.015); }
-.s-thread .td.star code { color: rgba(15, 19, 11, 0.7); }
-.s-thread .td.star .ok { color: #0f130b; }
-.s-thread .td.star > div + div::before { color: rgba(15, 19, 11, 0.5); }
-.s-thread .td.star::after { content: ''; position: absolute; top: 0; bottom: 0; width: 160px; left: -200px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent); animation: sweep 3.2s ease-in-out infinite 1.4s; }
+.s-thread .promises { margin-top: 56px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; height: 600px; }
+.s-thread .promise { display: flex; flex-direction: column; padding: 40px 40px 34px; }
+.s-thread .promise .pn { font-family: var(--font-display); font-size: 84px; font-weight: 700; line-height: 1; color: var(--lime); }
+.s-thread .promise h3 { font-size: 40px; margin-top: 18px; }
+.s-thread .promise > p { font-size: 22px; margin-top: 10px; color: var(--muted); }
+.s-thread .chain { position: relative; z-index: 1; margin-top: auto; display: grid; gap: 8px; }
+.s-thread .chain > div { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 18px; border-radius: 14px; background: rgba(255, 255, 255, 0.05); font-size: 19px; }
+.s-thread .chain span { color: var(--muted); font-size: 15px; font-weight: 700; letter-spacing: 0.08em; white-space: nowrap; }
+.s-thread .chain b { text-align: right; }
+.s-thread .chain q { quotes: none; padding: 2px 10px; border-radius: 8px; background: #0f130b; color: var(--lime); }
+.s-thread .chain .ok { color: var(--lime); }
+.s-thread .promise.lime .pn,
+.s-thread .promise.lime .chain .ok { color: #0f130b; }
+.s-thread .promise.lime > p,
+.s-thread .promise.lime .chain span { color: rgba(15, 19, 11, 0.65); }
+.s-thread .promise.lime .chain > div { background: rgba(15, 19, 11, 0.08); }
+.s-thread .promise.star::before { content: ''; position: absolute; top: 0; bottom: 0; width: 160px; left: -200px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent); animation: sweep 3.2s ease-in-out infinite 1.4s; pointer-events: none; }
 @keyframes sweep { to { left: 110%; } }
-.s-thread .flow { position: absolute; left: 110px; right: 110px; bottom: 100px; height: 190px; border-radius: 28px; padding: 22px 30px; display: flex; flex-direction: column; justify-content: space-between; cursor: zoom-in; }
-.s-thread .flow .row { justify-content: space-between; }
-.s-thread .flow .fhead { font-size: 18px; color: var(--muted); }
-.s-thread .flow .fhead b { color: var(--ink); font-family: var(--font-display); font-size: 22px; margin-right: 10px; }
-.s-thread .nodes { position: relative; display: flex; justify-content: space-between; gap: 12px; }
-.s-thread .nodes::before { content: ''; position: absolute; left: 40px; right: 40px; top: 50%; height: 2px; background: repeating-linear-gradient(90deg, rgba(198, 244, 50, 0.5) 0 8px, transparent 8px 16px); }
-.s-thread .fn { position: relative; z-index: 1; flex: 1; padding: 12px 14px; border-radius: 16px; background: #1a1f15; border: 1px solid rgba(255, 255, 255, 0.08); text-align: center; font-size: 15px; color: var(--muted); }
-.s-thread .fn b { display: block; color: var(--ink); font-size: 18px; font-family: var(--font-display); }
-.s-thread .fn.lit { border-color: var(--lime); box-shadow: 0 0 0 3px rgba(198, 244, 50, 0.18); }
-.s-thread .packet { position: absolute; top: 50%; left: 0; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 18px var(--lime); z-index: 2; }
 
 /* ── 11 พิสูจน์ ──────────────────────────────────────── */
 .s-proof h2 { margin: 22px 0 40px; }
@@ -235,8 +229,8 @@
 .s-proof .c-bug { grid-column: span 2; justify-content: space-between !important; }
 .s-proof .c-bug .row { justify-content: space-between; }
 .s-proof .bugline { display: flex; align-items: center; gap: 22px; font-family: var(--font-display); font-weight: 600; }
-.s-proof .bugline .a { font-size: 62px; }
-.s-proof .bugline .b { font-size: 62px; color: var(--amber); }
+.s-proof .bugline .a { font-size: 50px; }
+.s-proof .bugline .b { font-size: 50px; color: var(--amber); }
 .s-proof .bugline .arrow { font-size: 40px; opacity: 0.5; }
 .s-proof .cut { font-size: 16px; color: var(--amber); font-weight: 700; }
 

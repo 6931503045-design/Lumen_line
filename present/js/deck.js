@@ -82,7 +82,6 @@
     $$('[data-count]', slide).forEach(countUp);
     $$('[data-chat]', slide).forEach((body) => playChat(body.dataset.chat));
     $('.tower', slide)?.classList.add('go');
-    if (slide.classList.contains('s-thread')) startPacket(slide);
   }
 
   function leaveSlide(slide) {
@@ -90,7 +89,6 @@
     $('.tower', slide)?.classList.remove('go');
     $$('.fan-item.focus', slide).forEach((el) => el.classList.remove('focus'));
     $('.fan', slide)?.classList.remove('has-focus');
-    if (slide.classList.contains('s-thread')) stopPacket();
   }
 
   // ─────────────────────── ตัวเลขวิ่ง ───────────────────────
@@ -378,33 +376,6 @@
   });
   lightbox.addEventListener('click', () => lightbox.classList.remove('open'));
 
-  // ─────────────────────── Golden Thread: จุดวิ่งตามเส้นทาง FR-01 ───────────────────────
-  let packetRaf = 0;
-  function startPacket(slide) {
-    const nodesWrap = $('.nodes', slide);
-    const packet = $('.packet', slide);
-    const nodes = $$('.fn', slide);
-    if (!nodesWrap || !packet || reduceMotion) return;
-    const t0 = performance.now();
-    const loop = (now) => {
-      const w = nodesWrap.clientWidth;
-      const p = ((now - t0) % 5200) / 4600;
-      const x = Math.min(1, p) * (w - 18);
-      packet.style.left = `${x}px`;
-      packet.style.opacity = p > 1 ? '0' : '1';
-      const center = x + 9;
-      nodes.forEach((n) => {
-        const left = n.offsetLeft;
-        n.classList.toggle('lit', p <= 1 && center >= left && center <= left + n.offsetWidth);
-      });
-      packetRaf = requestAnimationFrame(loop);
-    };
-    packetRaf = requestAnimationFrame(loop);
-  }
-  function stopPacket() {
-    cancelAnimationFrame(packetRaf);
-  }
-
   // ─────────────────────── การ์ดเอียงตามเมาส์ + พารัลแลกซ์ ───────────────────────
   $$('[data-tilt]').forEach((card) => {
     card.addEventListener('pointermove', (e) => {
@@ -557,9 +528,9 @@
 
   // ─────────────────────── คีย์บอร์ด เมาส์ สัมผัส ───────────────────────
   function closePanels() {
-    const anyOpen = $$('.panel.open, #lightbox.open').length > 0;
-    $$('.panel.open, #lightbox.open').forEach((p) => p.classList.remove('open'));
-    return anyOpen;
+    const anyOpen = $('.panel.open, #lightbox.open').length > 0;
+    $('.panel.open, #lightbox.open').forEach((p) => p.classList.remove('open'));
+    return closeLiveZoom() || anyOpen;
   }
 
   function onKey(e, fromPopup = false) {
@@ -594,6 +565,9 @@
       if (fromPopup) showToast(isEn() ? 'Press M on the slide window to share the phone screen' : 'กด M ที่หน้าต่างสไลด์เพื่อแชร์จอมือถือ');
       else toggleLive();
     }
+    else if (k === 'z' || k === 'Z') toggleLiveZoom();
+    else if (liveZoom.classList.contains('open') && ['+', '='].includes(k)) setLiveZoomScale(lzStep + 1);
+    else if (liveZoom.classList.contains('open') && ['-', '_'].includes(k)) setLiveZoomScale(lzStep - 1);
     else if (k === 'b' || k === 'B' || k === '.') $('#blackout').classList.toggle('on');
     else if (k === 'f' || k === 'F') toggleFullscreen();
     else if (k === 'l' || k === 'L') setLang(isEn() ? 'th' : 'en');
@@ -608,7 +582,7 @@
 
   // คลิกพื้นที่ว่าง: ครึ่งขวา = ถัดไป ครึ่งซ้าย = ย้อนกลับ (ของที่กดได้ไม่นับ)
   document.addEventListener('click', (e) => {
-    if (e.target.closest('[data-tilt], .step, .fan-item, button, [data-zoom], .phone, .panel-chat, .panel, #lightbox, #notesDrawer')) return;
+    if (e.target.closest('[data-tilt], .step, .fan-item, button, [data-zoom], .phone, .panel-chat, .panel, #lightbox, #liveZoom, #notesDrawer')) return;
     if ($('#blackout').classList.contains('on')) {
       $('#blackout').classList.remove('on');
       return;
@@ -655,7 +629,52 @@
     const btn = $('#liveBtn');
     btn.classList.toggle('show', main || Boolean(liveStream));
     btn.classList.toggle('mini', !main && Boolean(liveStream));
+    $('#liveZoomBtn').classList.toggle('show', main && Boolean(liveStream));
   }
+
+  // ขยายจอมือถือเต็มหน้าต่าง (ปุ่ม ⤢ หรือกด Z) — ใช้ stream เดิม ไม่ต้องเลือกหน้าต่างใหม่
+  const liveZoom = $('#liveZoom');
+  const liveZoomVideo = $('video', liveZoom);
+  function openLiveZoom() {
+    if (!liveStream) {
+      showToast(isEn() ? 'Share the phone screen first (press M)' : 'ต้องแชร์จอมือถือก่อน (กด M)');
+      return;
+    }
+    liveZoomVideo.srcObject = liveStream;
+    liveZoomVideo.play().catch(() => {});
+    setLiveZoomScale(0); // เริ่มที่ 1 เท่า (ช่องแรกของ LZ_STEPS)
+    liveZoom.classList.add('open');
+  }
+  // ซูมเพิ่มตรงจุดที่เมาส์ชี้ — จอมือถือแนวตั้งบนจอแนวนอน ขยายเต็มจอได้แค่เต็มความสูง จึงให้ซูมเข้าไปดูการ์ดได้อีก
+  const LZ_STEPS = [1, 1.5, 2, 2.5, 3];
+  let lzStep = 0;
+  function setLiveZoomScale(step) {
+    lzStep = Math.max(0, Math.min(LZ_STEPS.length - 1, step));
+    liveZoom.style.setProperty('--lz-scale', LZ_STEPS[lzStep]);
+  }
+  liveZoom.addEventListener('pointermove', (e) => {
+    liveZoom.style.setProperty('--lz-x', `${(e.clientX / window.innerWidth) * 100}%`);
+    liveZoom.style.setProperty('--lz-y', `${(e.clientY / window.innerHeight) * 100}%`);
+  });
+  liveZoom.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    setLiveZoomScale(lzStep + (e.deltaY < 0 ? 1 : -1));
+  }, { passive: false });
+  function closeLiveZoom() {
+    if (!liveZoom.classList.contains('open')) return false;
+    liveZoom.classList.remove('open');
+    liveZoomVideo.srcObject = null;
+    return true;
+  }
+  const toggleLiveZoom = () => (closeLiveZoom() || openLiveZoom());
+  $('#liveZoomBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    openLiveZoom();
+  });
+  liveZoom.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeLiveZoom();
+  });
 
   let toastTimer = 0;
   function showToast(msg) {
@@ -698,6 +717,7 @@
     liveStream.getTracks().forEach((t) => t.stop());
     liveStream = null;
     liveVideos.forEach((v) => { v.srcObject = null; });
+    closeLiveZoom();
     document.documentElement.classList.remove('live');
     updateLiveBtn();
     replayCurrent();
@@ -765,7 +785,7 @@
   const EN = window.DECK_EN || {};
   const ALT_EN = window.DECK_ALT_EN || {};
   const originalText = new Map();
-  const I18N_ROOTS = ['#stage', '#help', '#overview h4', '#hint'];
+  const I18N_ROOTS = ['#stage', '#help', '#overview h4', '#hint', '#liveZoom'];
 
   function translatableTextNodes() {
     const nodes = [];
