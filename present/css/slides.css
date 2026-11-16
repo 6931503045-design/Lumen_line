@@ -247,7 +247,8 @@
 .s-lesson .t2 { background: linear-gradient(170deg, #f4f6f0 0%, #d9ded2 100%); color: #0f130b; }
 .s-lesson .t2 .glow { position: absolute; left: 30px; top: 160px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, rgba(198, 244, 50, 0.45), transparent 70%); filter: blur(20px); }
 .s-lesson .t3 .amp { position: absolute; left: 40px; top: 90px; width: 230px; }
-.s-lesson .t3 b { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: #fff; font-size: 18px; margin-bottom: 14px; align-self: flex-start; }
+.s-lesson .t3 a.site { color: #0f130b; text-decoration: none; cursor: pointer; font-weight: 700; }
+.s-lesson .t3 b, .s-lesson .t3 a.site { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: #fff; font-size: 18px; margin-bottom: 14px; align-self: flex-start; }
 
 /* ── 13 ขอบคุณ ───────────────────────────────────────── */
 .s-thanks .copy { position: absolute; left: 110px; top: 200px; width: 900px; }

@@ -31,6 +31,12 @@
     seg.style.flex = String(count);
     seg.title = `${sp.sec} · ${sp.name} — ${sp.topic}`;
     seg.innerHTML = '<i></i>';
+    // คลิกที่ช่วงของผู้พูด = กระโดดไปสไลด์แรกของคนนั้น
+    seg.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const i = slides.findIndex((s) => Number(s.dataset.sec) === sp.sec);
+      if (i >= 0) go(i);
+    });
     progress.appendChild(seg);
     return { sp, count, el: seg.firstChild };
   });
@@ -528,10 +534,39 @@
 
   // ─────────────────────── คีย์บอร์ด เมาส์ สัมผัส ───────────────────────
   function closePanels() {
-    const anyOpen = $('.panel.open, #lightbox.open').length > 0;
-    $('.panel.open, #lightbox.open').forEach((p) => p.classList.remove('open'));
+    const anyOpen = $$('.panel.open, #lightbox.open').length > 0;
+    $$('.panel.open, #lightbox.open').forEach((p) => p.classList.remove('open'));
     return closeLiveZoom() || anyOpen;
   }
+
+  // ทุกอย่างที่ทำได้ด้วยคีย์บอร์ด ต้องกดด้วยเมาส์ได้ด้วย
+  // หน้าปุ่มลัด: คลิกแถวไหน = กดปุ่มนั้น (ปิดหน้าต่างก่อน แล้วค่อยสั่งงาน)
+  $$('#help [data-key]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closePanels();
+      if (el.dataset.key !== 'Escape') onKey({ key: el.dataset.key, preventDefault() {} });
+    });
+  });
+  // คลิกพื้นหลังมืดของหน้าต่าง (ปุ่มลัด / ภาพรวม) = ปิด
+  $$('.panel').forEach((p) => {
+    p.addEventListener('click', (e) => {
+      if (e.target === p) p.classList.remove('open');
+    });
+  });
+  // "กด ? ดูปุ่มลัด" มุมขวาล่าง กดได้
+  $('#hint').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('#help').classList.toggle('open');
+  });
+  // ชื่อหมวดบนแถบด้านบน = กระโดดไปต้นส่วนนั้น
+  $$('#sections span').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const i = slides.findIndex((s) => s.dataset.sec === el.dataset.sec);
+      if (i >= 0) go(i);
+    });
+  });
 
   function onKey(e, fromPopup = false) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -582,7 +617,7 @@
 
   // คลิกพื้นที่ว่าง: ครึ่งขวา = ถัดไป ครึ่งซ้าย = ย้อนกลับ (ของที่กดได้ไม่นับ)
   document.addEventListener('click', (e) => {
-    if (e.target.closest('[data-tilt], .step, .fan-item, button, [data-zoom], .phone, .panel-chat, .panel, #lightbox, #liveZoom, #notesDrawer')) return;
+    if (e.target.closest('[data-tilt], .step, .fan-item, button, [data-zoom], .phone, .panel-chat, .panel, #lightbox, #liveZoom, #notesDrawer, a, #hint, #sections, #progress')) return;
     if ($('#blackout').classList.contains('on')) {
       $('#blackout').classList.remove('on');
       return;

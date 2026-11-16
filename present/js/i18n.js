@@ -263,6 +263,7 @@ window.DECK_EN = {
   '📱 แชร์จอมือถือ': '📱 Share phone screen',
   'หยุดแชร์จอ': 'Stop',
   'ขยายจอ': 'Enlarge',
+  'คลิกที่แถวเพื่อสั่งงานได้เลย ไม่ต้องจำปุ่ม': 'Click any row to run it — no need to remember the keys',
   'ลูกกลิ้งเมาส์ หรือ + / − = ซูมตรงจุดที่ชี้ · คลิก, Z หรือ Esc = ย่อกลับ': 'Mouse wheel or + / − = zoom where you point · click, Z or Esc = shrink back',
   'ขยายจอมือถือเต็มหน้าต่าง (ตอนแชร์จออยู่)': 'Enlarge the phone screen to fill the window (while sharing)',
 };

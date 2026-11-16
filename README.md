@@ -1,5 +1,9 @@
 # Deploy: https://lumen-line.onrender.com
 
+# สไลด์นำเสนอ: https://glowing-raindrop-e048cb.netlify.app/#13
+
+นี่คือสไลด์นำเสนอ Final Demo ของทีม Lumen — โค้ดของสไลด์อยู่ในโฟลเดอร์ [present/](present/) (กด `?` ในสไลด์เพื่อดูปุ่มลัด)
+
 ขั้นตอน deploy แบบละเอียดอยู่ที่ [docs/DEPLOY.md](docs/DEPLOY.md)
 
 ## 🖱️ วิธีเปิด Clickable Prototype (ไม่ต้องมี server / DB)

@@ -200,7 +200,8 @@ html[data-theme='light'] #topbar { color: var(--paper-ink); }
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-#sections span { opacity: 0.38; transition: opacity 0.4s var(--ease); white-space: nowrap; }
+#sections span { opacity: 0.38; transition: opacity 0.4s var(--ease); white-space: nowrap; pointer-events: auto; cursor: pointer; }
+#sections span:not(.on):hover { opacity: 0.75; }
 #sections span.on { opacity: 1; }
 #sections span.on::before {
   content: '';
@@ -233,17 +234,22 @@ html[data-theme='light'] #sections span.on::before { background: var(--paper-ink
 #progress {
   flex: 1;
   display: flex;
+  align-items: center;
   gap: 6px;
-  height: 6px;
+  height: 24px; /* แถบสูง 6px แต่พื้นที่กดสูง 24px ให้คลิกโดนง่าย */
+  pointer-events: auto;
 }
 #progress .seg {
   position: relative;
   height: 6px;
+  cursor: pointer;
+  transition: height 0.2s var(--ease);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }
 html[data-theme='light'] #progress .seg { background: rgba(0, 0, 0, 0.08); }
+#progress .seg:hover { height: 10px; }
 #progress .seg i {
   position: absolute;
   inset: 0;
@@ -386,6 +392,9 @@ p { line-height: 1.55; }
   white-space: nowrap;
 }
 .pill.lime { background: var(--lime); color: #0f130b; border-color: transparent; }
+a.pill { color: inherit; text-decoration: none; pointer-events: auto; cursor: pointer; transition: transform 0.2s var(--ease); }
+a.pill.lime { color: #0f130b; }
+a.pill:hover { transform: translateY(-2px); }
 .pill.dark { background: #0f130b; color: var(--lime); border-color: transparent; }
 .pill.ghost { background: transparent; }
 .light .pill { background: rgba(0, 0, 0, 0.05); border-color: rgba(0, 0, 0, 0.08); }
@@ -630,9 +639,10 @@ html[data-theme='light'] .phone-shadow { background: radial-gradient(closest-sid
   z-index: 50;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.35);
-  pointer-events: none;
-  transition: opacity 0.6s;
+  cursor: pointer;
+  transition: opacity 0.6s, color 0.3s;
 }
+#hint:hover { color: var(--lime); }
 html[data-theme='light'] #hint { color: rgba(0, 0, 0, 0.35); }
 
 .panel {
@@ -656,7 +666,29 @@ html[data-theme='light'] #hint { color: rgba(0, 0, 0, 0.35); }
   border: 1px solid rgba(198, 244, 50, 0.18);
 }
 .panel h4 { font-family: var(--font-display); font-size: 26px; margin-bottom: 20px; }
-.keys { display: grid; grid-template-columns: auto 1fr; gap: 12px 24px; font-size: 17px; }
+.keys { display: grid; gap: 4px; font-size: 17px; }
+.keys-tip { margin: -10px 0 16px; font-size: 15px; color: var(--muted); }
+/* แต่ละแถวในหน้าปุ่มลัดกดได้ — สั่งงานแบบเดียวกับกดปุ่มบนคีย์บอร์ด */
+.krow {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 24px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.krow:hover { background: rgba(198, 244, 50, 0.08); }
+.krow.multi { cursor: default; }
+.krow.multi:hover { background: transparent; }
+.kbtn { padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
+.kbtn:hover kbd, .krow:not(.multi):hover kbd { border-color: var(--lime); }
 kbd {
   display: inline-block;
   min-width: 34px;
