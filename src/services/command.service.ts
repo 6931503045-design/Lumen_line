@@ -21,7 +21,12 @@ import { buildBudgetCard, type BudgetCardRow } from '../line/flex/budgetCard';
 import { AI_DISCLAIMER } from '../config/constants';
 import { env } from '../config/env';
 import { getSafeToSpend, getUserSummary, type SafeToSpend } from './summary.service';
-import { buildTodaySummaryText } from './dailySummary.service';
+import { buildTodaySummaryCard, buildTodaySummaryText } from './dailySummary.service';
+import {
+  buildAllowanceCard,
+  type AllowanceCardInput,
+  type AllowanceMeter,
+} from '../line/flex/allowanceCard';
 import { getBudgetOverview } from './budget.service';
 import { listPlansWithProgress, transferToPlan } from './plan.service';
 import {
@@ -655,6 +660,259 @@ async function buildLimits(userId: string): Promise<string> {
   return lines.join('\n');
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// การ์ด "ใช้ได้อีกเท่าไหร่" — ตัวเลขชุดเดียวกับข้อความด้านบนทุกตัว แค่จัดเป็นการ์ด
+// ข้อความล้วนยังอยู่ (runCommand) เป็นทางสำรองและเป็นตัวที่เทสต์ตรวจตัวเลข
+// ⚖️ G1: ทุกยอดมาจาก service (S5.2 / S5.10) ที่นี่ format และคิดสัดส่วนเพื่อวาดแถบเท่านั้น
+// ────────────────────────────────────────────────────────────────────────────
+
+/** สัดส่วนใช้ไปเทียบเพดาน — ใช้วาดความกว้างแถบ ไม่ใช่ยอดเงิน */
+function usedPercent(spentSatang: number, ceilingSatang: number): number {
+  if (ceilingSatang <= 0) return spentSatang > 0 ? 100 : 0;
+  return Math.round((spentSatang / ceilingSatang) * 100);
+}
+
+function meter(label: string, spentSatang: number, ceilingSatang: number): AllowanceMeter {
+  const remaining = ceilingSatang - spentSatang;
+  return {
+    label,
+    formattedSpent: formatBaht(spentSatang),
+    formattedCeiling: formatBaht(ceilingSatang),
+    percent: usedPercent(spentSatang, ceilingSatang),
+    status: remaining >= 0 ? `เหลือ ${formatBaht(remaining)}` : `เกิน ${formatBaht(-remaining)}`,
+    over: remaining < 0,
+  };
+}
+
+function ceilingSubtitle(periodLabel: string, mode: 'manual' | 'system', profile: keyof typeof PROFILE_LABEL): string {
+  return mode === 'manual'
+    ? `ตามเพดาน${periodLabel}ที่คุณตั้งไว้`
+    : `ตามเพดาน${periodLabel}ที่ระบบคิดให้ (แบบ${PROFILE_LABEL[profile]})`;
+}
+
+/** แถวที่มาของเงินทั้งเดือน (S5.2) — ใช้ทั้งตอนติดลบและตอนตอบ "เดือนนี้" */
+function monthBreakdown(safe: SafeToSpend): { label: string; value: string }[] {
+  const { breakdown } = safe;
+  const rows = [{ label: 'รายรับเดือนนี้', value: formatBaht(breakdown.monthIncomeSatang) }];
+  if (breakdown.upcomingIncomeSatang > 0) {
+    rows.push({ label: 'รายรับประจำที่จะเข้าอีก', value: formatBaht(breakdown.upcomingIncomeSatang) });
+  }
+  rows.push({ label: 'ใช้ไปแล้ว', value: formatBaht(breakdown.monthExpenseSatang) });
+  if (breakdown.upcomingExpenseSatang > 0) {
+    rows.push({ label: 'รายจ่ายประจำที่ยังไม่ถึงรอบ', value: formatBaht(breakdown.upcomingExpenseSatang) });
+  }
+  if (breakdown.planCommitmentSatang > 0) {
+    rows.push({ label: 'กันไว้ให้แผนออม', value: formatBaht(breakdown.planCommitmentSatang) });
+  }
+  return rows;
+}
+
+/** การ์ดตอนเงินเดือนนี้ติดลบ — คู่กับ describeShortfall */
+function shortfallCard(title: string, safe: SafeToSpend): AllowanceCardInput {
+  const { breakdown } = safe;
+  const spentMoreThanEarned =
+    breakdown.monthExpenseSatang > breakdown.monthIncomeSatang + breakdown.upcomingIncomeSatang;
+  return {
+    title,
+    amount: formatBaht(0),
+    alert: spentMoreThanEarned
+      ? `⚠️ เดือนนี้ใช้เกินแล้ว ขาดอยู่ ${formatBaht(safe.overspentSatang)}`
+      : `⚠️ เงินเดือนนี้ไม่พอสำหรับรายจ่ายที่รออยู่ ขาดอยู่ ${formatBaht(safe.overspentSatang)}`,
+    breakdown: [...monthBreakdown(safe), { label: 'เหลืออีก', value: `${safe.daysLeft} วันจะสิ้นเดือน` }],
+    footnotes: [AI_DISCLAIMER],
+    altText: `${title} ${formatBaht(0)} — ขาดอยู่ ${formatBaht(safe.overspentSatang)}`,
+  };
+}
+
+function withAssets(input: AllowanceCardInput) {
+  return buildAllowanceCard({ ...input, assetBaseUrl: env.appBaseUrl || undefined });
+}
+
+async function buildRemainingCard(userId: string) {
+  const todayIso = getTodayIso();
+  const allowance = await getDailyAllowance(userId, todayIso);
+
+  if (allowance) {
+    const over = allowance.remainingSatang < 0;
+    const amount = formatBaht(Math.abs(allowance.remainingSatang));
+    return withAssets({
+      title: over ? 'วันนี้ใช้เกินเพดานแล้ว' : 'วันนี้ใช้ได้อีก',
+      subtitle: ceilingSubtitle('รายวัน', allowance.mode, allowance.profile),
+      amount,
+      amountOver: over,
+      meters: [meter('วันนี้', allowance.spentTodaySatang, allowance.ceilingSatang)],
+      footnotes: [LIMIT_SETTINGS_HINT, AI_DISCLAIMER],
+      altText: `${over ? 'วันนี้ใช้เกินเพดานแล้ว' : 'วันนี้ใช้ได้อีก'} ${amount}`,
+    });
+  }
+
+  const safe = await getSafeToSpend(userId, todayIso);
+  if (safe.overspentSatang > 0) return withAssets(shortfallCard('วันนี้ใช้ได้อีก', safe));
+
+  const breakdown = [
+    { label: 'เงินเหลือทั้งเดือน', value: formatBaht(safe.monthRemainingSatang) },
+    { label: 'หารวันที่เหลือ', value: `${safe.daysLeft} วัน` },
+  ];
+  if (safe.breakdown.planCommitmentSatang > 0) {
+    breakdown.push({ label: 'กันไว้ให้แผนออมแล้ว', value: formatBaht(safe.breakdown.planCommitmentSatang) });
+  }
+  return withAssets({
+    title: 'วันนี้ใช้ได้อีก',
+    amount: formatBaht(safe.perDaySatang),
+    breakdown,
+    footnotes: [AI_DISCLAIMER],
+    altText: `วันนี้ใช้ได้อีก ${formatBaht(safe.perDaySatang)}`,
+  });
+}
+
+async function buildRemainingTomorrowCard(userId: string) {
+  const todayIso = getTodayIso();
+  const tomorrowIso = addDaysIso(todayIso, 1);
+
+  if (tomorrowIso.slice(0, 7) !== todayIso.slice(0, 7)) {
+    return withAssets({
+      title: 'พรุ่งนี้ขึ้นเดือนใหม่แล้ว',
+      message: 'ยอดใช้ได้ต่อวันจะเริ่มนับใหม่จากรายรับของเดือนหน้า พิมพ์ "เหลือ" อีกทีพรุ่งนี้ได้เลย',
+      altText: 'พรุ่งนี้ขึ้นเดือนใหม่แล้ว — พิมพ์ "เหลือ" อีกทีพรุ่งนี้',
+    });
+  }
+
+  const limits = await getSpendingLimits(userId);
+  if (limits.daily.enabled && limits.daily.mode === 'manual' && limits.daily.limitSatang !== null) {
+    return withAssets({
+      title: 'พรุ่งนี้ใช้ได้',
+      subtitle: 'ตามเพดานรายวันที่คุณตั้งไว้',
+      amount: formatBaht(limits.daily.limitSatang),
+      footnotes: [LIMIT_SETTINGS_HINT, AI_DISCLAIMER],
+      altText: `พรุ่งนี้ใช้ได้ ${formatBaht(limits.daily.limitSatang)}`,
+    });
+  }
+
+  const safe = await getSafeToSpend(userId, tomorrowIso);
+  if (safe.overspentSatang > 0) return withAssets(shortfallCard('พรุ่งนี้ใช้ได้', safe));
+
+  return withAssets({
+    title: 'พรุ่งนี้ใช้ได้',
+    amount: formatBaht(safe.perDaySatang),
+    amountCaption: '(ถ้าวันนี้ไม่ใช้เพิ่มแล้ว)',
+    breakdown: [
+      { label: 'เงินเหลือทั้งเดือน', value: formatBaht(safe.monthRemainingSatang) },
+      { label: 'หารวันที่เหลือ นับจากพรุ่งนี้', value: `${safe.daysLeft} วัน` },
+    ],
+    footnotes: [AI_DISCLAIMER],
+    altText: `พรุ่งนี้ใช้ได้ ${formatBaht(safe.perDaySatang)}`,
+  });
+}
+
+async function buildRemainingWeekCard(userId: string) {
+  const allowance = await getWeeklyAllowance(userId, getTodayIso());
+  const spent = formatBaht(allowance.spentSatang);
+
+  if (!allowance.enabled) {
+    return withAssets({
+      title: 'สัปดาห์นี้ใช้ไปแล้ว',
+      subtitle: 'นับจากวันอาทิตย์',
+      amount: spent,
+      message: 'ยังไม่ได้ตั้งเพดานรายสัปดาห์ จึงยังบอกไม่ได้ว่าสัปดาห์นี้ใช้ได้อีกเท่าไหร่',
+      footnotes: ['ตั้งได้ที่หน้าเว็บ → ตั้งค่า', 'พิมพ์ "เหลือ" เพื่อดูว่าวันนี้ใช้ได้อีกเท่าไหร่'],
+      altText: `สัปดาห์นี้ใช้ไปแล้ว ${spent}`,
+    });
+  }
+
+  if (!allowance.available) {
+    return withAssets({
+      title: 'สัปดาห์นี้ใช้ไปแล้ว',
+      subtitle: 'นับจากวันอาทิตย์',
+      amount: spent,
+      alert: 'สัปดาห์นี้คาบสองเดือน ระบบยังคิดเพดานรายสัปดาห์ให้แม่นยำไม่ได้',
+      footnotes: ['ถ้าอยากได้ตัวเลขแน่นอน ตั้งเพดานรายสัปดาห์เองได้ที่หน้าเว็บ → ตั้งค่า'],
+      altText: `สัปดาห์นี้ใช้ไปแล้ว ${spent}`,
+    });
+  }
+
+  const over = allowance.remainingSatang < 0;
+  const amount = formatBaht(Math.abs(allowance.remainingSatang));
+  return withAssets({
+    title: over ? 'สัปดาห์นี้ใช้เกินเพดานแล้ว' : 'สัปดาห์นี้ใช้ได้อีก',
+    subtitle: ceilingSubtitle('รายสัปดาห์', allowance.mode, allowance.profile),
+    amount,
+    amountOver: over,
+    meters: [meter('สัปดาห์นี้ (นับจากวันอาทิตย์)', allowance.spentSatang, allowance.ceilingSatang)],
+    footnotes: [LIMIT_SETTINGS_HINT, AI_DISCLAIMER],
+    altText: `${over ? 'สัปดาห์นี้ใช้เกินเพดานแล้ว' : 'สัปดาห์นี้ใช้ได้อีก'} ${amount}`,
+  });
+}
+
+async function buildRemainingMonthCard(userId: string) {
+  const todayIso = getTodayIso();
+  const allowance = await getMonthlyAllowance(userId, todayIso);
+
+  if (allowance.enabled) {
+    const over = allowance.remainingSatang < 0;
+    const amount = formatBaht(Math.abs(allowance.remainingSatang));
+    return withAssets({
+      title: over ? 'เดือนนี้ใช้เกินเพดานแล้ว' : 'เดือนนี้ใช้ได้อีก',
+      subtitle: ceilingSubtitle('รายเดือน', allowance.mode, allowance.profile),
+      amount,
+      amountOver: over,
+      meters: [meter('เดือนนี้', allowance.spentSatang, allowance.ceilingSatang)],
+      footnotes: [LIMIT_SETTINGS_HINT, AI_DISCLAIMER],
+      altText: `${over ? 'เดือนนี้ใช้เกินเพดานแล้ว' : 'เดือนนี้ใช้ได้อีก'} ${amount}`,
+    });
+  }
+
+  const safe = await getSafeToSpend(userId, todayIso);
+  if (safe.overspentSatang > 0) return withAssets(shortfallCard('เดือนนี้ใช้ได้อีก', safe));
+
+  return withAssets({
+    title: 'เดือนนี้ใช้ได้อีก',
+    amount: formatBaht(safe.monthRemainingSatang),
+    amountCaption: `เหลืออีก ${safe.daysLeft} วันจะสิ้นเดือน เฉลี่ยวันละ ${formatBaht(safe.perDaySatang)}`,
+    breakdown: monthBreakdown(safe),
+    footnotes: [AI_DISCLAIMER],
+    altText: `เดือนนี้ใช้ได้อีก ${formatBaht(safe.monthRemainingSatang)}`,
+  });
+}
+
+async function buildLimitsCard(userId: string) {
+  const todayIso = getTodayIso();
+  const [daily, weekly, monthly] = await Promise.all([
+    getDailyAllowance(userId, todayIso),
+    getWeeklyAllowance(userId, todayIso),
+    getMonthlyAllowance(userId, todayIso),
+  ]);
+
+  if (!daily && !weekly.enabled && !monthly.enabled) {
+    return withAssets({
+      title: 'ยังไม่ได้เปิดเพดานการใช้จ่าย',
+      message: 'ตั้งเพดานรายวัน รายสัปดาห์ หรือรายเดือนได้ที่หน้าเว็บ → ตั้งค่า',
+      footnotes: ['พิมพ์ "เหลือ" เพื่อดูว่าวันนี้ใช้ได้อีกเท่าไหร่'],
+      altText: 'ยังไม่ได้เปิดเพดานการใช้จ่าย',
+    });
+  }
+
+  const meters: AllowanceMeter[] = [];
+  const offRows: { label: string; value: string }[] = [];
+  if (daily) meters.push(meter('วันนี้', daily.spentTodaySatang, daily.ceilingSatang));
+  else offRows.push({ label: 'รายวัน', value: 'ปิดอยู่' });
+
+  if (!weekly.enabled) offRows.push({ label: 'รายสัปดาห์', value: 'ปิดอยู่' });
+  else if (!weekly.available) {
+    offRows.push({ label: 'สัปดาห์นี้ (คาบสองเดือน)', value: `ใช้ไป ${formatBaht(weekly.spentSatang)}` });
+  } else meters.push(meter('สัปดาห์นี้', weekly.spentSatang, weekly.ceilingSatang));
+
+  if (monthly.enabled) meters.push(meter('เดือนนี้', monthly.spentSatang, monthly.ceilingSatang));
+  else offRows.push({ label: 'รายเดือน', value: 'ปิดอยู่' });
+
+  return withAssets({
+    title: 'เพดานการใช้จ่าย',
+    meters,
+    offRows,
+    footnotes: [LIMIT_SETTINGS_HINT, AI_DISCLAIMER],
+    altText: `เพดานการใช้จ่าย: ${meters.map((m) => `${m.label} ${m.status}`).join(' · ') || 'ปิดอยู่ทั้งหมด'}`,
+  });
+}
+
 const FREQUENCY_LABEL = {
   daily: 'ทุกวัน',
   weekly: 'ทุกสัปดาห์',
@@ -845,6 +1103,18 @@ export async function runCommandCard(userId: string, command: CommandName) {
       return buildPlansFlex(userId);
     case 'budget':
       return buildBudgetFlex(userId);
+    case 'today':
+      return buildTodaySummaryCard(userId);
+    case 'remaining':
+      return buildRemainingCard(userId);
+    case 'remaining_tomorrow':
+      return buildRemainingTomorrowCard(userId);
+    case 'remaining_week':
+      return buildRemainingWeekCard(userId);
+    case 'remaining_month':
+      return buildRemainingMonthCard(userId);
+    case 'limits':
+      return buildLimitsCard(userId);
     default:
       return null;
   }

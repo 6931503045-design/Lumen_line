@@ -20,7 +20,12 @@ import { listTransactionRowsInRange } from '../src/db/queries/summary';
 import { countUnparsedEmails } from '../src/db/queries/emails';
 import { getSafeToSpend } from '../src/services/summary.service';
 import { sendPush } from '../src/line/push';
-import { buildTodaySummaryText, dailySummaryMessage, sendDailySummaries } from '../src/services/dailySummary.service';
+import {
+  buildTodaySummaryText,
+  dailySummaryCard,
+  dailySummaryMessage,
+  sendDailySummaries,
+} from '../src/services/dailySummary.service';
 
 const TODAY = '2026-09-17';
 const NOW = new Date('2026-09-17T14:00:00Z'); // 21:00 ไทย
@@ -34,8 +39,10 @@ function safe(monthRemainingSatang: number) {
   return { monthRemainingSatang } as any;
 }
 
+/** ข้อความที่ส่ง — ตอนนี้ส่งเป็นการ์ด Flex ซึ่งใช้ข้อความสรุปเต็มเป็น altText */
 function sentText(callIndex = 0): string {
-  return vi.mocked(sendPush).mock.calls[callIndex]![3];
+  const message = vi.mocked(sendPush).mock.calls[callIndex]![3];
+  return typeof message === 'string' ? message : message.altText;
 }
 
 beforeEach(() => {
@@ -61,8 +68,9 @@ describe('sendDailySummaries — ใครได้รับ', () => {
     const result = await sendDailySummaries(TODAY, NOW);
 
     expect(result.pushed).toBe(2);
-    expect(sendPush).toHaveBeenCalledWith('u1', 'dailySummary', 'daily:2026-09-17:u1', expect.any(String));
-    expect(sendPush).toHaveBeenCalledWith('u2', 'dailySummary', 'daily:2026-09-17:u2', expect.any(String));
+    const flex = expect.objectContaining({ type: 'flex' });
+    expect(sendPush).toHaveBeenCalledWith('u1', 'dailySummary', 'daily:2026-09-17:u1', flex);
+    expect(sendPush).toHaveBeenCalledWith('u2', 'dailySummary', 'daily:2026-09-17:u2', flex);
   });
 
   it('ดึงรายการเฉพาะวันนี้ตามเวลาไทย [วันนี้, พรุ่งนี้)', async () => {
@@ -202,5 +210,53 @@ describe('buildTodaySummaryText — ผู้ใช้ถามเอง "วั
     expect(text).not.toContain('ปิดสรุปรายวัน');
     expect(sendPush).not.toHaveBeenCalled();
     expect(listTransactionRowsInRange).toHaveBeenCalledWith('u1', TODAY, '2026-09-18');
+  });
+});
+
+describe('การ์ดสรุปวันนี้', () => {
+  const figures = {
+    incomeSatang: 100000,
+    expenseSatang: 16550,
+    expenseCount: 2,
+    monthRemainingSatang: 110000,
+    unparsedEmails: 0,
+  };
+  const all = (card: unknown) => JSON.stringify(card);
+
+  it('ข้อมูลครบเท่าข้อความเดิม: รายจ่าย จำนวนรายการ รายรับ เงินเหลือทั้งเดือน', () => {
+    const card = dailySummaryCard('17 ก.ย. 2569', figures);
+    expect(card.type).toBe('flex');
+    expect(all(card)).toContain('฿165.50');
+    expect(all(card)).toContain('2 รายการ');
+    expect(all(card)).toContain('฿1,000');
+    expect(all(card)).toContain('เดือนนี้เหลือใช้ได้อีก');
+    expect(all(card)).toContain('฿1,100');
+    expect(all(card)).toContain('ปิดสรุปรายวันได้ที่หน้าเว็บ');
+  });
+
+  it('altText คือข้อความสรุปเต็มแบบเดิม — แจ้งเตือนบนมือถือยังอ่านยอดได้', () => {
+    const card = dailySummaryCard('17 ก.ย. 2569', figures);
+    expect(card.altText).toBe(dailySummaryMessage('17 ก.ย. 2569', figures));
+  });
+
+  it('ใช้เกินทั้งเดือน → บอกยอดที่เกินเป็นค่าบวก ไม่ใช่ติดลบ', () => {
+    const card = dailySummaryCard('x', { ...figures, monthRemainingSatang: -25000 });
+    expect(all(card)).toContain('เดือนนี้ใช้เกินไปแล้ว');
+    expect(all(card)).toContain('฿250');
+    expect(all(card)).not.toContain('-฿');
+  });
+
+  it('วันนี้ยังไม่มีรายการ → ชวนจด ไม่โชว์ยอดศูนย์', () => {
+    const card = dailySummaryCard('x', { ...figures, incomeSatang: 0, expenseSatang: 0, expenseCount: 0 });
+    expect(all(card)).toContain('วันนี้ยังไม่ได้จดรายการเลย');
+    expect(all(card)).not.toContain('0 รายการ');
+  });
+
+  it('ผู้ใช้ถามเอง → ไม่มีบรรทัดวิธีปิดการแจ้งเตือน', () => {
+    expect(all(dailySummaryCard('x', figures, false))).not.toContain('ปิดสรุปรายวัน');
+  });
+
+  it('มีอีเมลที่อ่านไม่ออก → แสดงกล่องเตือน', () => {
+    expect(all(dailySummaryCard('x', { ...figures, unparsedEmails: 3 }))).toContain('3 ฉบับ');
   });
 });

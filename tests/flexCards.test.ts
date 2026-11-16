@@ -477,17 +477,18 @@ describe('ทุกการ์ดหน้าตาชุดเดียวก�
   };
 
   for (const [name, bubble] of Object.entries(bubbles)) {
-    it(`${name}: ขนาด mega และมีหัวแถบมะนาวพร้อม mascot`, () => {
+    it(`${name}: ขนาด mega และมีหัวพื้นดำตัวหนังสือมะนาวพร้อม mascot`, () => {
       expect(bubble.size).toBe('mega');
       const header = bubble.header as Record<string, unknown>;
-      expect(header.backgroundColor).toBe(FLEX_THEME.band);
+      expect(header.backgroundColor).toBe(FLEX_THEME.headerBg);
+      expect(collect(header, 'color')).toContain(FLEX_THEME.band);
       expect(collect(header, 'url')).toContain(`${base}/img/mascot/happy.png`);
     });
   }
 
-  it('การ์ดแจ้งปัญหาใช้แถบเหลืองอ่อน ไม่ใช่มะนาว และไม่มี mascot หน้ายิ้ม', () => {
+  it('การ์ดแจ้งปัญหาใช้แถบแดงอ่อน ไม่ใช่หัวดำแบบปกติ และไม่มี mascot หน้ายิ้ม', () => {
     const header = (buildUnreadableCard().contents as Record<string, unknown>).header;
-    expect((header as Record<string, unknown>).backgroundColor).toBe(FLEX_THEME.warnBand);
+    expect((header as Record<string, unknown>).backgroundColor).toBe(FLEX_THEME.dangerBand);
     expect(collect(header, 'url')).toEqual([]);
   });
 

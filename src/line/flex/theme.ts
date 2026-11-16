@@ -5,8 +5,11 @@
 // (ม่วงในการ์ดยืนยันของ AI, กรมท่าในการ์ดสรุป, เขียว LINE ในการ์ดแผน, การ์ดบางใบไม่มีหัว)
 // ผู้ใช้ทดสอบเห็นแล้วบอกว่าไม่เหมือนแอปเดียวกัน
 //
-// แม่แบบคือการ์ด "บันทึกแล้ว" (recordedCard) — หัวแถบมะนาว + mascot, ตัวการ์ดพื้นขาว,
-// แถบความคืบหน้า 10px, ป้ายเม็ดมน การ์ดใหม่ให้ประกอบจากชิ้นส่วนในไฟล์นี้ ไม่ต้องวาดเอง
+// แม่แบบคือการ์ด "บันทึกแล้ว" (recordedCard) — หัวพื้นดำตัวหนังสือมะนาว + mascot ทางขวา,
+// ตัวการ์ดพื้นขาว, ป้ายประเภทพื้นอ่อน ("รายจ่าย · อาหาร"), แถบความคืบหน้า 10px
+// การ์ดใหม่ให้ประกอบจากชิ้นส่วนในไฟล์นี้ ไม่ต้องวาดเอง
+//
+// หน้าตาชุดนี้ตรงกับการ์ดในสไลด์นำเสนอ (present/) — เดิมหัวการ์ดเป็นแถบมะนาวตัวหนังสือดำ
 //
 // 🔴 บทเรียนจากการทดสอบบนมือถือจริง — Flex Simulator บนเดสก์ท็อปผ่อนผันกว่าแอป LINE
 // สามข้อนี้ Simulator วาดให้เห็นปกติ แต่บนเครื่องจริงพัง ห้ามแก้กลับ:
@@ -18,8 +21,18 @@ export const FLEX_THEME = {
   /** มะนาวจัด (--lime) — แถบหัวการ์ดและจุดเน้น ใช้กับตัวหนังสือสีเข้มเท่านั้น */
   band: '#c6ff3d',
   bandText: '#4a5c38',
-  /** แถบหัวของการ์ดแจ้งปัญหา — ต้องต่างจากมะนาว ไม่งั้นข้อความผิดพลาดดูเหมือนข่าวดี */
-  warnBand: '#ffeec2',
+  /** พื้นหัวการ์ดปกติ — ดำเข้มแบบ .surface-dark ของเว็บ หัวข้อเป็นสีมะนาว (band) */
+  headerBg: '#14170f',
+  /** คำอธิบายใต้หัวข้อบนพื้นดำ (--on-dark-muted) */
+  headerSub: '#a7b39a',
+  /** แถบหัวของการ์ดรอยืนยัน/เตือน — ต้องต่างจากหัวปกติ ไม่งั้นดูเหมือนบันทึกแล้ว */
+  warnBand: '#fff3d6',
+  /** แถบหัวของการ์ดแจ้งว่าทำไม่สำเร็จ (อ่านไม่ออก) */
+  dangerBand: '#ffe1e1',
+  dangerText: '#a12a2a',
+  /** ป้ายประเภทรายการ เช่น "รายจ่าย · อาหาร" */
+  tagBg: '#eef3e4',
+  tagText: '#4a5a37',
   /** เส้นคั่น (--line) */
   line: '#dfe9d3',
   /** พื้นกล่องรองในการ์ด (--surface-soft) เช่นกล่องสรุป กล่องตัวอย่าง */
@@ -36,7 +49,7 @@ export const FLEX_THEME = {
   incomeBg: '#e4f4e5',
   /** แถบความคืบหน้าปกติ */
   bar: '#8fbf18',
-  track: '#dde6d2',
+  track: '#e8ece2',
   /** สีเหลืองอำพันสำหรับแถบ — บนพื้นขาวอ่านยาก ตัวหนังสือเตือนให้ใช้ warnText */
   warn: '#f5a524',
   warnText: '#9a5b00',
@@ -111,6 +124,19 @@ export function pill(label: string, background: string, color: string): FlexNode
   };
 }
 
+/**
+ * ป้ายประเภทรายการแบบในการ์ด "บันทึกแล้ว" เช่น "รายจ่าย · อาหาร"
+ * รายรับใช้โทนเขียว รายจ่ายใช้โทนเทาอมเขียว ให้แยกออกได้ตั้งแต่แวบแรก
+ */
+export function typeTag(type: 'income' | 'expense', categoryName?: string): FlexNode {
+  const label = type === 'income' ? 'รายรับ' : 'รายจ่าย';
+  return pill(
+    categoryName ? `${label} · ${categoryName}` : label,
+    type === 'income' ? C.incomeBg : C.tagBg,
+    type === 'income' ? C.income : C.tagText
+  );
+}
+
 /** กล่องพื้นอ่อนมุมมน — ใช้กับยอดรวม สิ่งที่ AI เข้าใจ ตัวอย่างวิธีพิมพ์ */
 export function softPanel(contents: FlexNode[], margin?: string): FlexNode {
   return {
@@ -152,41 +178,52 @@ export function sectionTitle(text: string, margin = 'xl'): FlexNode {
   return { type: 'text', text, size: 'xs', weight: 'bold', color: C.muted, margin };
 }
 
-/** เส้นคั่นหนาสีเข้ม — แบ่งส่วนหลักของการ์ด แบบเดียวกับก่อนแถบงบในการ์ดบันทึกแล้ว */
+/**
+ * เส้นคั่นส่วนหลักของการ์ด เช่นก่อนแถบงบในการ์ดบันทึกแล้ว
+ * เดิมเป็นเส้นดำหนา 2px — พอหัวการ์ดเปลี่ยนเป็นพื้นดำ เส้นดำในตัวการ์ดแย่งสายตาจากหัว จึงเหลือเส้นบางสีอ่อน
+ */
 export function heavyDivider(margin = 'xl'): FlexNode {
-  return { type: 'box', layout: 'vertical', height: '2px', backgroundColor: C.dark, margin, contents: [] };
+  return { type: 'box', layout: 'vertical', height: '1px', backgroundColor: C.line, margin, contents: [] };
 }
 
-export type CardTone = 'default' | 'warn';
+/** default = หัวดำ · warn = รอยืนยัน/เตือน (เหลืองอ่อน) · danger = ทำไม่สำเร็จ (แดงอ่อน) */
+export type CardTone = 'default' | 'warn' | 'danger';
+
+const HEADER_TONES: Record<CardTone, { bg: string; title: string; sub: string }> = {
+  default: { bg: C.headerBg, title: C.band, sub: C.headerSub },
+  warn: { bg: C.warnBand, title: C.warnText, sub: C.warnText },
+  danger: { bg: C.dangerBand, title: C.dangerText, sub: C.dangerText },
+};
 
 export type CardHeaderInput = {
   title: string;
   subtitle?: string;
   /** โดเมนที่เสิร์ฟ web/ — ไม่ส่งมา = ไม่มี mascot (รูปใน Flex ต้องเป็น URL แบบ HTTPS) */
   assetBaseUrl?: string;
-  /** warn = การ์ดแจ้งปัญหา ใช้แถบเหลืองอ่อนและไม่มี mascot หน้ายิ้ม */
+  /** warn/danger = การ์ดแจ้งปัญหา ใช้แถบสีอ่อนและไม่มี mascot หน้ายิ้ม */
   tone?: CardTone;
 };
 
-/** หัวการ์ด: แถบมะนาว + หัวข้อตัวหนา + คำอธิบายสั้น + mascot ทางขวา */
+/** หัวการ์ด: พื้นดำ + หัวข้อตัวหนาสีมะนาว + คำอธิบายสั้น + mascot ทางขวา */
 export function cardHeader(input: CardHeaderInput): FlexNode {
-  const warn = input.tone === 'warn';
+  const tone = input.tone ?? 'default';
+  const colors = HEADER_TONES[tone];
   const texts: FlexNode[] = [
-    { type: 'text', text: input.title, size: 'lg', weight: 'bold', color: C.strong, wrap: true },
+    { type: 'text', text: input.title, size: 'lg', weight: 'bold', color: colors.title, wrap: true },
   ];
   if (input.subtitle) {
     texts.push({
       type: 'text',
       text: input.subtitle,
       size: 'xxs',
-      color: warn ? C.warnText : C.bandText,
+      color: colors.sub,
       margin: 'xs',
       wrap: true,
     });
   }
 
-  const contents: FlexNode[] = [{ type: 'box', layout: 'vertical', flex: 5, contents: texts }];
-  if (input.assetBaseUrl && !warn) {
+  const contents: FlexNode[] = [{ type: 'box', layout: 'vertical', flex: 5, justifyContent: 'center', contents: texts }];
+  if (input.assetBaseUrl && tone === 'default') {
     contents.push({
       type: 'image',
       url: `${trimBase(input.assetBaseUrl)}/img/mascot/happy.png`,
@@ -200,9 +237,10 @@ export function cardHeader(input: CardHeaderInput): FlexNode {
   return {
     type: 'box',
     layout: 'horizontal',
-    backgroundColor: warn ? C.warnBand : C.band,
+    backgroundColor: colors.bg,
     paddingAll: '16px',
-    paddingBottom: '12px',
+    paddingTop: '14px',
+    paddingBottom: '14px',
     contents,
   };
 }

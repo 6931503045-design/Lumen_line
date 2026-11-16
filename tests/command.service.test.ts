@@ -48,6 +48,7 @@ import {
   matchCommand,
   matchSaveCommand,
   runCommand,
+  runCommandCard,
   runSaveCommand,
   runUndoLatest,
 } from '../src/services/command.service';
@@ -800,5 +801,87 @@ describe('recurring — รายการประจำที่ตั้ง�
     expect(text).toContain('🟢 เงินเดือน +฿15,000.00');
     expect(text).toContain('🔴 ค่าหอ -฿3,500.00');
     expect(text).toContain('ทุกเดือน · รอบถัดไป 5 ธ.ค.');
+  });
+});
+
+describe('การ์ด "ใช้ได้อีกเท่าไหร่" — ตัวเลขชุดเดียวกับข้อความ', () => {
+  const json = (card: unknown) => JSON.stringify(card);
+
+  it('เหลือ (ไม่ได้ตั้งเพดาน) → การ์ดวันนี้ใช้ได้อีก พร้อมที่มา', async () => {
+    const card = await runCommandCard(USER, 'remaining');
+    expect(card?.type).toBe('flex');
+    expect(card?.altText).toBe('วันนี้ใช้ได้อีก ฿100.00');
+    expect(json(card)).toContain('เงินเหลือทั้งเดือน');
+    expect(json(card)).toContain('฿1,400.00');
+    expect(json(card)).toContain('14 วัน');
+    expect(json(card)).toContain('กันไว้ให้แผนออมแล้ว');
+  });
+
+  it('เหลือ (ตั้งเพดานรายวัน) → ยอดตามเพดาน และแถบใช้ไปเทียบเพดาน', async () => {
+    vi.mocked(getDailyAllowance).mockResolvedValue({
+      mode: 'manual', profile: 'moderate', ceilingSatang: 10000, spentTodaySatang: 0, remainingSatang: 10000,
+    });
+    const card = await runCommandCard(USER, 'remaining');
+    expect(card?.altText).toBe('วันนี้ใช้ได้อีก ฿100.00');
+    expect(json(card)).toContain('ตามเพดานรายวันที่คุณตั้งไว้');
+    expect(json(card)).toContain('ใช้ไป ฿0.00 / เพดาน ฿100.00');
+  });
+
+  it('เหลือ (ใช้เกินเพดาน) → หัวการ์ดบอกว่าเกิน ยอดเป็นค่าบวก', async () => {
+    vi.mocked(getDailyAllowance).mockResolvedValue({
+      mode: 'manual', profile: 'moderate', ceilingSatang: 10000, spentTodaySatang: 12000, remainingSatang: -2000,
+    });
+    const card = await runCommandCard(USER, 'remaining');
+    expect(card?.altText).toBe('วันนี้ใช้เกินเพดานแล้ว ฿20.00');
+    expect(json(card)).toContain('เกิน ฿20.00');
+    expect(json(card)).not.toContain('-฿');
+  });
+
+  it('เงินเดือนนี้ติดลบ → ฿0 พร้อมกล่องบอกสาเหตุ', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(getSafeToSpend).mockResolvedValue({
+      monthRemainingSatang: -50000, perDaySatang: 0, daysLeft: 14, overspentSatang: 50000,
+      breakdown: {
+        monthIncomeSatang: 100000, upcomingIncomeSatang: 0, monthExpenseSatang: 150000,
+        upcomingExpenseSatang: 0, planCommitmentSatang: 0,
+      },
+    } as any);
+    const card = await runCommandCard(USER, 'remaining');
+    expect(json(card)).toContain('฿0.00');
+    expect(json(card)).toContain('เดือนนี้ใช้เกินแล้ว ขาดอยู่ ฿500.00');
+  });
+
+  it('สัปดาห์นี้ (ไม่ได้ตั้งเพดาน) → บอกยอดที่ใช้ไป ไม่ตอบยอดรายวัน', async () => {
+    vi.mocked(getWeeklyAllowance).mockResolvedValue({ ...NO_LIMIT, spentSatang: 12000 });
+    const card = await runCommandCard(USER, 'remaining_week');
+    expect(card?.altText).toBe('สัปดาห์นี้ใช้ไปแล้ว ฿120.00');
+    expect(json(card)).toContain('ยังไม่ได้ตั้งเพดานรายสัปดาห์');
+    expect(getDailyAllowance).not.toHaveBeenCalled();
+  });
+
+  it('เดือนนี้ (ตั้งเพดาน) → เพดาน − ใช้ไป', async () => {
+    vi.mocked(getMonthlyAllowance).mockResolvedValue({
+      ...NO_LIMIT, enabled: true, mode: 'manual', ceilingSatang: 500000, spentSatang: 120000, remainingSatang: 380000,
+    });
+    const card = await runCommandCard(USER, 'remaining_month');
+    expect(card?.altText).toBe('เดือนนี้ใช้ได้อีก ฿3,800.00');
+    expect(json(card)).toContain('ใช้ไป ฿1,200.00 / เพดาน ฿5,000.00');
+  });
+
+  it('เพดาน → แถบของระดับที่เปิด และบอกระดับที่ปิดอยู่', async () => {
+    vi.mocked(getMonthlyAllowance).mockResolvedValue({
+      ...NO_LIMIT, enabled: true, mode: 'manual', ceilingSatang: 500000, spentSatang: 120000, remainingSatang: 380000,
+    });
+    const card = await runCommandCard(USER, 'limits');
+    expect(json(card)).toContain('เหลือ ฿3,800.00');
+    expect(json(card)).toContain('รายวัน');
+    expect(json(card)).toContain('ปิดอยู่');
+  });
+
+  it('ทุกการ์ดใช้หัวพื้นดำแบบเดียวกับการ์ด "บันทึกแล้ว"', async () => {
+    for (const command of ['remaining', 'remaining_tomorrow', 'remaining_week', 'remaining_month', 'limits'] as const) {
+      const card = (await runCommandCard(USER, command)) as unknown as { contents: { header: { backgroundColor: string } } };
+      expect(card.contents.header.backgroundColor).toBe('#14170f');
+    }
   });
 });
