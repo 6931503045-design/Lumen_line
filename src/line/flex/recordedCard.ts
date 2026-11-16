@@ -19,9 +19,9 @@ import {
   cardHeader,
   FLEX_THEME as C,
   heavyDivider,
-  pill,
   progressBar,
   trimBase,
+  typeTag,
 } from './theme';
 
 export type RecordedItem = {
@@ -79,28 +79,13 @@ function iconButton(url: string, label: string, action: Record<string, unknown>)
   };
 }
 
+/** ป้าย "รายจ่าย · อาหาร" — ประเภทกับหมวดอยู่ในป้ายเดียว แบบการ์ดในสไลด์นำเสนอ */
 function groupHeader(group: RecordedGroup) {
-  const isIncome = group.type === 'income';
   return {
     type: 'box',
     layout: 'horizontal',
     margin: 'lg',
-    spacing: 'sm',
-    contents: [
-      pill(
-        isIncome ? 'รายรับ' : 'รายจ่าย',
-        isIncome ? C.incomeBg : C.dark,
-        isIncome ? C.income : C.onDark
-      ),
-      {
-        type: 'text',
-        text: group.categoryName,
-        size: 'sm',
-        weight: 'bold',
-        color: C.text,
-        gravity: 'center',
-      },
-    ],
+    contents: [typeTag(group.type, group.categoryName)],
   };
 }
 
@@ -119,7 +104,7 @@ function itemRow(item: RecordedItem, isIncome: boolean, base: string) {
           {
             type: 'text',
             text: item.title ?? 'รายการนี้',
-            size: 'sm',
+            size: 'md',
             color: item.title ? C.text : C.muted,
             flex: 5,
             wrap: true,
@@ -128,7 +113,7 @@ function itemRow(item: RecordedItem, isIncome: boolean, base: string) {
           {
             type: 'text',
             text: item.formattedAmount,
-            size: 'sm',
+            size: 'lg',
             weight: 'bold',
             color: isIncome ? C.income : C.strong,
             align: 'end',
@@ -158,7 +143,13 @@ function itemRow(item: RecordedItem, isIncome: boolean, base: string) {
   };
 }
 
+/**
+ * แถวงบ: "งบอาหารเดือนนี้ ........ 62%" แล้วแถบ แล้วยอด "฿1,240 / ฿2,000"
+ * ข้อมูลชุดเดิมทุกตัว (ชื่อหมวด ใช้ไป เพดาน เปอร์เซ็นต์) แค่จัดวางแบบการ์ดในสไลด์นำเสนอ
+ * ⚖️ G1: เปอร์เซ็นต์มาจาก service แล้ว ที่นี่แค่ปัดเพื่อแสดงผล
+ */
 function budgetRow(budget: RecordedBudget) {
+  const percent = Math.round(budget.percentUsed);
   return {
     type: 'box',
     layout: 'vertical',
@@ -171,26 +162,33 @@ function budgetRow(budget: RecordedBudget) {
           // ชื่อหมวดผู้ใช้ตั้งเองได้ ยาวแค่ไหนก็ได้ จึงต้อง wrap ไม่ใช่ปล่อยให้ตัด
           {
             type: 'text',
-            text: budget.categoryName,
-            size: 'sm',
-            weight: 'bold',
-            color: C.text,
+            text: `งบ${budget.categoryName}เดือนนี้`,
+            size: 'xs',
+            color: C.muted,
             flex: 5,
             wrap: true,
           },
-          // ตัวเล็กกว่าชื่อเพราะแถวนี้แคบ และยอดยาวกว่าชื่อได้ง่าย
           {
             type: 'text',
-            text: `${budget.formattedSpent} / ${budget.formattedLimit}`,
+            text: `${percent}%`,
             size: 'xs',
-            color: C.text,
+            weight: 'bold',
+            color: percent >= 100 ? C.danger : percent >= 80 ? C.warnText : C.muted,
             align: 'end',
-            flex: 5,
+            flex: 2,
             gravity: 'center',
           },
         ],
       },
       progressBar(budget.percentUsed),
+      {
+        type: 'text',
+        text: `${budget.formattedSpent} / ${budget.formattedLimit}`,
+        size: 'xxs',
+        color: C.muted,
+        align: 'end',
+        margin: 'sm',
+      },
     ],
   };
 }

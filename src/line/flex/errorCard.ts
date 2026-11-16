@@ -30,7 +30,7 @@ export type ErrorCardInput = {
 };
 
 /**
- * หน้าตาตามแม่แบบการ์ด "บันทึกแล้ว" แต่หัวเป็นแถบเหลืองอ่อน (tone 'warn') ไม่ใช่มะนาว
+ * หน้าตาตามแม่แบบการ์ด "บันทึกแล้ว" แต่หัวเป็นแถบแดงอ่อน (tone 'danger') ไม่ใช่หัวดำ
  * และไม่มี mascot หน้ายิ้ม — ข้อความผิดพลาดต้องไม่ดูเหมือนข่าวดี
  */
 export function buildErrorCard(input: ErrorCardInput) {
@@ -59,7 +59,7 @@ export function buildErrorCard(input: ErrorCardInput) {
     type: 'flex' as const,
     altText: `${input.title} — ${input.reason}`,
     contents: bubble({
-      header: cardHeader({ title: input.title, subtitle: 'ยังไม่ได้บันทึกอะไร', tone: 'warn' }),
+      header: cardHeader({ title: input.title, subtitle: 'ยังไม่ได้บันทึกอะไร', tone: 'danger' }),
       body: cardBody(body),
       footer: cardFooter([actionButton('ดูวิธีใช้', { type: 'message', text: 'ช่วยเหลือ' })]),
     }),

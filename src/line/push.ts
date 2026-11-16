@@ -35,7 +35,8 @@ export async function sendPush(
   userId: string,
   kind: PushKind,
   dedupKey: string,
-  text: string
+  /** ข้อความล้วน หรือการ์ด Flex ({ type: 'flex', altText, contents }) */
+  message: string | { type: 'flex'; altText: string; contents: unknown }
 ): Promise<PushResult> {
   const decision = await checkPushQuota(kind);
   if (!decision.allowed) {
@@ -55,7 +56,10 @@ export async function sendPush(
   }
 
   try {
-    await lineClient.pushMessage({ to: lineUserId, messages: [{ type: 'text', text }] });
+    // cast เหมือน replyFlex: type ของ FlexMessage ใน @line/bot-sdk เปลี่ยน namespace บ่อยระหว่างเวอร์ชัน
+    const payload = typeof message === 'string' ? { type: 'text', text: message } : message;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await lineClient.pushMessage({ to: lineUserId, messages: [payload as any] });
     return { sent: true };
   } catch (err) {
     // คืนสิทธิ์เพื่อให้รอบหน้าลองใหม่ได้ — ไม่งั้นผู้ใช้จะไม่ได้รับข้อความนี้เลยตลอดกาล

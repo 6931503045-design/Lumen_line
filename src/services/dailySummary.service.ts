@@ -20,6 +20,8 @@ import { listTransactionRowsInRange, type SummaryRow } from '../db/queries/summa
 import { countUnparsedEmails } from '../db/queries/emails';
 import { getSafeToSpend } from './summary.service';
 import { sendPush } from '../line/push';
+import { buildDailySummaryCard } from '../line/flex/dailySummaryCard';
+import { env } from '../config/env';
 
 export type DailySummaryResult = {
   /** ผู้ใช้ที่เปิดรับไว้ทั้งหมด */
@@ -76,6 +78,34 @@ export function dailySummaryMessage(
 }
 
 /**
+ * การ์ดสรุปวันนี้ — ข้อมูลชุดเดียวกับ dailySummaryMessage ทุกบรรทัด
+ * และใช้ข้อความนั้นเป็น altText (แจ้งเตือนบนมือถือ / เครื่องที่แสดง Flex ไม่ได้)
+ * ⚖️ G1/G3: format เงินจากสตางค์ที่นี่ การ์ดรับไปแค่สตริง
+ */
+export function dailySummaryCard(dateLabel: string, figures: DailyFigures, showOptOut = true) {
+  const empty = figures.expenseCount === 0 && figures.incomeSatang === 0;
+  return buildDailySummaryCard({
+    dateLabel,
+    empty,
+    formattedExpense: formatBaht(figures.expenseSatang),
+    expenseCount: figures.expenseCount,
+    formattedIncome: figures.incomeSatang > 0 ? formatBaht(figures.incomeSatang) : null,
+    formattedMonthRemaining: formatBaht(Math.abs(figures.monthRemainingSatang)),
+    overspent: figures.monthRemainingSatang < 0,
+    unparsedEmails: figures.unparsedEmails,
+    showOptOut,
+    plainText: dailySummaryMessage(dateLabel, figures, showOptOut),
+    assetBaseUrl: env.appBaseUrl || undefined,
+  });
+}
+
+/** การ์ดของคำถาม "วันนี้ใช้ไปเท่าไหร่" — ไม่มีบรรทัดวิธีปิดการแจ้งเตือน */
+export async function buildTodaySummaryCard(userId: string, now: Date = new Date()) {
+  const figures = await collectFigures(userId, getTodayIso(now));
+  return dailySummaryCard(formatThaiDate(now), figures, false);
+}
+
+/**
  * "วันนี้ใช้ไปเท่าไหร่" — ตัวเลขชุดเดียวกับสรุปรายวัน 21:00 แต่ผู้ใช้ถามเองเมื่อไหร่ก็ได้
  * เดิมคำถามนี้ไปถึง AI แล้วได้ "สรุปทั้งเดือน" กลับไป ซึ่งไม่ได้ตอบคำถาม
  * ⚖️ G1: ตัวเลขทุกตัวมาจาก collectFigures (S5) ที่นี่แค่จัดรูปแบบ
@@ -122,7 +152,7 @@ export async function sendDailySummaries(
         userId,
         'dailySummary',
         `daily:${todayIso}:${userId}`,
-        dailySummaryMessage(dateLabel, figures)
+        dailySummaryCard(dateLabel, figures)
       );
       if (sent.sent) {
         result.pushed += 1;
